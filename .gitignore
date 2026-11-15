@@ -5,3 +5,9 @@
 build/
 *.zip
 *.rar
+
+# Godot editörünün geçici kilit kopyaları
+~*.dll
+
+# Kişisel Claude ayarları
+.claude/settings.local.json
