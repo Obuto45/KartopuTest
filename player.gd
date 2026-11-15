@@ -58,6 +58,16 @@ var cam: Camera3D
 var leg_l: Node3D
 var leg_r: Node3D
 
+var name_lbl: Label3D # kafa üstü isim (yalnızca başkalarında)
+
+# Ölünce izleme (yalnızca yerel oyuncu): yaşayan birinin arkasından 3. şahıs kamera.
+var spec_target: Node3D
+var spec_arm: SpringArm3D
+var spec_cam: Camera3D
+var spec_yaw := 0.0
+var spec_pitch := -0.35
+var dead_t := 0.0
+
 var net_pos := Vector3.ZERO
 var net_yaw := 0.0
 var net_pitch := 0.0
@@ -123,6 +133,17 @@ func _ready() -> void:
 		cam.current = true
 		for mi in vis.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY # kendini görme, gölgen kalsın
+	else:
+		name_lbl = Label3D.new()
+		name_lbl.position.y = 2.3 # vis'e değil gövdeye bağlı: ölünce devrilmez
+		name_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		name_lbl.fixed_size = true # uzaktan da okunur
+		name_lbl.pixel_size = 0.0012
+		name_lbl.font_size = 36
+		name_lbl.outline_size = 12
+		name_lbl.modulate = col.lightened(0.35)
+		name_lbl.text = Net.display_name(get_multiplayer_authority())
+		add_child(name_lbl)
 
 	# Ateş asası: kafa pivotuna bağlı, sağ altta (herkes görür). Yerel +Y ileriyi gösterir.
 	var pole := CylinderMesh.new()
@@ -173,10 +194,62 @@ func _ready() -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if is_multiplayer_authority() and e is InputEventMouseMotion \
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if not is_multiplayer_authority() or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	if hp <= 0: # izleme modu: fare kamerayı döndürür, sol/sağ tık oyuncu değiştirir
+		if e is InputEventMouseMotion:
+			spec_yaw -= e.relative.x * 0.0025
+			spec_pitch = clamp(spec_pitch - e.relative.y * 0.0025, -1.2, 0.6)
+		elif e is InputEventMouseButton and e.pressed:
+			if e.button_index == MOUSE_BUTTON_LEFT:
+				_spec_cycle(1)
+			elif e.button_index == MOUSE_BUTTON_RIGHT:
+				_spec_cycle(-1)
+		return
+	if e is InputEventMouseMotion:
 		rotation.y -= e.relative.x * 0.0025
 		look.rotation.x = clamp(look.rotation.x - e.relative.y * 0.0025, -1.45, 1.45)
+
+
+## Yaşayan diğer oyuncular arasında sıradakine geç (step: 1 ileri, -1 geri).
+func _spec_cycle(step: int) -> void:
+	var alive := get_parent().get_children().filter(func(p): return p != self and p.hp > 0)
+	if alive.is_empty():
+		spec_target = null
+		return
+	var i := alive.find(spec_target)
+	spec_target = alive[posmod(i + step, alive.size())] if i >= 0 else alive[0]
+	spec_yaw = spec_target.rotation.y # arkasından başla
+	if spec_arm:
+		spec_arm.clear_excluded_objects()
+		spec_arm.add_excluded_object(spec_target.get_rid())
+
+
+func _spectate(dt: float) -> void:
+	dead_t += dt
+	if dead_t < 1.2: # önce kendi düşüşünü gör
+		return
+	if spec_target == null or not is_instance_valid(spec_target) or spec_target.hp <= 0:
+		_spec_cycle(1)
+	if spec_target == null:
+		return # izlenecek kimse yok
+	if spec_arm == null:
+		spec_arm = SpringArm3D.new()
+		spec_arm.top_level = true
+		spec_arm.spring_length = 4.5
+		spec_arm.margin = 0.3 # ağaç/kayanın içine girme
+		var sh := SphereShape3D.new()
+		sh.radius = 0.25
+		spec_arm.shape = sh
+		spec_arm.add_excluded_object(get_rid())
+		spec_arm.add_excluded_object(spec_target.get_rid())
+		add_child(spec_arm)
+		spec_cam = Camera3D.new()
+		spec_cam.fov = 80
+		spec_arm.add_child(spec_cam)
+	spec_arm.global_position = spec_target.global_position + Vector3.UP * 1.7
+	spec_arm.rotation = Vector3(spec_pitch, spec_yaw, 0)
+	spec_cam.current = true
 
 
 func _physics_process(dt: float) -> void:
@@ -191,6 +264,8 @@ func _local(dt: float) -> void:
 	var alive := hp > 0
 	var active := alive and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	var on_floor := is_on_floor()
+	if not alive:
+		_spectate(dt)
 	if on_floor:
 		air_jumps = 1
 	cd -= dt
@@ -378,6 +453,10 @@ func _animate(dt: float) -> void:
 	leg_l.rotation.x = sin(walk_t) * amp
 	leg_r.rotation.x = -sin(walk_t) * amp
 	vis.rotation.z = lerp(vis.rotation.z, 1.5 if hp <= 0 else 0.0, 0.1) # ölünce devril
+	if name_lbl: # isim lobiden sonra gelebilir
+		var n := Net.display_name(get_multiplayer_authority())
+		if name_lbl.text != n:
+			name_lbl.text = n
 	flash = max(flash - dt, 0.0)
 	body_mat.albedo_color = base_col.lerp(Color(1, 0.1, 0.1), flash / 0.35)
 	body_mat.emission_enabled = flash > 0.0
@@ -452,3 +531,7 @@ func respawn() -> void:
 	velocity = Vector3.ZERO
 	global_position = spawn_pos
 	net_pos = spawn_pos
+	dead_t = 0.0
+	spec_target = null
+	if cam:
+		cam.current = true # izlemeden kendi gözüne dön

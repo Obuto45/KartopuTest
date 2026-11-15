@@ -31,4 +31,19 @@ func _ready() -> void:
 	me._cast_lightning()
 	await get_tree().create_timer(0.42).timeout
 	await _shot("lightning")
+	# Sahte ikinci oyuncu: isim etiketi ve ölünce izleme kamerası.
+	var dummy: CharacterBody3D = load("res://player.gd").new()
+	dummy.name = "2"
+	dummy.set_multiplayer_authority(2)
+	dummy.spawn_pos = me.global_position + Vector3(0, 0, -6)
+	Net.names[2] = "Sinan"
+	main.players.add_child(dummy)
+	me.rotation.y = 0.0
+	me.look.rotation.x = -0.1
+	await get_tree().create_timer(0.6).timeout
+	await _shot("nametag")
+	me.hp = 0
+	me.dead_t = 2.0
+	await get_tree().create_timer(0.6).timeout
+	await _shot("spectate")
 	get_tree().quit()

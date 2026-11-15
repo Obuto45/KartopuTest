@@ -18,7 +18,7 @@ func _ready() -> void:
 		await _wait(1.0)
 		var me = main.players.get_node("1")
 		var other = main.players.get_children().filter(func(p): return p != me)[0]
-		print("HOST players=", main.players.get_child_count(), " names=", Net.names)
+		print("HOST players=", main.players.get_child_count(), " names=", Net.names, " label=", other.name_lbl.text)
 		for i in 6:
 			me.rocket_n += 1; me.fire_rocket.rpc(other.global_position + Vector3(0, 1.0, -3), Vector3(0, 0, 1), me.rocket_n)
 			await _wait(0.4)
@@ -44,8 +44,10 @@ func _ready() -> void:
 		print("CLIENT shield=", me.shield_on)
 		await _wait(3.6)
 		print("CLIENT hp=", me.hp, " text=", main.center_lbl.text.replace("\n", " / "))
-		await _wait(3.5)
-		print("CLIENT after restart hp=", me.hp, " pos=", me.global_position.round())
+		await _wait(1.2)
+		print("CLIENT spectating=", me.spec_target.name if me.spec_target else "yok", " spec_cam=", me.spec_cam != null and me.spec_cam.current, " hud=", main.spec_lbl.text.replace("\n", " / "))
+		await _wait(2.3)
+		print("CLIENT after restart hp=", me.hp, " pos=", me.global_position.round(), " own_cam=", me.cam.current)
 		await _wait(1.5)
 		print("CLIENT after lightning hp=", me.hp)
 		await _wait(1.5)

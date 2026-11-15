@@ -42,7 +42,7 @@ Steam App ID olarak test ID'si `480` (Spacewar) kullanılıyor. Steam'de "Spacew
 | ESC | Ayarlar (ses, ekran modu, çözünürlük) / oyuna dön |
 | F10 | Lobiden çık |
 
-Her isabet 20 hasar, 5 isabette ölüm. Biri ölünce kazanan yazılır, 3 sn sonra yeni tur başlar.
+Her isabet 20 hasar, 5 isabette ölüm. Ölen oyuncu yaşayanları 3. şahıs kameradan izler; sol tık / sağ tık izlenen oyuncuyu değiştirir. Tek kişi kalınca kazanan yazılır, 3 sn sonra yeni tur başlar. Her oyuncunun kafasının üstünde Steam adı görünür.
 
 ## Dışa aktarma (exe)
 

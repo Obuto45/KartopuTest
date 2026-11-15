@@ -16,6 +16,7 @@ var hud: Control
 var hp_lbl: Label
 var score_lbl: Label
 var center_lbl: Label
+var spec_lbl: Label
 var slots := [] # [[StyleBoxFlat, Label], ...]
 var settings_wrap: ColorRect
 var vol_lbl: Label
@@ -195,6 +196,8 @@ func _build_ui() -> void:
 	hp_lbl = _full_label(28, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_TOP)
 	score_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_RIGHT, VERTICAL_ALIGNMENT_TOP)
 	center_lbl = _full_label(52, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
+	spec_lbl = _full_label(22, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_TOP)
+	spec_lbl.offset_top = 60
 	_full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM).text = \
 		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1-4 eşya | Sol tık kullan | ESC menü/ayarlar | F10 çık"
 	# Alt envanter çubuğu (hotbar)
@@ -361,6 +364,8 @@ func _process(_dt: float) -> void:
 		for i in 4:
 			slots[i][0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
 			slots[i][1].text = texts[i]
+		spec_lbl.text = "İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir" \
+			% Net.display_name(me.spec_target.name.to_int()) if me.hp <= 0 and is_instance_valid(me.spec_target) else ""
 	var s := PackedStringArray()
 	for p in players.get_children():
 		s.append("%s  %d" % [Net.display_name(p.name.to_int()), p.hp])
