@@ -65,3 +65,5 @@ godot --headless --path . res://tests/autotest.tscn -- host
 ```bash
 godot --headless --path . res://tests/autotest.tscn -- join
 ```
+
+Sinan'ı çok seviyom ❤️
