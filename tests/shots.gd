@@ -41,7 +41,17 @@ func _ready() -> void:
 	me.rotation.y = 0.0
 	me.look.rotation.x = -0.1
 	await get_tree().create_timer(0.6).timeout
+	dummy.hp = 60
+	await get_tree().create_timer(0.1).timeout
 	await _shot("nametag")
+	dummy.net_pos += Vector3(0, 0, -8) # uzakta isim/can barı ölçeği
+	me.rotation.y = 0.0
+	me.look.rotation.x = -0.1
+	await get_tree().create_timer(0.6).timeout
+	await _shot("far")
+	me._set_slot(5)
+	await get_tree().create_timer(0.3).timeout
+	await _shot("sword")
 	me.hp = 0
 	me.dead_t = 2.0
 	await get_tree().create_timer(0.6).timeout

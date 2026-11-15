@@ -80,7 +80,7 @@ func _strike() -> void:
 
 	Sfx.play3d(Sfx.thunder, global_position, 6.0)
 	if is_instance_valid(caster):
-		caster.apply_blast(global_position, radius)
+		caster.apply_blast(global_position, radius, caster.LIGHTNING_DMG)
 
 	var tw := create_tween().set_parallel()
 	tw.tween_property(bolt, "albedo_color:a", 0.0, 0.3)

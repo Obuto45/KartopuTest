@@ -27,8 +27,12 @@ const BLAST_RADIUS := 2.5 # patlama bu mesafedekilere hasar verir
 const LIGHTNING_CD := 2.5
 const LIGHTNING_RANGE := 25.0 # en fazla bu uzaklığa yıldırım indirilir
 const LIGHTNING_R := 2.2
+const LIGHTNING_DMG := 40 # ateş topunun 2 katı
 const WALL_CD := 6.0
 const WALL_DIST := 2.5 # duvar önümüzde bu mesafede çıkar
+const SWORD_CD := 0.5
+const SWORD_RANGE := 2.3 # kılıç bu mesafeye kadar önündekine vurur
+const SWORD_DMG := 20
 const SLOT_COLORS := {1: Color(1.0, 0.4, 0.05), 3: Color(0.4, 0.75, 1.0), 4: Color(0.6, 0.45, 0.3)}
 
 var spawn_pos := Vector3.ZERO
@@ -58,7 +62,12 @@ var cam: Camera3D
 var leg_l: Node3D
 var leg_r: Node3D
 
+var sword: Node3D
+var sword_cd := 0.0
+var swing_t := 0.0 # > 0 iken savurma animasyonu
 var name_lbl: Label3D # kafa üstü isim (yalnızca başkalarında)
+var hp_bar: Node3D
+var hp_fill: MeshInstance3D
 
 # Ölünce izleme (yalnızca yerel oyuncu): yaşayan birinin arkasından 3. şahıs kamera.
 var spec_target: Node3D
@@ -83,6 +92,13 @@ func _mesh(parent: Node, m: Mesh, pos: Vector3, c: Color) -> MeshInstance3D:
 	mi.material_override = mat
 	parent.add_child(mi)
 	return mi
+
+
+func _bar_mat(mi: MeshInstance3D) -> void:
+	var m: StandardMaterial3D = mi.material_override
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _ready() -> void:
@@ -137,13 +153,23 @@ func _ready() -> void:
 		name_lbl = Label3D.new()
 		name_lbl.position.y = 2.3 # vis'e değil gövdeye bağlı: ölünce devrilmez
 		name_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		name_lbl.fixed_size = true # uzaktan da okunur
-		name_lbl.pixel_size = 0.0012
+		name_lbl.pixel_size = 0.006 # dünya ölçeğinde: uzaklaştıkça oyuncuyla birlikte küçülür
 		name_lbl.font_size = 36
 		name_lbl.outline_size = 12
 		name_lbl.modulate = col.lightened(0.35)
 		name_lbl.text = Net.display_name(get_multiplayer_authority())
 		add_child(name_lbl)
+		# Can barı: ismin altında, her karede kameraya döner.
+		hp_bar = Node3D.new()
+		hp_bar.position.y = 2.1
+		add_child(hp_bar)
+		var bg := QuadMesh.new()
+		bg.size = Vector2(0.84, 0.11)
+		_bar_mat(_mesh(hp_bar, bg, Vector3.ZERO, Color(0, 0, 0, 0.6)))
+		var fg := QuadMesh.new()
+		fg.size = Vector2(0.8, 0.07)
+		hp_fill = _mesh(hp_bar, fg, Vector3(0, 0, 0.005), Color(0.3, 0.9, 0.3))
+		_bar_mat(hp_fill)
 
 	# Ateş asası: kafa pivotuna bağlı, sağ altta (herkes görür). Yerel +Y ileriyi gösterir.
 	var pole := CylinderMesh.new()
@@ -180,6 +206,26 @@ func _ready() -> void:
 	gun.add_child(glow)
 	gem_mat = cm
 	gem_glow = glow
+
+	# Kılıç: sağ elde, yerel -Z ileri. Pivot kabzada; savurunca Y ekseninde döner.
+	sword = Node3D.new()
+	sword.position = Vector3(0.34, -0.36, -0.4)
+	look.add_child(sword)
+	var blade := BoxMesh.new()
+	blade.size = Vector3(0.015, 0.07, 0.75) # keskin kenar yukarı
+	var bm := _mesh(sword, blade, Vector3(0, 0, -0.47), Color(0.85, 0.87, 0.9)).material_override as StandardMaterial3D
+	bm.metallic = 0.5; bm.roughness = 0.3
+	var guard := BoxMesh.new()
+	guard.size = Vector3(0.04, 0.24, 0.04)
+	_mesh(sword, guard, Vector3(0, 0, -0.08), Color(0.95, 0.75, 0.2))
+	var grip := CylinderMesh.new()
+	grip.top_radius = 0.022; grip.bottom_radius = 0.022; grip.height = 0.18
+	_mesh(sword, grip, Vector3(0, 0, 0.02), Color(0.3, 0.18, 0.1)).rotation.x = PI / 2
+	sword.rotation = Vector3(0.9, 0.2, 0) # dinlenme: ucu yukarıda, hafif içe dönük
+	sword.visible = false
+	if is_multiplayer_authority():
+		for mi in sword.find_children("*", "MeshInstance3D", true, false):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	# Kalkan: yarı saydam mavi küre, içeriden de görünsün.
 	var sph := SphereMesh.new()
@@ -273,6 +319,7 @@ func _local(dt: float) -> void:
 	shield_cd -= dt
 	lightning_cd -= dt
 	wall_cd -= dt
+	sword_cd -= dt
 
 	var dir := Vector3.ZERO
 	if active:
@@ -299,6 +346,8 @@ func _local(dt: float) -> void:
 			_set_slot(3)
 		if Input.is_action_just_pressed("slot4"):
 			_set_slot(4)
+		if Input.is_action_just_pressed("slot5"):
+			_set_slot(5)
 
 	if dash_t > 0.0:
 		dash_t -= dt # dash sırasında yerçekimi/sürtünme yok
@@ -320,6 +369,9 @@ func _local(dt: float) -> void:
 			_cast_lightning()
 		elif slot == 4 and wall_cd <= 0.0:
 			_place_wall()
+		elif slot == 5 and sword_cd <= 0.0:
+			sword_cd = SWORD_CD
+			swing.rpc(global_position, -transform.basis.z)
 	if active and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
 		cd = THROW_CD
 		var b := cam.global_basis
@@ -353,7 +405,8 @@ func sync_state(p: Vector3, yaw: float, pitch: float, spd: float, s: int) -> voi
 
 func _set_slot(s: int) -> void:
 	slot = s
-	gun.visible = s != 2 # kalkanda asa yok
+	gun.visible = s != 2 and s != 5 # kalkanda ve kılıçta asa yok
+	sword.visible = s == 5
 	if SLOT_COLORS.has(s): # her asanın kristal rengi farklı
 		gem_mat.albedo_color = SLOT_COLORS[s]
 		gem_mat.emission = SLOT_COLORS[s]
@@ -453,10 +506,24 @@ func _animate(dt: float) -> void:
 	leg_l.rotation.x = sin(walk_t) * amp
 	leg_r.rotation.x = -sin(walk_t) * amp
 	vis.rotation.z = lerp(vis.rotation.z, 1.5 if hp <= 0 else 0.0, 0.1) # ölünce devril
+	if swing_t > 0.0: # sağdan sola yatay savurma
+		swing_t = maxf(swing_t - dt, 0.0)
+		var k := 1.0 - swing_t / 0.25
+		sword.rotation = Vector3(0.25, lerpf(1.3, -1.1, k), -0.5)
+	else:
+		sword.rotation = sword.rotation.lerp(Vector3(0.9, 0.2, 0), 0.2)
 	if name_lbl: # isim lobiden sonra gelebilir
 		var n := Net.display_name(get_multiplayer_authority())
 		if name_lbl.text != n:
 			name_lbl.text = n
+		var f := clampf(float(hp) / MAX_HP, 0.0, 1.0)
+		hp_fill.scale.x = maxf(f, 0.001)
+		hp_fill.position.x = -0.4 * (1.0 - f) # sola yaslı
+		(hp_fill.material_override as StandardMaterial3D).albedo_color = Color(0.95, 0.2, 0.15).lerp(Color(0.3, 0.9, 0.3), f)
+		hp_bar.visible = hp > 0
+		var c := get_viewport().get_camera_3d()
+		if c:
+			hp_bar.global_basis = c.global_basis # kameraya dön
 	flash = max(flash - dt, 0.0)
 	body_mat.albedo_color = base_col.lerp(Color(1, 0.1, 0.1), flash / 0.35)
 	body_mat.emission_enabled = flash > 0.0
@@ -488,8 +555,27 @@ func explode(rocket_name, pos: Vector3) -> void:
 	apply_blast(pos, BLAST_RADIUS)
 
 
+## Kılıç savurma: herkes animasyonu görür, her makine kendi oyuncusu vurulduysa hasarı uygular.
+@rpc("authority", "call_local", "reliable")
+func swing(from: Vector3, fwd: Vector3) -> void:
+	swing_t = 0.25
+	Sfx.play3d(Sfx.whoosh, from + Vector3.UP * 1.5, 0.0)
+	var me = get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
+	if me == null or me == self or me.hp <= 0:
+		return
+	var to: Vector3 = me.global_position - from
+	to.y = 0.0
+	if to.length() > SWORD_RANGE or (to.length() > 0.3 and fwd.dot(to.normalized()) < 0.4):
+		return # menzil dışı ya da önünde değil (~65° yay)
+	me.velocity += fwd * 6.0 + Vector3.UP * 2.0 # geri savrulma
+	if me.shield_on:
+		me.set_shield.rpc(false)
+	else:
+		me.take_hit(SWORD_DMG)
+
+
 ## Hasarı her makine yalnızca kendi oyuncusu için uygular (atan hariç).
-func apply_blast(pos: Vector3, radius: float) -> void:
+func apply_blast(pos: Vector3, radius: float, dmg := DAMAGE) -> void:
 	var me = get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
 	if me == null or me == self or me.hp <= 0:
 		return
@@ -499,12 +585,12 @@ func apply_blast(pos: Vector3, radius: float) -> void:
 		if me.shield_on:
 			me.set_shield.rpc(false) # kalkan tek roketi emer
 		else:
-			me.take_hit()
+			me.take_hit(dmg)
 
 
 ## Roket kurbanın kendi makinesinde hasar uygular.
-func take_hit() -> void:
-	set_hp.rpc(hp - DAMAGE)
+func take_hit(dmg := DAMAGE) -> void:
+	set_hp.rpc(hp - dmg)
 	if hp <= 0:
 		get_node("/root/Main").report_death.rpc_id(1, get_multiplayer_authority())
 
@@ -528,6 +614,7 @@ func respawn() -> void:
 	dash_cd = 0.0
 	lightning_cd = 0.0
 	wall_cd = 0.0
+	sword_cd = 0.0
 	velocity = Vector3.ZERO
 	global_position = spawn_pos
 	net_pos = spawn_pos

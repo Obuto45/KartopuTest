@@ -33,6 +33,11 @@ func _ready() -> void:
 		me.spawn_wall.rpc(me.global_position + Vector3(0, 0, 3), 0.0)
 		await _wait(0.5)
 		print("HOST wall=", main.world.has_node("W1"))
+		me.swing.rpc(other.global_position - Vector3(0, 0, 1.5), Vector3(0, 0, 1)) # önünde: vurur
+		await _wait(0.4)
+		me.swing.rpc(other.global_position - Vector3(0, 0, 1.5), Vector3(0, 0, -1)) # arkası dönük: ıskalar
+		await _wait(0.4)
+		print("HOST sword other.hp=", other.hp, " (60 -> 40 bekleniyor)")
 		await _wait(1.0)
 	else:
 		Net.join_local()
@@ -51,4 +56,6 @@ func _ready() -> void:
 		await _wait(1.5)
 		print("CLIENT after lightning hp=", me.hp)
 		await _wait(1.5)
+		print("CLIENT after sword hp=", me.hp)
+		await _wait(1.0)
 	get_tree().quit()

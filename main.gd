@@ -42,7 +42,7 @@ func _ready() -> void:
 
 func _setup_input() -> void:
 	var keys := {"fwd": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "jump": KEY_SPACE,
-		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4}
+		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "slot5": KEY_5}
 	for a in keys:
 		InputMap.add_action(a)
 		var ev := InputEventKey.new()
@@ -199,16 +199,16 @@ func _build_ui() -> void:
 	spec_lbl = _full_label(22, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_TOP)
 	spec_lbl.offset_top = 60
 	_full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM).text = \
-		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1-4 eşya | Sol tık kullan | ESC menü/ayarlar | F10 çık"
+		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1-5 eşya | Sol tık kullan | ESC menü/ayarlar | F10 çık"
 	# Alt envanter çubuğu (hotbar)
 	var bar := HBoxContainer.new()
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bar.offset_left = -195; bar.offset_right = 195
+	bar.offset_left = -245; bar.offset_right = 245
 	bar.offset_top = -140; bar.offset_bottom = -50
 	bar.add_theme_constant_override("separation", 10)
 	hud.add_child(bar)
-	for i in 4:
+	for i in 5:
 		var cell := PanelContainer.new()
 		cell.custom_minimum_size = Vector2(90, 84)
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -360,8 +360,8 @@ func _process(_dt: float) -> void:
 		dmg_rect.color.a = me.flash * 1.2
 		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
 		var texts := ["1\nATEŞ ASASI", "2\nKALKAN\n" + sh,
-			"3\nYILDIRIM\n" + _cd_text(me.lightning_cd), "4\nDUVAR\n" + _cd_text(me.wall_cd)]
-		for i in 4:
+			"3\nYILDIRIM\n" + _cd_text(me.lightning_cd), "4\nDUVAR\n" + _cd_text(me.wall_cd), "5\nKILIÇ"]
+		for i in 5:
 			slots[i][0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
 			slots[i][1].text = texts[i]
 		spec_lbl.text = "İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir" \

@@ -38,11 +38,12 @@ Steam App ID olarak test ID'si `480` (Spacewar) kullanılıyor. Steam'de "Spacew
 | 2 | Kalkan (tek saldırıyı emer, 8 sn bekleme) |
 | 3 | Yıldırım asası (nişan alınan yere, en fazla 25 m, 2.5 sn bekleme) |
 | 4 | Duvar asası (önüne 3 m'lik duvar, 8 sn durur, 6 sn bekleme) |
+| 5 | Kılıç (yakın dövüş, 2.3 m, önündekine 20 hasar) |
 | Sol tık | Seçili eşyayı kullan |
 | ESC | Ayarlar (ses, ekran modu, çözünürlük) / oyuna dön |
 | F10 | Lobiden çık |
 
-Her isabet 20 hasar, 5 isabette ölüm. Ölen oyuncu yaşayanları 3. şahıs kameradan izler; sol tık / sağ tık izlenen oyuncuyu değiştirir. Tek kişi kalınca kazanan yazılır, 3 sn sonra yeni tur başlar. Her oyuncunun kafasının üstünde Steam adı görünür.
+Can 100. Ateş topu ve kılıç 20, yıldırım 40 hasar verir. İsimlerin altında can barı görünür. Ölen oyuncu yaşayanları 3. şahıs kameradan izler; sol tık / sağ tık izlenen oyuncuyu değiştirir. Tek kişi kalınca kazanan yazılır, 3 sn sonra yeni tur başlar. Her oyuncunun kafasının üstünde Steam adı görünür.
 
 ## Dışa aktarma (exe)
 
