@@ -7,10 +7,14 @@ const ExplosionScript := preload("res://explosion.gd")
 const LightningScript := preload("res://lightning.gd")
 const WallScript := preload("res://wall.gd")
 const Chars := preload("res://characters.gd")
-const BLINK_DIST := 8.0
-const HYPE_TIME := 4.0
-const WAVE_R := 5.0
-const WAVE_DMG := 15
+const SlipperScript := preload("res://slipper.gd")
+const FLASH_R := 8.0
+const FLASH_TIME := 1.5
+const SLIPPER_RANGE := 40.0
+const PULL_R := 8.0
+const PULL_DMG := 10
+const SHOUT_TIME := 4.0
+const SHOUT_DMG := 30
 const DRONE_RANGE := 30.0
 const DRONE_R := 3.0
 const DRONE_DMG := 35
@@ -52,9 +56,11 @@ var hp := MAX_HP
 var max_hp := MAX_HP
 var ch: Dictionary # seçilen karakter (characters.gd)
 var skill_cd := 0.0
-var hype_t := 0.0 # > 0 iken Hype Modu açık
-var calm_t := 0.0 # son hasardan beri geçen süre (can yenileme için)
-var regen_t := 0.0
+var shout_t := 0.0 # > 0 iken Pazarcı Abi'nin ateş topları güçlü
+var blind_t := 0.0 # > 0 iken ekran beyaz (Keloğlan'ın flaşı; yalnızca yerel oyuncu)
+var head_mat: StandardMaterial3D
+var quote_lbl: Label3D
+var quote_t := 0.0
 var cd := 0.0
 var slot := 1 # 1 = ateş asası, 2 = kalkan, 3 = yıldırım asası, 4 = duvar asası
 var lightning_cd := 0.0
@@ -145,7 +151,7 @@ func _ready() -> void:
 	vis.add_child(look)
 	var head := SphereMesh.new()
 	head.radius = 0.3; head.height = 0.6
-	_mesh(look, head, Vector3.ZERO, Color(1.0, 0.85, 0.7))
+	head_mat = _mesh(look, head, Vector3.ZERO, Color(1.0, 0.85, 0.7)).material_override
 	var eye := SphereMesh.new()
 	eye.radius = 0.05; eye.height = 0.1
 	_mesh(look, eye, Vector3(-0.11, 0.06, -0.27), Color.BLACK)
@@ -260,30 +266,45 @@ func _ready() -> void:
 ## Karakteri tanıtan kafa süsü. Kafa pivotuna bağlı; yerel oyuncu kendininkini görmez.
 func _accessory(kind: String, col: Color) -> void:
 	match kind:
-		"antenna":
-			var rod := CylinderMesh.new()
-			rod.top_radius = 0.012; rod.bottom_radius = 0.018; rod.height = 0.28
-			_mesh(look, rod, Vector3(0, 0.38, 0), Color(0.4, 0.42, 0.48))
-			var tip := SphereMesh.new()
-			tip.radius = 0.05; tip.height = 0.1
-			var m: StandardMaterial3D = _mesh(look, tip, Vector3(0, 0.54, 0), Color(0.3, 0.9, 1.0)).material_override
-			m.emission_enabled = true
-			m.emission = Color(0.3, 0.9, 1.0)
-		"headphones":
-			var band := TorusMesh.new()
-			band.inner_radius = 0.3; band.outer_radius = 0.34
-			_mesh(look, band, Vector3(0, 0.02, 0), Color(0.12, 0.12, 0.14)).rotation.z = PI / 2
-			var cup := CylinderMesh.new()
-			cup.top_radius = 0.1; cup.bottom_radius = 0.1; cup.height = 0.07
-			for x in [-0.32, 0.32]:
-				_mesh(look, cup, Vector3(x, 0, 0), col.lightened(0.3)).rotation.z = PI / 2
-		"leaves":
-			var leaf := PrismMesh.new()
-			leaf.size = Vector3(0.1, 0.16, 0.03)
-			for i in 7:
-				var a := TAU * i / 7.0
-				var l := _mesh(look, leaf, Vector3(cos(a) * 0.27, 0.22, sin(a) * 0.27), Color(0.2, 0.65, 0.2))
-				l.rotation.y = -a + PI / 2 # yüzü dışarı baksın
+		"bald": # parlak kel kafa + yamalı yelek
+			head_mat.roughness = 0.12
+			head_mat.metallic_specular = 1.0
+			var glint := SphereMesh.new()
+			glint.radius = 0.045; glint.height = 0.09
+			var g: StandardMaterial3D = _mesh(look, glint, Vector3(0.09, 0.22, -0.14), Color.WHITE).material_override
+			g.emission_enabled = true
+			g.emission = Color.WHITE
+			var patch := BoxMesh.new()
+			patch.size = Vector3(0.15, 0.15, 0.03)
+			_mesh(vis, patch, Vector3(-0.15, 1.2, -0.37), Color(0.85, 0.7, 0.25)).rotation.z = 0.3
+			_mesh(vis, patch, Vector3(0.14, 0.9, -0.37), Color(0.3, 0.45, 0.75)).rotation.z = -0.2
+		"curlers": # bigudiler + önlük
+			var cur := CylinderMesh.new()
+			cur.top_radius = 0.055; cur.bottom_radius = 0.055; cur.height = 0.16
+			for i in 5:
+				var a := PI * (0.15 + 0.7 * i / 4.0)
+				var cc := Color(1.0, 0.75, 0.85) if i % 2 == 0 else Color(0.6, 0.85, 1.0)
+				_mesh(look, cur, Vector3(cos(a) * 0.2, 0.22 + sin(a) * 0.04, 0.08 - sin(a) * 0.08), cc).rotation.z = PI / 2
+			var apron := BoxMesh.new()
+			apron.size = Vector3(0.5, 0.62, 0.03)
+			_mesh(vis, apron, Vector3(0, 0.98, -0.37), Color(0.97, 0.95, 0.9))
+		"cap": # kasket + bıyık + omuzda domates kasası
+			var top := CylinderMesh.new()
+			top.top_radius = 0.33; top.bottom_radius = 0.31; top.height = 0.1
+			_mesh(look, top, Vector3(0, 0.2, 0.02), Color(0.35, 0.3, 0.25))
+			var brim := BoxMesh.new()
+			brim.size = Vector3(0.34, 0.03, 0.2)
+			_mesh(look, brim, Vector3(0, 0.16, -0.3), Color(0.3, 0.25, 0.2))
+			var stache := BoxMesh.new()
+			stache.size = Vector3(0.22, 0.05, 0.05)
+			_mesh(look, stache, Vector3(0, -0.07, -0.28), Color(0.15, 0.1, 0.07))
+			var crate := BoxMesh.new()
+			crate.size = Vector3(0.32, 0.14, 0.24)
+			_mesh(vis, crate, Vector3(-0.45, 1.58, 0.05), Color(0.6, 0.42, 0.22))
+			var tom := SphereMesh.new()
+			tom.radius = 0.07; tom.height = 0.13
+			for x in [-0.55, -0.45, -0.35]:
+				_mesh(vis, tom, Vector3(x, 1.69, 0.05), Color(0.9, 0.12, 0.08))
 		"helmet":
 			var dome := SphereMesh.new()
 			dome.radius = 0.33; dome.height = 0.33; dome.is_hemisphere = true
@@ -294,7 +315,7 @@ func _accessory(kind: String, col: Color) -> void:
 
 
 func _speed() -> float:
-	return SPEED * ch.speed * (1.3 if hype_t > 0.0 else 1.0)
+	return SPEED * ch.speed
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -379,12 +400,6 @@ func _local(dt: float) -> void:
 	wall_cd -= dt
 	sword_cd -= dt
 	skill_cd -= dt
-	if alive and ch.regen and hp < max_hp: # Yeşil Eda pasifi
-		calm_t += dt
-		regen_t += dt
-		if calm_t > 3.0 and regen_t >= 0.25:
-			regen_t = 0.0
-			set_hp.rpc(mini(hp + 1, max_hp))
 
 	var dir := Vector3.ZERO
 	if active:
@@ -440,7 +455,7 @@ func _local(dt: float) -> void:
 			sword_cd = SWORD_CD
 			swing.rpc(global_position, -transform.basis.z)
 	if active and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
-		cd = THROW_CD * (0.5 if hype_t > 0.0 else 1.0)
+		cd = THROW_CD
 		var b := cam.global_basis
 		var target := cam.global_position - b.z * 200.0
 		var q := PhysicsRayQueryParameters3D.create(cam.global_position, target)
@@ -543,16 +558,17 @@ func spawn_wall(pos: Vector3, yaw: float) -> void:
 ## Q: karakterin özel yeteneği. Karar yerel makinede, etkiyi use_skill herkese yayar.
 func _use_skill() -> void:
 	match ch.skill:
-		"blink":
-			var fwd := -transform.basis.z
-			var from := global_position + Vector3.UP
-			var q := PhysicsRayQueryParameters3D.create(from, from + fwd * BLINK_DIST)
-			q.exclude = [get_rid()]
-			var r := get_world_3d().direct_space_state.intersect_ray(q)
-			var d: float = maxf(from.distance_to(r.position) - 0.6, 0.0) if r else BLINK_DIST
-			use_skill.rpc("blink", global_position)
-			global_position += fwd * d
-			velocity.y = maxf(velocity.y, 0.0)
+		"slipper":
+			var best: Node3D = null
+			var bd := SLIPPER_RANGE
+			for p in get_parent().get_children():
+				var d := global_position.distance_to(p.global_position)
+				if p != self and p.hp > 0 and d < bd:
+					best = p
+					bd = d
+			if best == null:
+				return # kovalanacak kimse yok: bekleme süresi harcanmasın
+			throw_slipper.rpc(best.get_multiplayer_authority())
 		"drone":
 			var from := cam.global_position
 			var q := PhysicsRayQueryParameters3D.create(from, from - cam.global_basis.z * DRONE_RANGE)
@@ -568,23 +584,76 @@ func _use_skill() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func use_skill(kind: String, pos: Vector3) -> void:
+	say(ch.quote)
 	match kind:
-		"blink":
-			_ring_fx(pos + Vector3.UP * 0.1, Color(0.4, 0.85, 1.0, 0.8), 1.2, 0.3)
-			Sfx.play3d(Sfx.whoosh, pos + Vector3.UP, 2.0)
-		"hype":
-			hype_t = HYPE_TIME
-			Sfx.play3d(Sfx.shield_up, pos + Vector3.UP, 0.0)
-		"wave":
-			_ring_fx(pos + Vector3.UP * 0.2, Color(0.2, 0.55, 1.0, 0.7), WAVE_R, 0.45)
-			Sfx.play3d(Sfx.boom, pos, -2.0)
-			apply_blast(pos + Vector3.UP * 0.95, WAVE_R, WAVE_DMG)
+		"flash":
+			_ring_fx(pos + Vector3.UP * 1.7, Color(1, 1, 0.85, 0.9), FLASH_R, 0.35)
+			Sfx.play3d(Sfx.shield_up, pos + Vector3.UP, 4.0)
+			var me := _local_player()
+			if me and me != self and me.hp > 0:
+				var eye: Vector3 = me.look.global_position
+				var to := pos + Vector3.UP * 1.7 - eye
+				if to.length() < FLASH_R and (-me.look.global_basis.z).dot(to.normalized()) > 0.3: # bakıyorsa
+					me.blind_t = FLASH_TIME
+		"pull":
+			shout_t = SHOUT_TIME
+			var ring := _ring_fx(pos + Vector3.UP * 0.2, Color(0.95, 0.3, 0.15, 0.8), PULL_R, 0.0)
+			var tw := ring.create_tween() # dışarıdan içe daralır: çekiliyorsun
+			tw.tween_property(ring, "scale", Vector3.ONE * 0.3, 0.4)
+			tw.tween_callback(ring.queue_free)
+			Sfx.play3d(Sfx.whoosh, pos + Vector3.UP, 4.0)
+			var me := _local_player()
+			if me and me != self and me.hp > 0:
+				var to: Vector3 = pos - me.global_position
+				to.y = 0.0
+				if to.length() < PULL_R:
+					me.velocity += to.normalized() * minf(to.length() * 2.0, 14.0) + Vector3.UP * 4.0
+					if me.shield_on:
+						me.set_shield.rpc(false)
+					else:
+						me.take_hit(PULL_DMG)
 		"drone":
 			# Uyarı halkası 1 sn'de daralır, sonra bomba patlar.
 			var mark := _ring_fx(pos + Vector3.UP * 0.05, Color(1.0, 0.2, 0.1, 0.7), DRONE_R, 0.0)
 			var tw := mark.create_tween()
 			tw.tween_property(mark, "scale", Vector3.ONE * 0.3, 1.0).from(Vector3.ONE * DRONE_R)
 			tw.tween_callback(_drone_hit.bind(pos, mark)) # mark ya da oyuncu silinirse çağrılmaz
+
+
+@rpc("authority", "call_local", "reliable")
+func throw_slipper(target_id: int) -> void:
+	say(ch.quote)
+	var target := get_parent().get_node_or_null(str(target_id))
+	if target == null:
+		return
+	var s: Node3D = SlipperScript.new()
+	s.thrower = self
+	s.target = target
+	s.dir = (-look.global_basis.z + Vector3.UP * 0.4).normalized() # önce havaya kalkar
+	s.position = look.global_position + s.dir * 0.6
+	get_parent().get_parent().add_child(s)
+	Sfx.play3d(Sfx.whoosh, s.position, 2.0)
+
+
+## Kafa üstünde 2 sn replik balonu (herkes görür).
+@rpc("any_peer", "call_local", "reliable")
+func say(text: String) -> void:
+	if quote_lbl == null:
+		quote_lbl = Label3D.new()
+		quote_lbl.position.y = 2.6
+		quote_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		quote_lbl.pixel_size = 0.007
+		quote_lbl.font_size = 40
+		quote_lbl.outline_size = 14
+		quote_lbl.modulate = Color(1.0, 0.95, 0.6)
+		add_child(quote_lbl)
+	quote_lbl.text = text
+	quote_lbl.visible = true
+	quote_t = 2.0
+
+
+func _local_player() -> Node:
+	return get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
 
 
 func _drone_hit(pos: Vector3, mark: Node3D) -> void:
@@ -663,10 +732,14 @@ func _animate(dt: float) -> void:
 		if c:
 			hp_bar.global_basis = c.global_basis # kameraya dön
 	flash = max(flash - dt, 0.0)
-	hype_t = maxf(hype_t - dt, 0.0)
+	shout_t = maxf(shout_t - dt, 0.0)
+	blind_t = maxf(blind_t - dt, 0.0)
+	if quote_lbl and quote_lbl.visible:
+		quote_t -= dt
+		quote_lbl.visible = quote_t > 0.0
 	body_mat.albedo_color = base_col.lerp(Color(1, 0.1, 0.1), flash / 0.35)
-	body_mat.emission_enabled = flash > 0.0 or hype_t > 0.0
-	body_mat.emission = Color(1, 0, 0) * (flash / 0.35) if flash > 0.0 else Color(0.7, 0.2, 1.0) * 0.6 # mor: hype
+	body_mat.emission_enabled = flash > 0.0 or shout_t > 0.0
+	body_mat.emission = Color(1, 0, 0) * (flash / 0.35) if flash > 0.0 else Color(1.0, 0.5, 0.1) * 0.6 # turuncu: bağırdı, güçlü
 
 
 @rpc("authority", "call_local", "reliable")
@@ -691,7 +764,7 @@ func explode(rocket_name, pos: Vector3) -> void:
 	fx.position = pos
 	world.add_child(fx)
 	Sfx.play3d(Sfx.boom, pos, 4.0)
-	apply_blast(pos, BLAST_RADIUS)
+	apply_blast(pos, BLAST_RADIUS, SHOUT_DMG if shout_t > 0.0 else DAMAGE) # Pazarcı pasifi
 
 
 ## Kılıç savurma: herkes animasyonu görür, her makine kendi oyuncusu vurulduysa hasarı uygular.
@@ -729,6 +802,9 @@ func apply_blast(pos: Vector3, radius: float, dmg := DAMAGE) -> void:
 
 ## Roket kurbanın kendi makinesinde hasar uygular.
 func take_hit(dmg := DAMAGE) -> void:
+	if randf() < ch.get("dodge", 0.0): # Keloğlan pasifi
+		say.rpc("Kafadan sekti!")
+		return
 	set_hp.rpc(hp - dmg)
 	if hp <= 0:
 		get_node("/root/Main").report_death.rpc_id(1, get_multiplayer_authority())
@@ -738,7 +814,6 @@ func take_hit(dmg := DAMAGE) -> void:
 func set_hp(v: int) -> void:
 	if v < hp:
 		flash = 0.35
-		calm_t = 0.0
 		if is_multiplayer_authority():
 			Sfx.play2d(Sfx.hurt)
 		else:
@@ -749,8 +824,8 @@ func set_hp(v: int) -> void:
 func respawn() -> void:
 	hp = max_hp
 	skill_cd = 0.0
-	hype_t = 0.0
-	calm_t = 0.0
+	shout_t = 0.0
+	blind_t = 0.0
 	shield_on = false
 	shield_mesh.visible = false
 	shield_cd = 0.0

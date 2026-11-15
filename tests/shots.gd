@@ -41,14 +41,26 @@ func _ready() -> void:
 	dummy.set_multiplayer_authority(2)
 	dummy.spawn_pos = me.global_position + Vector3(0, 0, -6)
 	Net.names[2] = "Sinan"
-	Net.chars[2] = 3 # Kaptan Dron: kask görünsün
+	Net.chars[2] = 2 # Pazarcı Abi
 	main.players.add_child(dummy)
+	for k in 2: # Keloğlan ve Terlikli Anne de yan yana görünsün
+		var d: CharacterBody3D = load("res://player.gd").new()
+		d.name = str(3 + k)
+		d.set_multiplayer_authority(3 + k)
+		d.spawn_pos = me.global_position + Vector3(-1.6 + k * 3.2, 0, -4.5)
+		Net.chars[3 + k] = k
+		main.players.add_child(d)
+		d.net_yaw = PI # bize baksın
+	dummy.net_yaw = PI
 	me.rotation.y = 0.0
 	me.look.rotation.x = -0.1
 	await get_tree().create_timer(0.6).timeout
 	dummy.hp = 60
 	await get_tree().create_timer(0.1).timeout
 	await _shot("nametag")
+	main.players.get_node("4").say("Gel buraya!")
+	await get_tree().create_timer(0.1).timeout
+	await _shot("looks")
 	me.set_hp(25) # can barı: kritik seviye + beyaz iz
 	await get_tree().create_timer(0.3).timeout
 	await _shot("hud")
@@ -60,6 +72,11 @@ func _ready() -> void:
 	me._set_slot(5)
 	await get_tree().create_timer(0.3).timeout
 	await _shot("sword")
+	me.rotation.y = 0.0
+	var kel = main.players.get_node("3")
+	kel.use_skill("flash", kel.global_position)
+	await get_tree().create_timer(0.8).timeout
+	await _shot("flash")
 	me.hp = 0
 	me.dead_t = 2.0
 	await get_tree().create_timer(0.6).timeout

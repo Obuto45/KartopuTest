@@ -10,9 +10,11 @@ var dir := Vector3.FORWARD
 var life := 3.0
 var done := false
 var fire: CPUParticles3D
+var spd := SPEED
 
 
 func _ready() -> void:
+	spd = SPEED * shooter.ch.get("throw_mult", 1.0) # Terlikli Anne pasifi
 	var up := Vector3.UP if abs(dir.y) < 0.99 else Vector3.FORWARD
 	look_at(global_position + dir, up)
 
@@ -70,7 +72,7 @@ func _physics_process(dt: float) -> void:
 	life -= dt
 	fire.emitting = life < 2.93 # ~2 m sonra iz başlar
 	var from := global_position
-	var to := from + dir * SPEED * dt
+	var to := from + dir * spd * dt
 	var hit = null
 	if life <= 0.0:
 		hit = from

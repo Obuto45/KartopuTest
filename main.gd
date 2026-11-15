@@ -26,6 +26,7 @@ var char_wrap: ColorRect
 var char_cards := [] # her karakter kartının StyleBoxFlat'ı
 var score_lbl: Label
 var center_lbl: Label
+var blind_rect: ColorRect # Keloğlan flaşı
 var spec_lbl: Label
 var slots := [] # [[StyleBoxFlat, Label], ...]
 var settings_wrap: ColorRect
@@ -204,6 +205,11 @@ func _build_ui() -> void:
 	dmg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dmg_rect.color = Color(1, 0, 0, 0)
 	hud.add_child(dmg_rect)
+	blind_rect = ColorRect.new()
+	blind_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	blind_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	blind_rect.color = Color(1, 1, 0.95, 0)
+	hud.add_child(blind_rect)
 	_full_label(28, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER).text = "+"
 	_build_hp_bar()
 	score_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_RIGHT, VERTICAL_ALIGNMENT_TOP)
@@ -341,6 +347,7 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 		_lbl(cv, "Pasif: " + c.passive, 15)
 		_lbl(cv, "Q – %s (%d sn)\n%s" % [c.skill_name, c.cd, c.skill_desc], 15) \
 			.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+		_lbl(cv, "\"%s\"" % c.quote, 16).modulate = Color(0.75, 0.9, 1.0)
 		var spacer := Control.new()
 		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		cv.add_child(spacer)
@@ -496,8 +503,9 @@ func _process(dt: float) -> void:
 	if me:
 		_update_hp_bar(me, dt)
 		dmg_rect.color.a = me.flash * 1.2
+		blind_rect.color.a = clampf(me.blind_t * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
 		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
-		var q := "AKTİF" if me.hype_t > 0.0 else _cd_text(me.skill_cd)
+		var q := "GÜÇLÜ" if me.shout_t > 0.0 else _cd_text(me.skill_cd)
 		var texts := ["1\nATEŞ ASASI", "2\nKALKAN\n" + sh,
 			"3\nYILDIRIM\n" + _cd_text(me.lightning_cd), "4\nDUVAR\n" + _cd_text(me.wall_cd), "5\nKILIÇ",
 			"Q\n%s\n%s" % [me.ch.skill_name, q]]

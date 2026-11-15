@@ -52,10 +52,12 @@ Menüdeki **Karakter: … – değiştir** butonundan seçilir; lobideki herkes 
 
 | Karakter | Can | Pasif | Q yeteneği |
 |---|---|---|---|
-| Bit-7 (Yapay Zeka) | 100 | Kalkan bekleme 5 sn | Işınlanma: 8 m ileri (5 sn) |
-| Canlı Kaan (Yayıncı) | 100 | %15 hızlı | Hype Modu: 4 sn çift atış hızı, %30 hız (14 sn) |
-| Yeşil Eda (İklim Aktivisti) | 100 | 3 sn hasarsız kalınca can yeniler | Sel Dalgası: 5 m, 15 hasar + savurma (10 sn) |
+| Keloğlan (Şanslı Kel) | 100 | %15 şansla hasar kafadan seker | Kafa Parlatma: 8 m içinde ona bakanların ekranı 1,5 sn beyaz (12 sn) |
+| Terlikli Anne (Ev Hanımı) | 100 | Ateş topları %25 hızlı/uzak | Güdümlü Terlik: en yakın düşmanı kovalar, 30 hasar (8 sn) |
+| Pazarcı Abi (Semt Pazarı) | 110 | Q'dan sonra 4 sn ateş topu 30 hasar | Gel Abla Gel: 8 m içindekileri çeker, 10 hasar (10 sn) |
 | Kaptan Dron (Dron Pilotu) | 120 | Fazladan can | Dron Bombası: 30 m'ye, 1 sn sonra 35 hasar (9 sn) |
+
+Q basınca karakterin kafasında repliği çıkar ("Gel buraya!", "Gel abla gel, domates bunlar!").
 
 Yeni karakter eklemek için `characters.gd` listesinin **sonuna** ekle (sıra ağda numara olarak gider).
 
@@ -87,6 +89,7 @@ gh release create v0.4 KartopuTest_v0.4_Windows.zip --title "v0.4" --notes "Değ
 | `main.gd` | Menü, HUD, envanter çubuğu, test haritası, tur yönetimi (kararları host verir) |
 | `player.gd` | Karakter, hareket fiziği, roket atışı, kalkan, hasar |
 | `rocket.gd` | Roket uçuşu ve çarpışma |
+| `slipper.gd` | Terlikli Anne'nin güdümlü terliği |
 | `explosion.gd` | Patlama efekti |
 | `sfx.gd` (autoload `Sfx`) | Ses efektlerini koddan üretir (ses dosyası yok) |
 | `settings.gd` (autoload `Settings`) | Ses ve ekran ayarları, `user://settings.cfg` |
