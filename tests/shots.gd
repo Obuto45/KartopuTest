@@ -18,6 +18,10 @@ func _ready() -> void:
 	main._on_start()
 	await get_tree().create_timer(0.5).timeout
 	var me = main.players.get_node("1")
+	me.rotation.y = PI * 0.75
+	me.look.rotation.x = 0.05
+	await get_tree().create_timer(0.3).timeout
+	await _shot("forest")
 	me.look.rotation.x = -0.2
 	me._set_slot(4)
 	me._place_wall()

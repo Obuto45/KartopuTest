@@ -52,6 +52,18 @@ Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release "Wind
 
 Export şablonları kurulu olmalı. `steam_appid.txt` dosyasını exe'nin yanına kopyala.
 
+## Yeni sürüm yayınlama (otomatik güncelleme)
+
+Oyun açılışta GitHub'daki son Release'e bakar. Sürümü daha yeniyse zip'i indirir, kendini günceller ve yeniden başlar. Bunun çalışması için:
+
+1. `project.godot` içinde `config/version` değerini artır (ör. `"0.3"` → `"0.4"`).
+2. Exe'yi dışa aktar, `KartopuTest.exe`, iki `.dll` ve `steam_appid.txt` dosyasını `KartopuTest_vX.Y_Windows.zip` adıyla zip'le.
+3. GitHub'da `vX.Y` etiketiyle Release oluştur ve zip'i ekle. Dosya adı `_Windows.zip` ile bitmeli.
+
+```bash
+gh release create v0.4 KartopuTest_v0.4_Windows.zip --title "v0.4" --notes "Değişiklikler"
+```
+
 ## Kod yapısı
 
 | Dosya | Görev |
@@ -65,6 +77,8 @@ Export şablonları kurulu olmalı. `steam_appid.txt` dosyasını exe'nin yanın
 | `settings.gd` (autoload `Settings`) | Ses ve ekran ayarları, `user://settings.cfg` |
 | `lightning.gd` | Yıldırım: uyarı halkası, şimşek efekti, alan hasarı |
 | `wall.gd` | Duvar asasının geçici duvarı |
+| `forest.gd` | Ormanlık harita: ağaçlar, kayalar, çimen, çiçekler (sabit tohum, herkeste aynı) |
+| `updater.gd` (autoload `Updater`) | GitHub Release'ten otomatik güncelleme |
 | `tests/autotest.tscn` | İki örnekli uçtan uca test |
 
 Ağ modeli:

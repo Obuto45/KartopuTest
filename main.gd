@@ -2,6 +2,7 @@ extends Node3D
 ## Menü, HUD, test sahnesi ve tur yönetimi (tur kararlarını host verir).
 
 const PlayerScript := preload("res://player.gd")
+const ForestScript := preload("res://forest.gd")
 const SPAWNS := [Vector3(-14, 1, -14), Vector3(14, 1, 14), Vector3(-14, 1, 14), Vector3(14, 1, -14)]
 
 var ui: Control
@@ -33,6 +34,7 @@ func _ready() -> void:
 	Net.lobby_changed.connect(_refresh)
 	Net.left.connect(_back_to_menu)
 	Net.invited.connect(_on_invited)
+	Updater.status.connect(func(m): info.text = m)
 	multiplayer.peer_disconnected.connect(_on_peer_left)
 	_refresh()
 
@@ -149,6 +151,7 @@ func _build_ui() -> void:
 	var sub := _lbl(v, "Steam: " + (Net.my_name() if Net.steam_ok else "BAĞLI DEĞİL (Steam açık mı?)"), 15)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.modulate = Color(1, 1, 1, 0.7)
+	sub.text += "   •   sürüm " + Updater.version()
 	invite_box = VBoxContainer.new() # gelen davetler burada çıkar
 	v.add_child(invite_box)
 	_btn(v, "Steam Lobisi Kur", Net.host_steam)
@@ -468,98 +471,15 @@ func _back_to_menu() -> void:
 	_refresh()
 
 
-# ---------- Test sahnesi ----------
-
-func _mat(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	return m
-
-
-func _box(pos: Vector3, size: Vector3, c: Color, rot_y := 0.0) -> void:
-	var b := StaticBody3D.new()
-	b.position = pos
-	b.rotation.y = rot_y
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
-	mi.material_override = _mat(c)
-	b.add_child(mi)
-	var cs := CollisionShape3D.new()
-	var sh := BoxShape3D.new()
-	sh.size = size
-	cs.shape = sh
-	b.add_child(cs)
-	world.add_child(b)
-
-
-func _tree(pos: Vector3, s: float) -> void:
-	var b := StaticBody3D.new()
-	b.position = pos
-	b.scale = Vector3.ONE * s
-	var parts := [ # [üst yarıçap, alt yarıçap, yükseklik, y, renk]
-		[0.25, 0.3, 2.0, 1.0, Color(0.4, 0.25, 0.12)],
-		[0.0, 1.4, 2.6, 2.9, Color(0.1, 0.4, 0.18)],
-		[0.0, 1.0, 2.0, 4.1, Color(0.85, 0.92, 0.95)], # karlı tepe
-	]
-	for p in parts:
-		var mi := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = p[0]; cm.bottom_radius = p[1]; cm.height = p[2]
-		mi.mesh = cm
-		mi.position.y = p[3]
-		mi.material_override = _mat(p[4])
-		b.add_child(mi)
-	var cs := CollisionShape3D.new()
-	var sh := CylinderShape3D.new()
-	sh.radius = 0.35; sh.height = 5.0
-	cs.shape = sh
-	cs.position.y = 2.5
-	b.add_child(cs)
-	world.add_child(b)
-
+# ---------- Harita ----------
 
 func _build_world() -> void:
 	world = Node3D.new()
 	world.name = "World"
 	add_child(world)
-
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	env.sky = Sky.new()
-	env.sky.sky_material = ProceduralSkyMaterial.new()
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	var we := WorldEnvironment.new()
-	we.environment = env
-	world.add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, 35, 0)
-	sun.shadow_enabled = true
-	world.add_child(sun)
-
-	_box(Vector3(0, -0.5, 0), Vector3(60, 1, 60), Color(0.95, 0.97, 1.0)) # karlı zemin
-	for w in [[Vector3(0, 1.5, -30), Vector3(60, 3, 1)], [Vector3(0, 1.5, 30), Vector3(60, 3, 1)],
-			[Vector3(-30, 1.5, 0), Vector3(1, 3, 60)], [Vector3(30, 1.5, 0), Vector3(1, 3, 60)]]:
-		_box(w[0], w[1], Color(0.7, 0.75, 0.8))
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 1234 # herkeste aynı harita
-	var placed := 0
-	while placed < 45:
-		var pos := Vector3(rng.randf_range(-27, 27), 0, rng.randf_range(-27, 27))
-		var near_spawn := SPAWNS.any(func(sp): return Vector2(sp.x - pos.x, sp.z - pos.z).length() < 4.0)
-		var kind := rng.randf() # her döngüde aynı sırayla rng çağrısı -> deterministik
-		var size := rng.randf_range(0.8, 2.0)
-		var rot := rng.randf() * TAU
-		if near_spawn:
-			continue
-		if placed < 22:
-			_tree(pos, 0.8 + kind * 0.6)
-		else:
-			_box(pos + Vector3(0, size * 0.5, 0), Vector3.ONE * size, Color(0.55, 0.38, 0.2).lerp(Color(0.7, 0.55, 0.3), kind), rot)
-		placed += 1
+	var forest: Node3D = ForestScript.new()
+	forest.spawns = SPAWNS
+	world.add_child(forest)
 
 	players = Node3D.new()
 	players.name = "Players"
