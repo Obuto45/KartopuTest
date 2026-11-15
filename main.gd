@@ -16,6 +16,11 @@ var hp_lbl: Label
 var score_lbl: Label
 var center_lbl: Label
 var slots := [] # [[StyleBoxFlat, Label], ...]
+var settings_wrap: ColorRect
+var vol_lbl: Label
+var res_opt: OptionButton
+var close_btn: Button
+var ingame_box: VBoxContainer
 var world: Node3D
 var players: Node3D
 var round_over := false
@@ -34,7 +39,7 @@ func _ready() -> void:
 
 func _setup_input() -> void:
 	var keys := {"fwd": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "jump": KEY_SPACE,
-		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2}
+		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4}
 	for a in keys:
 		InputMap.add_action(a)
 		var ev := InputEventKey.new()
@@ -79,21 +84,71 @@ func _full_label(size: int, h: int, v: int) -> Label:
 	return l
 
 
+func _sb(c: Color, radius := 8, margin := 10) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = c
+	s.set_corner_radius_all(radius)
+	s.set_content_margin_all(margin)
+	return s
+
+
+func _make_theme() -> Theme:
+	var t := Theme.new()
+	t.default_font_size = 17
+	t.set_stylebox("normal", "Button", _sb(Color(0.15, 0.17, 0.26)))
+	t.set_stylebox("hover", "Button", _sb(Color(0.85, 0.42, 0.12)))
+	t.set_stylebox("pressed", "Button", _sb(Color(0.6, 0.28, 0.08)))
+	t.set_stylebox("disabled", "Button", _sb(Color(0.12, 0.12, 0.16, 0.6)))
+	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	t.set_color("font_color", "Button", Color(0.92, 0.94, 1.0))
+	t.set_color("font_hover_color", "Button", Color.WHITE)
+	t.set_color("font_disabled_color", "Button", Color(0.5, 0.5, 0.55))
+	for k in ["normal", "hover", "pressed"]:
+		t.set_stylebox(k, "OptionButton", t.get_stylebox(k, "Button"))
+	var p := _sb(Color(0.06, 0.07, 0.11, 0.93), 14, 26)
+	p.set_border_width_all(2)
+	p.border_color = Color(0.95, 0.5, 0.15, 0.45)
+	t.set_stylebox("panel", "PanelContainer", p)
+	return t
+
+
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	var theme := _make_theme()
 
-	ui = CenterContainer.new()
+	ui = Control.new()
 	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.theme = theme
 	layer.add_child(ui)
+	var bg := TextureRect.new() # menü arka planı: koyu lacivertten mora geçiş
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.04, 0.06, 0.14))
+	grad.set_color(1, Color(0.22, 0.07, 0.16))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	gt.fill_to = Vector2(0, 1)
+	bg.texture = gt
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(bg)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(center)
 	var panel := PanelContainer.new()
-	ui.add_child(panel)
+	center.add_child(panel)
 	var v := VBoxContainer.new()
-	v.custom_minimum_size = Vector2(440, 0)
-	v.add_theme_constant_override("separation", 8)
+	v.custom_minimum_size = Vector2(460, 0)
+	v.add_theme_constant_override("separation", 9)
 	panel.add_child(v)
-	_lbl(v, "ROKET SAVAŞI (test)", 30)
-	_lbl(v, "Steam: " + (Net.my_name() if Net.steam_ok else "BAĞLI DEĞİL (Steam açık mı?)"), 16)
+
+	var title := _lbl(v, "ASA SAVAŞI", 46)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	var sub := _lbl(v, "Steam: " + (Net.my_name() if Net.steam_ok else "BAĞLI DEĞİL (Steam açık mı?)"), 15)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.modulate = Color(1, 1, 1, 0.7)
 	invite_box = VBoxContainer.new() # gelen davetler burada çıkar
 	v.add_child(invite_box)
 	_btn(v, "Steam Lobisi Kur", Net.host_steam)
@@ -104,14 +159,25 @@ func _build_ui() -> void:
 	friends_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(friends_box)
 	v.add_child(scroll)
-	start_btn = _btn(v, "Oyunu Başlat (host)", _on_start)
-	_btn(v, "Lobiden Çık", Net.leave)
-	_lbl(v, "— Tek PC testi —", 14)
-	_btn(v, "Yerel Host", Net.host_local)
-	_btn(v, "Yerel Katıl (127.0.0.1)", Net.join_local)
+	start_btn = _btn(v, "▶  Oyunu Başlat (host)", _on_start)
 	members = _lbl(v, "", 16)
+	_btn(v, "Lobiden Çık", Net.leave)
+	v.add_child(HSeparator.new())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 9)
+	v.add_child(row)
+	for b in [_btn(row, "Ayarlar", _open_settings), _btn(row, "Çıkış", get_tree().quit)]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var test := HBoxContainer.new()
+	test.add_theme_constant_override("separation", 9)
+	v.add_child(test)
+	var tl := _lbl(test, "Tek PC testi:", 14)
+	tl.modulate = Color(1, 1, 1, 0.6)
+	tl.autowrap_mode = TextServer.AUTOWRAP_OFF # HBox içinde harf harf kırılmasın
+	for b in [_btn(test, "Yerel Host", Net.host_local), _btn(test, "Yerel Katıl", Net.join_local)]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info = _lbl(v, "Arkadaşın daveti kabul edince lobiye girer. Sonra 'Oyunu Başlat'.", 14)
-	_btn(v, "Çıkış", get_tree().quit)
+	info.modulate = Color(1, 1, 1, 0.75)
 
 	hud = Control.new()
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -127,16 +193,16 @@ func _build_ui() -> void:
 	score_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_RIGHT, VERTICAL_ALIGNMENT_TOP)
 	center_lbl = _full_label(52, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
 	_full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM).text = \
-		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1 ateş asası | 2 kalkan | Sol tık kullan | ESC fare | F10 çık"
+		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1-4 eşya | Sol tık kullan | ESC menü/ayarlar | F10 çık"
 	# Alt envanter çubuğu (hotbar)
 	var bar := HBoxContainer.new()
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bar.offset_left = -95; bar.offset_right = 95
+	bar.offset_left = -195; bar.offset_right = 195
 	bar.offset_top = -140; bar.offset_bottom = -50
 	bar.add_theme_constant_override("separation", 10)
 	hud.add_child(bar)
-	for i in 2:
+	for i in 4:
 		var cell := PanelContainer.new()
 		cell.custom_minimum_size = Vector2(90, 84)
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -153,6 +219,89 @@ func _build_ui() -> void:
 		bar.add_child(cell)
 		slots.append([sb, l])
 	hud.hide()
+	_build_settings(layer, theme)
+
+
+func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
+	settings_wrap = ColorRect.new() # arkayı karartır, tıklamaları yutar
+	settings_wrap.color = Color(0, 0, 0, 0.55)
+	settings_wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	settings_wrap.theme = theme
+	layer.add_child(settings_wrap)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	settings_wrap.add_child(center)
+	var panel := PanelContainer.new()
+	center.add_child(panel)
+	var v := VBoxContainer.new()
+	v.custom_minimum_size = Vector2(420, 0)
+	v.add_theme_constant_override("separation", 10)
+	panel.add_child(v)
+	_lbl(v, "AYARLAR", 32).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	vol_lbl = _lbl(v, "", 17)
+	var vol := HSlider.new()
+	vol.min_value = 0.0; vol.max_value = 1.0; vol.step = 0.05
+	vol.value = Settings.volume
+	vol.value_changed.connect(_on_volume)
+	v.add_child(vol)
+	_on_volume(vol.value)
+
+	_lbl(v, "Ekran modu", 17)
+	var mode := OptionButton.new()
+	for m in Settings.MODES:
+		mode.add_item(m)
+	mode.selected = Settings.mode
+	mode.item_selected.connect(_on_mode)
+	v.add_child(mode)
+	_lbl(v, "Çözünürlük (pencere modunda)", 17)
+	res_opt = OptionButton.new()
+	for r in Settings.RESOLUTIONS:
+		res_opt.add_item("%d x %d" % [r.x, r.y])
+	res_opt.selected = Settings.resolution
+	res_opt.disabled = Settings.mode != 0
+	res_opt.item_selected.connect(_on_res)
+	v.add_child(res_opt)
+
+	v.add_child(HSeparator.new())
+	ingame_box = VBoxContainer.new()
+	v.add_child(ingame_box)
+	_btn(ingame_box, "Lobiden Çık", Net.leave)
+	close_btn = _btn(v, "Kapat", _close_settings)
+	settings_wrap.hide()
+
+
+func _on_volume(x: float) -> void:
+	Settings.volume = x
+	Settings.apply_audio()
+	vol_lbl.text = "Ses: %d%%" % roundi(x * 100.0)
+
+
+func _on_mode(i: int) -> void:
+	Settings.mode = i
+	res_opt.disabled = i != 0
+	Settings.apply_display()
+	Settings.save()
+
+
+func _on_res(i: int) -> void:
+	Settings.resolution = i
+	Settings.apply_display()
+	Settings.save()
+
+
+func _open_settings() -> void:
+	ingame_box.visible = world != null
+	close_btn.text = "Oyuna Dön" if world else "Kapat"
+	settings_wrap.show()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _close_settings() -> void:
+	settings_wrap.hide()
+	Settings.save()
+	if world:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _show_friends() -> void:
@@ -204,8 +353,9 @@ func _process(_dt: float) -> void:
 		hp_lbl.text = "Can: %d" % me.hp
 		dmg_rect.color.a = me.flash * 1.2
 		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
-		var texts := ["1\nATEŞ ASASI","2\nKALKAN\n" + sh]
-		for i in 2:
+		var texts := ["1\nATEŞ ASASI", "2\nKALKAN\n" + sh,
+			"3\nYILDIRIM\n" + _cd_text(me.lightning_cd), "4\nDUVAR\n" + _cd_text(me.wall_cd)]
+		for i in 4:
 			slots[i][0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
 			slots[i][1].text = texts[i]
 	var s := PackedStringArray()
@@ -214,12 +364,20 @@ func _process(_dt: float) -> void:
 	score_lbl.text = "\n".join(s)
 
 
+func _cd_text(t: float) -> String:
+	return "%d sn" % ceili(t) if t > 0.0 else "HAZIR"
+
+
 func _unhandled_input(e: InputEvent) -> void:
-	if world == null:
-		return
 	if e.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif e is InputEventMouseButton and e.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		if settings_wrap.visible:
+			_close_settings()
+		elif world:
+			_open_settings()
+		return
+	if world == null or settings_wrap.visible:
+		return
+	if e is InputEventMouseButton and e.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif e is InputEventKey and e.pressed and e.keycode == KEY_F10:
 		Net.leave()
@@ -304,6 +462,7 @@ func _back_to_menu() -> void:
 	_clear_world()
 	round_over = false
 	hud.hide()
+	settings_wrap.hide()
 	ui.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_refresh()

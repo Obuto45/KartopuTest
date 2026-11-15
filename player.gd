@@ -4,6 +4,8 @@ extends CharacterBody3D
 
 const RocketScript := preload("res://rocket.gd")
 const ExplosionScript := preload("res://explosion.gd")
+const LightningScript := preload("res://lightning.gd")
+const WallScript := preload("res://wall.gd")
 const SPEED := 7.0
 const ACCEL := 60.0 # yerde hızlanma (m/s²)
 const FRICTION := 45.0 # yerde tuş yokken yavaşlama
@@ -22,6 +24,12 @@ const THROW_CD := 0.8 # roket atış aralığı
 const SHIELD_CD := 8.0
 const SHIELD_R := 1.25
 const BLAST_RADIUS := 2.5 # patlama bu mesafedekilere hasar verir
+const LIGHTNING_CD := 2.5
+const LIGHTNING_RANGE := 25.0 # en fazla bu uzaklığa yıldırım indirilir
+const LIGHTNING_R := 2.2
+const WALL_CD := 6.0
+const WALL_DIST := 2.5 # duvar önümüzde bu mesafede çıkar
+const SLOT_COLORS := {1: Color(1.0, 0.4, 0.05), 3: Color(0.4, 0.75, 1.0), 4: Color(0.6, 0.45, 0.3)}
 
 var spawn_pos := Vector3.ZERO
 var rocket_n := 0
@@ -30,7 +38,11 @@ var body_mat: StandardMaterial3D
 var base_col: Color
 var hp := MAX_HP
 var cd := 0.0
-var slot := 1 # 1 = ateş asası, 2 = kalkan
+var slot := 1 # 1 = ateş asası, 2 = kalkan, 3 = yıldırım asası, 4 = duvar asası
+var lightning_cd := 0.0
+var wall_cd := 0.0
+var gem_mat: StandardMaterial3D
+var gem_glow: OmniLight3D
 var shield_on := false
 var shield_cd := 0.0
 var shield_mesh: MeshInstance3D
@@ -145,6 +157,8 @@ func _ready() -> void:
 	glow.omni_range = 1.5
 	glow.position.y = 0.6
 	gun.add_child(glow)
+	gem_mat = cm
+	gem_glow = glow
 
 	# Kalkan: yarı saydam mavi küre, içeriden de görünsün.
 	var sph := SphereMesh.new()
@@ -182,6 +196,8 @@ func _local(dt: float) -> void:
 	cd -= dt
 	dash_cd -= dt
 	shield_cd -= dt
+	lightning_cd -= dt
+	wall_cd -= dt
 
 	var dir := Vector3.ZERO
 	if active:
@@ -204,6 +220,10 @@ func _local(dt: float) -> void:
 		if Input.is_action_just_pressed("slot2"):
 			_set_slot(2)
 			_try_shield()
+		if Input.is_action_just_pressed("slot3"):
+			_set_slot(3)
+		if Input.is_action_just_pressed("slot4"):
+			_set_slot(4)
 
 	if dash_t > 0.0:
 		dash_t -= dt # dash sırasında yerçekimi/sürtünme yok
@@ -218,8 +238,13 @@ func _local(dt: float) -> void:
 		velocity.x = hv.x
 		velocity.z = hv.y
 
-	if active and slot == 2 and Input.is_action_just_pressed("throw"):
-		_try_shield()
+	if active and Input.is_action_just_pressed("throw"):
+		if slot == 2:
+			_try_shield()
+		elif slot == 3 and lightning_cd <= 0.0:
+			_cast_lightning()
+		elif slot == 4 and wall_cd <= 0.0:
+			_place_wall()
 	if active and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
 		cd = THROW_CD
 		var b := cam.global_basis
@@ -253,7 +278,71 @@ func sync_state(p: Vector3, yaw: float, pitch: float, spd: float, s: int) -> voi
 
 func _set_slot(s: int) -> void:
 	slot = s
-	gun.visible = s == 1
+	gun.visible = s != 2 # kalkanda asa yok
+	if SLOT_COLORS.has(s): # her asanın kristal rengi farklı
+		gem_mat.albedo_color = SLOT_COLORS[s]
+		gem_mat.emission = SLOT_COLORS[s]
+		gem_glow.light_color = SLOT_COLORS[s]
+
+
+func _player_rids() -> Array:
+	return get_tree().get_nodes_in_group("players").map(func(p): return p.get_rid())
+
+
+func _cast_lightning() -> void:
+	var space := get_world_3d().direct_space_state
+	var from := cam.global_position
+	var to := from - cam.global_basis.z * LIGHTNING_RANGE
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = [get_rid()]
+	var r := space.intersect_ray(q)
+	var p: Vector3 = r.position if r else to
+	# Nişan havadaysa (ya da oyuncuya denk geldiyse) altındaki zemine indir.
+	var dq := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 0.5, p + Vector3.DOWN * 60.0)
+	dq.exclude = _player_rids()
+	var down := space.intersect_ray(dq)
+	if down:
+		p = down.position
+	elif not r:
+		return # harita dışı
+	lightning_cd = LIGHTNING_CD
+	cast_lightning.rpc(p)
+
+
+@rpc("authority", "call_local", "reliable")
+func cast_lightning(pos: Vector3) -> void:
+	var l: Node3D = LightningScript.new()
+	l.caster = self
+	l.radius = LIGHTNING_R
+	l.position = pos
+	get_parent().get_parent().add_child(l)
+
+
+func _place_wall() -> void:
+	var p := global_position - transform.basis.z * WALL_DIST
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 2.0, p + Vector3.DOWN * 6.0)
+	q.exclude = _player_rids()
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	if r:
+		p.y = r.position.y
+	wall_cd = WALL_CD
+	spawn_wall.rpc(p, rotation.y)
+
+
+## Oyuncu başına tek duvar: yenisi eskisini siler.
+@rpc("authority", "call_local", "reliable")
+func spawn_wall(pos: Vector3, yaw: float) -> void:
+	var world := get_parent().get_parent()
+	var wname := "W%d" % get_multiplayer_authority()
+	var old := world.get_node_or_null(wname)
+	if old:
+		world.remove_child(old) # isim hemen boşalsın
+		old.queue_free()
+	var w: Node3D = WallScript.new()
+	w.name = wname
+	w.position = pos
+	w.rotation.y = yaw
+	world.add_child(w)
 
 
 func _try_shield() -> void:
@@ -317,12 +406,16 @@ func explode(rocket_name, pos: Vector3) -> void:
 	fx.position = pos
 	world.add_child(fx)
 	Sfx.play3d(Sfx.boom, pos, 4.0)
-	# Hasarı her makine yalnızca kendi oyuncusu için uygular.
+	apply_blast(pos, BLAST_RADIUS)
+
+
+## Hasarı her makine yalnızca kendi oyuncusu için uygular (atan hariç).
+func apply_blast(pos: Vector3, radius: float) -> void:
 	var me = get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
 	if me == null or me == self or me.hp <= 0:
 		return
 	var c: Vector3 = me.global_position + Vector3(0, 0.95, 0)
-	if c.distance_to(pos) < BLAST_RADIUS:
+	if c.distance_to(pos) < radius:
 		me.velocity += (c - pos).normalized() * 7.0 + Vector3.UP * 3.0 # sarsıntı / itme
 		if me.shield_on:
 			me.set_shield.rpc(false) # kalkan tek roketi emer
@@ -354,6 +447,8 @@ func respawn() -> void:
 	shield_mesh.visible = false
 	shield_cd = 0.0
 	dash_cd = 0.0
+	lightning_cd = 0.0
+	wall_cd = 0.0
 	velocity = Vector3.ZERO
 	global_position = spawn_pos
 	net_pos = spawn_pos

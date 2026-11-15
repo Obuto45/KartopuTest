@@ -35,9 +35,12 @@ Steam App ID olarak test ID'si `480` (Spacewar) kullanılıyor. Steam'de "Spacew
 | Boşluk | Zıpla, havada tekrar basınca çift zıplama |
 | Shift + WASD | Dash (havada da çalışır) |
 | 1 | Ateş asası (ateş topu fırlatır) |
-| 2 | Kalkan (tek roketi emer, 8 sn bekleme) |
+| 2 | Kalkan (tek saldırıyı emer, 8 sn bekleme) |
+| 3 | Yıldırım asası (nişan alınan yere, en fazla 25 m, 2.5 sn bekleme) |
+| 4 | Duvar asası (önüne 3 m'lik duvar, 8 sn durur, 6 sn bekleme) |
 | Sol tık | Seçili eşyayı kullan |
-| ESC / F10 | Fareyi serbest bırak / lobiden çık |
+| ESC | Ayarlar (ses, ekran modu, çözünürlük) / oyuna dön |
+| F10 | Lobiden çık |
 
 Her isabet 20 hasar, 5 isabette ölüm. Biri ölünce kazanan yazılır, 3 sn sonra yeni tur başlar.
 
@@ -59,6 +62,9 @@ Export şablonları kurulu olmalı. `steam_appid.txt` dosyasını exe'nin yanın
 | `rocket.gd` | Roket uçuşu ve çarpışma |
 | `explosion.gd` | Patlama efekti |
 | `sfx.gd` (autoload `Sfx`) | Ses efektlerini koddan üretir (ses dosyası yok) |
+| `settings.gd` (autoload `Settings`) | Ses ve ekran ayarları, `user://settings.cfg` |
+| `lightning.gd` | Yıldırım: uyarı halkası, şimşek efekti, alan hasarı |
+| `wall.gd` | Duvar asasının geçici duvarı |
 | `tests/autotest.tscn` | İki örnekli uçtan uca test |
 
 Ağ modeli:

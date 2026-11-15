@@ -9,6 +9,7 @@ run/main_scene="res://main.tscn"
 
 Net="*res://net.gd"
 Sfx="*res://sfx.gd"
+Settings="*res://settings.gd"
 
 [display]
 
