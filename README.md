@@ -2,7 +2,17 @@
 
 Godot 4 ile yapılmış, Steam üzerinden 2–4 kişilik, 1. şahıs roket savaşı test oyunu.
 
-## Gereksinimler
+## Sadece oynamak için (Windows)
+
+1. [Releases](https://github.com/Obuto45/KartopuTest/releases/latest) sayfasından son zip'i indir.
+2. Zip'i bir klasöre aç. Tüm dosyalar aynı klasörde kalmalı.
+3. Steam'i aç ve giriş yap.
+4. `KartopuTest.exe`'yi çalıştır. Windows uyarı verirse **Ek bilgi → Yine de çalıştır**.
+5. Bir kişi **Steam Lobisi Kur**, diğerlerini **Arkadaşlar → Davet et** ile çağırır. Herkes aynı sürümü kullanmalı.
+
+Steam'de "Spacewar oynuyor" görünmen normal (test App ID'si 480).
+
+## Gereksinimler (geliştirme)
 
 - **Godot 4.7.2** (standart ya da .NET/mono sürümü; kod tamamen GDScript)
 - **Steam** açık ve giriş yapılmış olmalı
