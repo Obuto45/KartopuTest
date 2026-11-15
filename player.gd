@@ -7,6 +7,7 @@ const ExplosionScript := preload("res://explosion.gd")
 const LightningScript := preload("res://lightning.gd")
 const WallScript := preload("res://wall.gd")
 const Chars := preload("res://characters.gd")
+const Rig := preload("res://rig.gd")
 const SlipperScript := preload("res://slipper.gd")
 const FLASH_R := 8.0
 const FLASH_TIME := 1.5
@@ -60,6 +61,10 @@ var blind_t := 0.0 # > 0 iken ekran beyaz (Keloğlan'ın flaşı; yalnızca yere
 var head_mat: StandardMaterial3D
 var model: Node3D # karakterin 3D modeli (varsa)
 var model_fx: StandardMaterial3D # modelin üstüne binen kırmızı hasar parlaması
+var skel: Skeleton3D # modele kodla takılan iskelet (rig.gd)
+var arm_down := [Quaternion(), Quaternion()] # [sağ, sol] kolu aşağı sarkıtan dönüş
+var arm_straight := [Quaternion(), Quaternion()] # ön kolu üst kolla hizalayan dönüş
+var arm_dir := Vector3.DOWN # sağ üst kolun modeldeki duruş yönü
 var quote_lbl: Label3D
 var quote_t := 0.0
 var still_t := 0.0 # yerinde durma süresi (Kahvehane Dayısı pasifi)
@@ -200,21 +205,23 @@ func _ready() -> void:
 		_bar_mat(hp_fill)
 
 	# Ateş asası: kafa pivotuna bağlı, sağ altta (herkes görür). Yerel +Y ileriyi gösterir.
+	var staff: String = ch.get("staff", "")
 	var pole := CylinderMesh.new()
 	pole.top_radius = 0.022; pole.bottom_radius = 0.035; pole.height = 1.0
-	gun = _mesh(look, pole, Vector3(0.3, -0.35, -0.45), Color(0.4, 0.24, 0.12))
+	var pole_col := Color(0.4, 0.24, 0.12)
+	match staff:
+		"oklava":
+			pole.top_radius = 0.026; pole.bottom_radius = 0.026
+			pole_col = Color(0.87, 0.72, 0.47)
+		"leek":
+			pole.top_radius = 0.03; pole.bottom_radius = 0.024
+			pole_col = Color(0.96, 0.96, 0.88)
+		"cane":
+			pole.top_radius = 0.022; pole.bottom_radius = 0.022
+			pole_col = Color(0.2, 0.13, 0.08)
+	gun = _mesh(look, pole, Vector3(0.3, -0.35, -0.45), pole_col)
 	gun.rotation.x = -PI / 2 + 0.45 # ucu hafif yukarı bakar, kristal görünsün
-	var ring := TorusMesh.new()
-	ring.inner_radius = 0.04; ring.outer_radius = 0.065
-	for y in [0.3, 0.44]:
-		var gm := _mesh(gun, ring, Vector3(0, y, 0), Color(0.95, 0.75, 0.2)).material_override as StandardMaterial3D
-		gm.metallic = 1.0; gm.roughness = 0.3
-	var claw := CylinderMesh.new() # kristali tutan altın pençeler
-	claw.top_radius = 0.008; claw.bottom_radius = 0.015; claw.height = 0.16
-	for i in 3:
-		var a := TAU * i / 3.0
-		var c := _mesh(gun, claw, Vector3(cos(a) * 0.05, 0.53, sin(a) * 0.05), Color(0.95, 0.75, 0.2))
-		c.basis = Basis(Vector3(-sin(a), 0, cos(a)), -0.35) # uçları dışa açık
+	_staff_parts(staff)
 	var gem := PrismMesh.new()
 	gem.size = Vector3(0.11, 0.2, 0.11)
 	var crystal := _mesh(gun, gem, Vector3(0, 0.6, 0), Color(1.0, 0.45, 0.1))
@@ -251,6 +258,8 @@ func _ready() -> void:
 	_mesh(sword, grip, Vector3(0, 0, 0.02), Color(0.3, 0.18, 0.1)).rotation.x = PI / 2
 	sword.rotation = Vector3(0.9, 0.2, 0) # dinlenme: ucu yukarıda, hafif içe dönük
 	sword.visible = false
+	if skel and not is_multiplayer_authority():
+		_weapons_to_hand() # kendi gözünden bakarken silah ekranın önünde kalır
 	if is_multiplayer_authority():
 		for mi in sword.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -289,6 +298,83 @@ func _load_model() -> void:
 	scene.position = Vector3(-c.x, -box.position.y, -c.z)
 	model.scale = Vector3.ONE * (1.9 / box.size.y)
 	model.rotation.y = ch.get("model_yaw", 0.0)
+	if ch.has("rig"):
+		var skin_mi: MeshInstance3D = scene.find_children("*", "MeshInstance3D", true, false)[0]
+		skel = Rig.build(skin_mi, ch.rig, ch.model)
+		var segs := Rig.segments(ch.rig)
+		arm_dir = (segs[Rig.ARM_R][1] - segs[Rig.ARM_R][0]).normalized()
+		for k in 2: # 0 sağ (+Z), 1 sol (-Z)
+			var up_i: int = Rig.ARM_R + k * 2
+			var u: Vector3 = (segs[up_i][1] - segs[up_i][0]).normalized()
+			var f: Vector3 = (segs[up_i + 1][1] - segs[up_i + 1][0]).normalized()
+			arm_down[k] = Quaternion(u, Vector3(0, -1, 0.12 if k == 0 else -0.12).normalized())
+			arm_straight[k] = Quaternion(f, u)
+
+
+## Asayı ve kılıcı kafa pivotundan alıp sağ ele bağlar (yalnızca iskeletli modelde, başkalarının gözünde).
+func _weapons_to_hand() -> void:
+	var segs := Rig.segments(ch.rig)
+	var hand := BoneAttachment3D.new()
+	skel.add_child(hand)
+	hand.bone_name = "fore_r"
+	var holder := Node3D.new()
+	hand.add_child(holder)
+	# Kol nişan alırken (pitch 0) tutucunun -Z'si karakterin önüne (+X), Y'si yukarı baksın.
+	var aim: Quaternion = Quaternion(arm_dir, _aim_dir(0.0)) * arm_straight[0]
+	holder.basis = Basis(aim.inverse()) * Basis(Vector3(0, 0, 1), Vector3(0, 1, 0), Vector3(-1, 0, 0))
+	holder.scale = Vector3.ONE / model.scale.x # model büyütülmüş; silah gerçek boyunda kalsın
+	holder.position = (segs[Rig.FORE_R][1] - segs[Rig.FORE_R][0]) * 0.85 # avuç içi
+	gun.reparent(holder, false)
+	gun.position = gun.basis.y * 0.25 # sapın alt üçte birinden tut
+	sword.reparent(holder, false)
+	sword.position = Vector3.ZERO
+
+
+## Sağ kolun nişan yönü (model uzayında): ileri, bakış açısı kadar yukarı/aşağı, hafif dışa ve aşağı.
+func _aim_dir(pitch: float) -> Vector3:
+	return Vector3(cos(pitch), sin(pitch) - 0.18, 0.22).normalized()
+
+
+## Ateş asasının karaktere özel süsleri. Asanın yerel +Y'si uç tarafıdır (kristal 0.6'da).
+func _staff_parts(staff: String) -> void:
+	var gold := Color(0.95, 0.75, 0.2)
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.04; ring.outer_radius = 0.065
+	match staff:
+		"crook": # çoban değneği: uçta kıvrık kanca, sapta ip sargısı
+			_mesh(gun, ring, Vector3(0, 0.44, 0.06), Color(0.4, 0.24, 0.12)).rotation.z = PI / 2
+			var wrap := CylinderMesh.new()
+			wrap.top_radius = 0.034; wrap.bottom_radius = 0.036; wrap.height = 0.12
+			_mesh(gun, wrap, Vector3(0, -0.2, 0), Color(0.8, 0.7, 0.45))
+		"oklava": # oklava: iki ucu koyu, ortası açık renk tahta
+			var cap := CylinderMesh.new()
+			cap.top_radius = 0.03; cap.bottom_radius = 0.03; cap.height = 0.07
+			for y in [-0.46, 0.4]:
+				_mesh(gun, cap, Vector3(0, y, 0), Color(0.6, 0.42, 0.22))
+		"leek": # pırasa: beyaz sap, yeşil üst, yapraklar
+			var green := CylinderMesh.new()
+			green.top_radius = 0.04; green.bottom_radius = 0.031; green.height = 0.45
+			_mesh(gun, green, Vector3(0, 0.25, 0), Color(0.3, 0.62, 0.22))
+			var leaf := PrismMesh.new()
+			leaf.size = Vector3(0.07, 0.22, 0.02)
+			for i in 3:
+				var a := TAU * i / 3.0
+				var l := _mesh(gun, leaf, Vector3(cos(a) * 0.05, 0.5, sin(a) * 0.05), Color(0.2, 0.5, 0.18))
+				l.basis = Basis(Vector3(-sin(a), 0, cos(a)), -0.5)
+		"cane": # baston: tutma yerinde kıvrık sap, uçta pirinç halka
+			_mesh(gun, ring, Vector3(0, -0.5, 0.06), Color(0.2, 0.13, 0.08)).rotation.z = PI / 2
+			var gm := _mesh(gun, ring, Vector3(0, 0.44, 0), gold).material_override as StandardMaterial3D
+			gm.metallic = 1.0; gm.roughness = 0.3
+		_: # büyücü asası: altın halkalar ve kristali tutan pençeler
+			for y in [0.3, 0.44]:
+				var gm := _mesh(gun, ring, Vector3(0, y, 0), gold).material_override as StandardMaterial3D
+				gm.metallic = 1.0; gm.roughness = 0.3
+			var claw := CylinderMesh.new()
+			claw.top_radius = 0.008; claw.bottom_radius = 0.015; claw.height = 0.16
+			for i in 3:
+				var a := TAU * i / 3.0
+				var c := _mesh(gun, claw, Vector3(cos(a) * 0.05, 0.53, sin(a) * 0.05), gold)
+				c.basis = Basis(Vector3(-sin(a), 0, cos(a)), -0.35) # uçları dışa açık
 
 
 ## Karakteri tanıtan kafa süsü. Kafa pivotuna bağlı; yerel oyuncu kendininkini görmez.
@@ -730,10 +816,13 @@ func _animate(dt: float) -> void:
 	walk_t += dt * spd * 2.0
 	leg_l.rotation.x = sin(walk_t) * amp
 	leg_r.rotation.x = -sin(walk_t) * amp
-	if model: # iskeleti yok: yürürken hafifçe zıplar ve sallanır
+	if model:
 		model.position.y = absf(sin(walk_t)) * 0.07 * amp
-		model.rotation.x = sin(walk_t) * 0.06 * amp
 		model_fx.albedo_color.a = flash / 0.35 * 0.6
+		if skel:
+			_pose(sin(walk_t) * amp / 0.7)
+		else: # iskeleti yok: yürürken yalnızca sallanır
+			model.rotation.x = sin(walk_t) * 0.06 * amp
 	vis.rotation.z = lerp(vis.rotation.z, 1.5 if hp <= 0 else 0.0, 0.1) # ölünce devril
 	if swing_t > 0.0: # sağdan sola yatay savurma
 		swing_t = maxf(swing_t - dt, 0.0)
@@ -762,6 +851,27 @@ func _animate(dt: float) -> void:
 	body_mat.albedo_color = base_col.lerp(Color(1, 0.1, 0.1), flash / 0.35)
 	body_mat.emission_enabled = flash > 0.0 or shout_t > 0.0
 	body_mat.emission = Color(1, 0, 0) * (flash / 0.35) if flash > 0.0 else Color(1.0, 0.5, 0.1) * 0.6 # turuncu: bağırdı, güçlü
+
+
+## İskelet duruşu. s: -1..1 adım salınımı. Model uzayı: +X ön, +Z sağ; Z ekseninde + dönüş uzvu öne atar.
+func _pose(s: float) -> void:
+	var z := Vector3(0, 0, 1)
+	_bone(Rig.LEG_R, Quaternion(z, s * 0.6))
+	_bone(Rig.SHIN_R, Quaternion(z, -maxf(-s, 0.0) * 0.8)) # arkada kalan bacak dizden bükülür
+	_bone(Rig.LEG_L, Quaternion(z, -s * 0.6))
+	_bone(Rig.SHIN_L, Quaternion(z, -maxf(s, 0.0) * 0.8))
+	_bone(Rig.HEAD, Quaternion(z, look.rotation.x * 0.6))
+	_bone(Rig.ARM_L, Quaternion(z, s * 0.5) * arm_down[1])
+	_bone(Rig.FORE_L, arm_straight[1])
+	_bone(Rig.FORE_R, arm_straight[0])
+	if slot == 2 or hp <= 0: # elinde bir şey yok: kol sarkar ve sallanır
+		_bone(Rig.ARM_R, Quaternion(z, -s * 0.5) * arm_down[0])
+	else: # silah elde: kol baktığı yere uzanır
+		_bone(Rig.ARM_R, Quaternion(arm_dir, _aim_dir(look.rotation.x)))
+
+
+func _bone(i: int, q: Quaternion) -> void:
+	skel.set_bone_pose_rotation(i, skel.get_bone_pose_rotation(i).slerp(q, 0.3)) # yumuşak geçiş
 
 
 @rpc("authority", "call_local", "reliable")

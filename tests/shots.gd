@@ -59,8 +59,18 @@ func _ready() -> void:
 	await get_tree().create_timer(0.1).timeout
 	await _shot("nametag")
 	main.players.get_node("4").say("Gel buraya!")
+	main.players.get_node("3").net_speed = 7.0 # Keloğlan yürüyor: bacak ve kol salınımı görünsün
+	await get_tree().create_timer(0.35).timeout
 	await get_tree().create_timer(0.1).timeout
 	await _shot("looks")
+	for n in ["2", "3"]: # yandan: kol, silah ve adım görünsün
+		main.players.get_node(n).net_yaw = PI / 2
+		main.players.get_node(n).net_pos += Vector3(0, 0, 2.0)
+	main.players.get_node("2").net_speed = 7.0
+	await get_tree().create_timer(0.5).timeout
+	await _shot("side")
+	for n in ["2", "3"]:
+		main.players.get_node(n).net_speed = 0.0
 	me.set_hp(25) # can barı: kritik seviye + beyaz iz
 	await get_tree().create_timer(0.3).timeout
 	await _shot("hud")

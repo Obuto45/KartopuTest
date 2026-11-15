@@ -91,6 +91,7 @@ gh release create v0.4 KartopuTest_v0.4_Windows.zip --title "v0.4" --notes "Değ
 | `rocket.gd` | Roket uçuşu ve çarpışma |
 | `slipper.gd` | Güdümlü mermiler: Terlikli Anne'nin terliği, Dayı'nın okey taşı |
 | `models/` | Karakterlerin 3D modelleri (yapay zekâyla üretildi; `characters.gd` içindeki `model` alanı) |
+| `rig.gd` | Modellere kodla iskelet takar (kol, bacak, kafa hareketi; silah sağ elde) |
 | `explosion.gd` | Patlama efekti |
 | `sfx.gd` (autoload `Sfx`) | Ses efektlerini koddan üretir (ses dosyası yok) |
 | `settings.gd` (autoload `Settings`) | Ses ve ekran ayarları, `user://settings.cfg` |
