@@ -67,3 +67,9 @@ godot --headless --path . res://tests/autotest.tscn -- join
 ```
 
 Sinan'ı çok seviyom ❤️
+
+---
+
+_Test güncellemesi: Sinan, 15.11.2026_
+
+Nihat'ı çok seviyorum.
