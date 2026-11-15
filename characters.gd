@@ -30,12 +30,13 @@ const LIST := [
 		"quote": "Gel abla gel, domates bunlar!",
 	},
 	{
-		"name": "Kaptan Dron", "role": "Dron Pilotu", "color": Color(0.95, 0.55, 0.15), "look": "helmet",
-		"hp": 120, "speed": 1.0, "shield_cd": 8.0,
-		"passive": "100 yerine 120 canla başlar.",
-		"skill": "drone", "skill_name": "DRON BOMBASI", "cd": 9.0,
-		"skill_desc": "Nişan noktasına (30 m) 1 sn sonra bomba düşer: 35 hasar, 3 m alan.",
-		"quote": "Hedef kilitlendi!",
+		"name": "Kahvehane Dayısı", "role": "Okey Ustası", "color": Color(0.42, 0.4, 0.5), "look": "dayi",
+		"hp": 100, "speed": 1.0, "shield_cd": 8.0, "sit_shield": true,
+		"passive": "2 sn yerinden kıpırdamazsa kendiliğinden kalkan alır.",
+		"skill": "tile", "skill_name": "TAŞ AT!", "cd": 9.0,
+		"skill_desc": "Okey taşı en yakın düşmana gider, 3 kişiye kadar seker: her birine 20 hasar.",
+		"quote": "Okey bende, taş at!",
+		"model": "res://models/dayi.glb", "model_yaw": PI / 2,
 	},
 ]
 

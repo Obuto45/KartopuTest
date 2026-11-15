@@ -55,7 +55,7 @@ Menüdeki **Karakter: … – değiştir** butonundan seçilir; lobideki herkes 
 | Keloğlan (Şanslı Kel) | 100 | %15 şansla hasar kafadan seker | Kafa Parlatma: 8 m içinde ona bakanların ekranı 1,5 sn beyaz (12 sn) |
 | Terlikli Anne (Ev Hanımı) | 100 | Ateş topları %25 hızlı/uzak | Güdümlü Terlik: en yakın düşmanı kovalar, 30 hasar (8 sn) |
 | Pazarcı Abi (Semt Pazarı) | 110 | Q'dan sonra 4 sn ateş topu 30 hasar | Gel Abla Gel: 8 m içindekileri çeker, 10 hasar (10 sn) |
-| Kaptan Dron (Dron Pilotu) | 120 | Fazladan can | Dron Bombası: 30 m'ye, 1 sn sonra 35 hasar (9 sn) |
+| Kahvehane Dayısı (Okey Ustası) | 100 | 2 sn durunca kendiliğinden kalkan | Taş At!: okey taşı en yakın düşmana gider, 3 kişiye kadar seker, 20 hasar (9 sn) |
 
 Q basınca karakterin kafasında repliği çıkar ("Gel buraya!", "Gel abla gel, domates bunlar!").
 
@@ -89,7 +89,7 @@ gh release create v0.4 KartopuTest_v0.4_Windows.zip --title "v0.4" --notes "Değ
 | `main.gd` | Menü, HUD, envanter çubuğu, test haritası, tur yönetimi (kararları host verir) |
 | `player.gd` | Karakter, hareket fiziği, roket atışı, kalkan, hasar |
 | `rocket.gd` | Roket uçuşu ve çarpışma |
-| `slipper.gd` | Terlikli Anne'nin güdümlü terliği |
+| `slipper.gd` | Güdümlü mermiler: Terlikli Anne'nin terliği, Dayı'nın okey taşı |
 | `models/` | Karakterlerin 3D modelleri (yapay zekâyla üretildi; `characters.gd` içindeki `model` alanı) |
 | `explosion.gd` | Patlama efekti |
 | `sfx.gd` (autoload `Sfx`) | Ses efektlerini koddan üretir (ses dosyası yok) |

@@ -15,9 +15,8 @@ const PULL_R := 8.0
 const PULL_DMG := 10
 const SHOUT_TIME := 4.0
 const SHOUT_DMG := 30
-const DRONE_RANGE := 30.0
-const DRONE_R := 3.0
-const DRONE_DMG := 35
+const TILE_RANGE := 30.0
+const SIT_TIME := 2.0 # Kahvehane Dayısı bu kadar durunca kalkan alır
 const SPEED := 7.0
 const ACCEL := 60.0 # yerde hızlanma (m/s²)
 const FRICTION := 45.0 # yerde tuş yokken yavaşlama
@@ -63,6 +62,7 @@ var model: Node3D # karakterin 3D modeli (varsa)
 var model_fx: StandardMaterial3D # modelin üstüne binen kırmızı hasar parlaması
 var quote_lbl: Label3D
 var quote_t := 0.0
+var still_t := 0.0 # yerinde durma süresi (Kahvehane Dayısı pasifi)
 var cd := 0.0
 var slot := 1 # 1 = ateş asası, 2 = kalkan, 3 = yıldırım asası, 4 = duvar asası
 var lightning_cd := 0.0
@@ -333,13 +333,20 @@ func _accessory(kind: String, col: Color) -> void:
 			tom.radius = 0.07; tom.height = 0.13
 			for x in [-0.55, -0.45, -0.35]:
 				_mesh(vis, tom, Vector3(x, 1.69, 0.05), Color(0.9, 0.12, 0.08))
-		"helmet":
-			var dome := SphereMesh.new()
-			dome.radius = 0.33; dome.height = 0.33; dome.is_hemisphere = true
-			_mesh(look, dome, Vector3(0, 0.04, 0), col)
-			var visor := BoxMesh.new()
-			visor.size = Vector3(0.4, 0.04, 0.16)
-			_mesh(look, visor, Vector3(0, 0.06, -0.3), Color(0.15, 0.15, 0.18))
+		"dayi": # kasket + gür kır bıyık + koyu yelek
+			var top := CylinderMesh.new()
+			top.top_radius = 0.33; top.bottom_radius = 0.31; top.height = 0.09
+			_mesh(look, top, Vector3(0, 0.2, 0.02), Color(0.45, 0.45, 0.5))
+			var brim := BoxMesh.new()
+			brim.size = Vector3(0.34, 0.03, 0.2)
+			_mesh(look, brim, Vector3(0, 0.16, -0.3), Color(0.38, 0.38, 0.43))
+			var stache := BoxMesh.new()
+			stache.size = Vector3(0.3, 0.08, 0.06)
+			_mesh(look, stache, Vector3(0, -0.08, -0.28), Color(0.8, 0.8, 0.8))
+			var vest := BoxMesh.new()
+			vest.size = Vector3(0.2, 0.7, 0.03)
+			for x in [-0.2, 0.2]:
+				_mesh(vis, vest, Vector3(x, 1.05, -0.37), Color(0.2, 0.18, 0.22))
 
 
 func _speed() -> float:
@@ -428,6 +435,11 @@ func _local(dt: float) -> void:
 	wall_cd -= dt
 	sword_cd -= dt
 	skill_cd -= dt
+	if alive and ch.get("sit_shield", false): # Kahvehane Dayısı: oturan (duran) adam kalkan alır
+		still_t = still_t + dt if Vector2(velocity.x, velocity.z).length() < 0.5 else minf(still_t, 0.0)
+		if still_t >= SIT_TIME and not shield_on:
+			still_t = -4.0 # sıradaki kalkan en erken 6 sn sonra
+			set_shield.rpc(true)
 
 	var dir := Vector3.ZERO
 	if active:
@@ -586,9 +598,9 @@ func spawn_wall(pos: Vector3, yaw: float) -> void:
 ## Q: karakterin özel yeteneği. Karar yerel makinede, etkiyi use_skill herkese yayar.
 func _use_skill() -> void:
 	match ch.skill:
-		"slipper":
+		"slipper", "tile":
 			var best: Node3D = null
-			var bd := SLIPPER_RANGE
+			var bd := SLIPPER_RANGE if ch.skill == "slipper" else TILE_RANGE
 			for p in get_parent().get_children():
 				var d := global_position.distance_to(p.global_position)
 				if p != self and p.hp > 0 and d < bd:
@@ -596,15 +608,7 @@ func _use_skill() -> void:
 					bd = d
 			if best == null:
 				return # kovalanacak kimse yok: bekleme süresi harcanmasın
-			throw_slipper.rpc(best.get_multiplayer_authority())
-		"drone":
-			var from := cam.global_position
-			var q := PhysicsRayQueryParameters3D.create(from, from - cam.global_basis.z * DRONE_RANGE)
-			q.exclude = _player_rids()
-			var r := get_world_3d().direct_space_state.intersect_ray(q)
-			if not r:
-				return # menzilde zemin yok: bekleme süresi harcanmasın
-			use_skill.rpc("drone", r.position)
+			throw_slipper.rpc(best.get_multiplayer_authority(), ch.skill)
 		_:
 			use_skill.rpc(ch.skill, global_position)
 	skill_cd = ch.cd
@@ -640,22 +644,17 @@ func use_skill(kind: String, pos: Vector3) -> void:
 						me.set_shield.rpc(false)
 					else:
 						me.take_hit(PULL_DMG)
-		"drone":
-			# Uyarı halkası 1 sn'de daralır, sonra bomba patlar.
-			var mark := _ring_fx(pos + Vector3.UP * 0.05, Color(1.0, 0.2, 0.1, 0.7), DRONE_R, 0.0)
-			var tw := mark.create_tween()
-			tw.tween_property(mark, "scale", Vector3.ONE * 0.3, 1.0).from(Vector3.ONE * DRONE_R)
-			tw.tween_callback(_drone_hit.bind(pos, mark)) # mark ya da oyuncu silinirse çağrılmaz
 
 
 @rpc("authority", "call_local", "reliable")
-func throw_slipper(target_id: int) -> void:
+func throw_slipper(target_id: int, kind := "slipper") -> void:
 	say(ch.quote)
 	var target := get_parent().get_node_or_null(str(target_id))
 	if target == null:
 		return
 	var s: Node3D = SlipperScript.new()
 	s.thrower = self
+	s.kind = kind
 	s.target = target
 	s.dir = (-look.global_basis.z + Vector3.UP * 0.4).normalized() # önce havaya kalkar
 	s.position = look.global_position + s.dir * 0.6
@@ -682,15 +681,6 @@ func say(text: String) -> void:
 
 func _local_player() -> Node:
 	return get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
-
-
-func _drone_hit(pos: Vector3, mark: Node3D) -> void:
-	mark.queue_free()
-	var fx: Node3D = ExplosionScript.new()
-	fx.position = pos
-	get_parent().get_parent().add_child(fx)
-	Sfx.play3d(Sfx.boom, pos, 4.0)
-	apply_blast(pos + Vector3.UP * 0.5, DRONE_R, DRONE_DMG)
 
 
 ## Yere yatık halka efekti. fade > 0 ise o sürede genişleyip söner ve silinir.
@@ -858,6 +848,7 @@ func respawn() -> void:
 	skill_cd = 0.0
 	shout_t = 0.0
 	blind_t = 0.0
+	still_t = 0.0
 	shield_on = false
 	shield_mesh.visible = false
 	shield_cd = 0.0

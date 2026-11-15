@@ -10,7 +10,7 @@ func _ready() -> void:
 	get_tree().root.add_child.call_deferred(main)
 	await _wait(0.3)
 	if role == "host":
-		Net.set_char(3) # Kaptan Dron (120 can)
+		Net.set_char(3) # Kahvehane Dayısı
 		Net.host_local()
 		while multiplayer.get_peers().is_empty():
 			await _wait(0.2)
@@ -20,7 +20,7 @@ func _ready() -> void:
 		var me = main.players.get_node("1")
 		var other = main.players.get_children().filter(func(p): return p != me)[0]
 		print("HOST players=", main.players.get_child_count(), " names=", Net.names, " label=", other.name_lbl.text)
-		print("HOST chars me=", me.ch.name, " max_hp=", me.max_hp, " other=", other.ch.name, " (Kaptan Dron 120 / Terlikli Anne bekleniyor)")
+		print("HOST chars me=", me.ch.name, " max_hp=", me.max_hp, " other=", other.ch.name, " (Kahvehane Dayısı 100 / Terlikli Anne bekleniyor)")
 		for i in 6:
 			me.rocket_n += 1; me.fire_rocket.rpc(other.global_position + Vector3(0, 1.0, -3), Vector3(0, 0, 1), me.rocket_n)
 			await _wait(0.4)
@@ -44,9 +44,12 @@ func _ready() -> void:
 		await _wait(0.6)
 		print("HOST pull other.hp=", other.hp, " (40 -> 30 bekleniyor)")
 		print("HOST slipper dist=", me.global_position.distance_to(other.global_position))
+		me.throw_slipper.rpc(other.get_multiplayer_authority(), "tile")
+		await _wait(3.0)
+		print("HOST tile other.hp=", other.hp, " (30 -> 10 bekleniyor)")
 		me.throw_slipper.rpc(other.get_multiplayer_authority())
 		await _wait(4.0)
-		print("HOST slipper other.hp=", other.hp, " (30 -> 0 bekleniyor) me.hp=", me.hp, " (istemcinin terliği: 120 -> 90 bekleniyor)")
+		print("HOST slipper other.hp=", other.hp, " (10 -> 0 bekleniyor) me.hp=", me.hp, " shield=", me.shield_on, " (dururken kalkan aldı; istemcinin terliği kalkanı kırdı, sonra yeniden aldı: 100, true bekleniyor)")
 		await _wait(1.0)
 	else:
 		Net.set_char(1) # Terlikli Anne
@@ -69,7 +72,7 @@ func _ready() -> void:
 		print("CLIENT after lightning hp=", me.hp)
 		await _wait(1.5)
 		print("CLIENT after sword hp=", me.hp)
-		await _wait(4.8)
+		await _wait(7.8)
 		print("CLIENT after skills hp=", me.hp, " hud=", main.hp_txt.text)
 		await _wait(1.0)
 	get_tree().quit()

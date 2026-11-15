@@ -41,7 +41,7 @@ func _ready() -> void:
 	dummy.set_multiplayer_authority(2)
 	dummy.spawn_pos = me.global_position + Vector3(0, 0, -6)
 	Net.names[2] = "Sinan"
-	Net.chars[2] = 2 # Pazarcı Abi
+	Net.chars[2] = 3 # Kahvehane Dayısı
 	main.players.add_child(dummy)
 	for k in 2: # Keloğlan ve Terlikli Anne de yan yana görünsün
 		var d: CharacterBody3D = load("res://player.gd").new()
