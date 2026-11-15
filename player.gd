@@ -30,7 +30,7 @@ var body_mat: StandardMaterial3D
 var base_col: Color
 var hp := MAX_HP
 var cd := 0.0
-var slot := 1 # 1 = roketatar, 2 = kalkan
+var slot := 1 # 1 = ateş asası, 2 = kalkan
 var shield_on := false
 var shield_cd := 0.0
 var shield_mesh: MeshInstance3D
@@ -112,14 +112,39 @@ func _ready() -> void:
 		for mi in vis.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY # kendini görme, gölgen kalsın
 
-	# Roketatar: kafa pivotuna bağlı, sağ altta (herkes görür).
-	var tube := CylinderMesh.new()
-	tube.top_radius = 0.09; tube.bottom_radius = 0.09; tube.height = 0.8
-	gun = _mesh(look, tube, Vector3(0.28, -0.25, -0.35), Color(0.25, 0.3, 0.2))
-	gun.rotation.x = -PI / 2
-	var tip := CylinderMesh.new()
-	tip.top_radius = 0.11; tip.bottom_radius = 0.11; tip.height = 0.08
-	_mesh(gun, tip, Vector3(0, 0.4, 0), Color(0.1, 0.1, 0.1))
+	# Ateş asası: kafa pivotuna bağlı, sağ altta (herkes görür). Yerel +Y ileriyi gösterir.
+	var pole := CylinderMesh.new()
+	pole.top_radius = 0.022; pole.bottom_radius = 0.035; pole.height = 1.0
+	gun = _mesh(look, pole, Vector3(0.3, -0.35, -0.45), Color(0.4, 0.24, 0.12))
+	gun.rotation.x = -PI / 2 + 0.45 # ucu hafif yukarı bakar, kristal görünsün
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.04; ring.outer_radius = 0.065
+	for y in [0.3, 0.44]:
+		var gm := _mesh(gun, ring, Vector3(0, y, 0), Color(0.95, 0.75, 0.2)).material_override as StandardMaterial3D
+		gm.metallic = 1.0; gm.roughness = 0.3
+	var claw := CylinderMesh.new() # kristali tutan altın pençeler
+	claw.top_radius = 0.008; claw.bottom_radius = 0.015; claw.height = 0.16
+	for i in 3:
+		var a := TAU * i / 3.0
+		var c := _mesh(gun, claw, Vector3(cos(a) * 0.05, 0.53, sin(a) * 0.05), Color(0.95, 0.75, 0.2))
+		c.basis = Basis(Vector3(-sin(a), 0, cos(a)), -0.35) # uçları dışa açık
+	var gem := PrismMesh.new()
+	gem.size = Vector3(0.11, 0.2, 0.11)
+	var crystal := _mesh(gun, gem, Vector3(0, 0.6, 0), Color(1.0, 0.45, 0.1))
+	var cm: StandardMaterial3D = crystal.material_override
+	cm.emission_enabled = true
+	cm.emission = Color(1.0, 0.4, 0.05)
+	cm.emission_energy_multiplier = 3.0
+	var gem_lo := _mesh(gun, gem, Vector3(0, 0.5, 0), Color.WHITE) # alt yarısı: ters prizma, aynı malzeme
+	gem_lo.material_override = cm
+	gem_lo.rotation.x = PI
+	gem_lo.scale.y = 0.5
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.5, 0.15)
+	glow.light_energy = 0.8
+	glow.omni_range = 1.5
+	glow.position.y = 0.6
+	gun.add_child(glow)
 
 	# Kalkan: yarı saydam mavi küre, içeriden de görünsün.
 	var sph := SphereMesh.new()
@@ -204,8 +229,8 @@ func _local(dt: float) -> void:
 		var r := get_world_3d().direct_space_state.intersect_ray(q)
 		if r:
 			target = r.position
-		# Namlu ucundan çık, nişangahın gösterdiği noktaya git.
-		var origin := cam.global_position + b.x * 0.28 - b.y * 0.25 - b.z * 0.8
+		# Asanın kristalinden çık, nişangahın gösterdiği noktaya git.
+		var origin := cam.global_position + b.x * 0.3 - b.y * 0.09 - b.z * 0.99 # kristalin konumu
 		rocket_n += 1
 		fire_rocket.rpc(origin, (target - origin).normalized(), rocket_n)
 

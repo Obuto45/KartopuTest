@@ -127,7 +127,7 @@ func _build_ui() -> void:
 	score_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_RIGHT, VERTICAL_ALIGNMENT_TOP)
 	center_lbl = _full_label(52, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
 	_full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM).text = \
-		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1 roketatar | 2 kalkan | Sol tık kullan | ESC fare | F10 çık"
+		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1 ateş asası | 2 kalkan | Sol tık kullan | ESC fare | F10 çık"
 	# Alt envanter çubuğu (hotbar)
 	var bar := HBoxContainer.new()
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -204,7 +204,7 @@ func _process(_dt: float) -> void:
 		hp_lbl.text = "Can: %d" % me.hp
 		dmg_rect.color.a = me.flash * 1.2
 		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
-		var texts := ["1\nROKETATAR", "2\nKALKAN\n" + sh]
+		var texts := ["1\nATEŞ ASASI","2\nKALKAN\n" + sh]
 		for i in 2:
 			slots[i][0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
 			slots[i][1].text = texts[i]

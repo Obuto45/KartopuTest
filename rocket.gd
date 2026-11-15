@@ -9,59 +9,66 @@ var shooter: Node3D
 var dir := Vector3.FORWARD
 var life := 3.0
 var done := false
+var fire: CPUParticles3D
 
 
 func _ready() -> void:
 	var up := Vector3.UP if abs(dir.y) < 0.99 else Vector3.FORWARD
 	look_at(global_position + dir, up)
 
-	var body := CylinderMesh.new()
-	body.top_radius = 0.07; body.bottom_radius = 0.07; body.height = 0.6
-	var nose := CylinderMesh.new()
-	nose.top_radius = 0.0; nose.bottom_radius = 0.07; nose.height = 0.18
-	for part in [[body, -0.0, Color(0.35, 0.4, 0.3)], [nose, -0.39, Color(0.8, 0.15, 0.1)]]:
+	# Ateş topu: parlak sarı çekirdek + turuncu alev kabuğu + alev izi.
+	for layer in [[0.12, Color(1.0, 0.95, 0.6, 1.0)], [0.2, Color(1.0, 0.45, 0.05, 0.55)]]:
 		var mi := MeshInstance3D.new()
-		mi.mesh = part[0]
-		mi.rotation.x = -PI / 2 # silindiri -Z yönüne yatır
-		mi.position.z = part[1]
+		var s := SphereMesh.new()
+		s.radius = layer[0]; s.height = layer[0] * 2
+		mi.mesh = s
 		var m := StandardMaterial3D.new()
-		m.albedo_color = part[2]
+		m.albedo_color = layer[1]
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mi)
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.6, 0.2)
-	light.light_energy = 2.0
-	light.omni_range = 3.0
-	light.position.z = 0.4
+	light.light_color = Color(1.0, 0.5, 0.15)
+	light.light_energy = 3.0
+	light.omni_range = 4.0
 	add_child(light)
 
-	var smoke := CPUParticles3D.new()
-	smoke.amount = 40
-	smoke.lifetime = 0.6
-	smoke.local_coords = false
-	smoke.position.z = 0.35
-	smoke.direction = Vector3(0, 0, 1)
-	smoke.spread = 15.0
-	smoke.initial_velocity_min = 1.0
-	smoke.initial_velocity_max = 2.0
-	smoke.gravity = Vector3(0, 0.5, 0)
-	smoke.scale_amount_min = 0.6
-	smoke.scale_amount_max = 1.2
+	fire = CPUParticles3D.new()
+	fire.emitting = false # namluda başlarsa atanın kamerasını kapatır; _physics_process açar
+	fire.amount = 60
+	fire.lifetime = 0.4
+	fire.local_coords = false
+	fire.direction = Vector3(0, 0, 1)
+	fire.spread = 25.0
+	fire.initial_velocity_min = 0.5
+	fire.initial_velocity_max = 1.5
+	fire.gravity = Vector3(0, 2.0, 0) # alev yukarı kıvrılır
+	fire.scale_amount_min = 0.8
+	fire.scale_amount_max = 1.4
+	var ramp := Gradient.new() # sarı -> turuncu -> sönük kırmızı
+	ramp.set_color(0, Color(1.0, 0.75, 0.2, 1.0))
+	ramp.set_color(1, Color(0.6, 0.1, 0.0, 0.0))
+	ramp.add_point(0.4, Color(1.0, 0.4, 0.05, 0.7))
+	fire.color_ramp = ramp
 	var sm := SphereMesh.new()
-	sm.radius = 0.08; sm.height = 0.16
+	sm.radius = 0.09; sm.height = 0.18
 	var smat := StandardMaterial3D.new()
-	smat.albedo_color = Color(0.75, 0.75, 0.75, 0.6)
+	smat.vertex_color_use_as_albedo = true # renk rampası parçacıklara uygulansın
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sm.material = smat
-	smoke.mesh = sm
-	add_child(smoke)
+	fire.mesh = sm
+	add_child(fire)
 
 
 func _physics_process(dt: float) -> void:
 	if done:
 		return
 	life -= dt
+	fire.emitting = life < 2.93 # ~2 m sonra iz başlar
 	var from := global_position
 	var to := from + dir * SPEED * dt
 	var hit = null

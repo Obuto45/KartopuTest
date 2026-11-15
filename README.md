@@ -24,7 +24,7 @@ Steam App ID olarak test ID'si `480` (Spacewar) kullanılıyor. Steam'de "Spacew
 | WASD | Yürü |
 | Boşluk | Zıpla, havada tekrar basınca çift zıplama |
 | Shift + WASD | Dash (havada da çalışır) |
-| 1 | Roketatar |
+| 1 | Ateş asası (ateş topu fırlatır) |
 | 2 | Kalkan (tek roketi emer, 8 sn bekleme) |
 | Sol tık | Seçili eşyayı kullan |
 | ESC / F10 | Fareyi serbest bırak / lobiden çık |
