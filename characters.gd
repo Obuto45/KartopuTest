@@ -1,5 +1,6 @@
 extends RefCounted
 ## Seçilebilir karakterler. Sıra = ağda gönderilen karakter numarası (değiştirirken sona ekle).
+## model: varsa basit şekiller yerine bu 3D model gösterilir (model_yaw: önünü -Z'ye çeviren dönüş).
 ## skill: player.gd'deki _use_skill / use_skill içinde işlenir. quote: Q basınca kafa üstü balon.
 
 const LIST := [
@@ -10,6 +11,7 @@ const LIST := [
 		"skill": "flash", "skill_name": "KAFA PARLATMA", "cd": 12.0,
 		"skill_desc": "8 m içinde sana bakanların ekranı 1,5 sn bembeyaz olur.",
 		"quote": "Gözünüz kamaşmasın!",
+		"model": "res://models/keloglan.glb", "model_yaw": PI / 2, # modelin önü +X'e bakıyor
 	},
 	{
 		"name": "Terlikli Anne", "role": "Ev Hanımı", "color": Color(0.92, 0.45, 0.62), "look": "curlers",

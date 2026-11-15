@@ -59,6 +59,8 @@ var skill_cd := 0.0
 var shout_t := 0.0 # > 0 iken Pazarcı Abi'nin ateş topları güçlü
 var blind_t := 0.0 # > 0 iken ekran beyaz (Keloğlan'ın flaşı; yalnızca yerel oyuncu)
 var head_mat: StandardMaterial3D
+var model: Node3D # karakterin 3D modeli (varsa)
+var model_fx: StandardMaterial3D # modelin üstüne binen kırmızı hasar parlaması
 var quote_lbl: Label3D
 var quote_t := 0.0
 var cd := 0.0
@@ -164,6 +166,8 @@ func _ready() -> void:
 	leg_r = Node3D.new(); leg_r.position = Vector3(0.17, 0.58, 0); vis.add_child(leg_r)
 	_mesh(leg_l, leg, Vector3(0, -0.29, 0), col.darkened(0.4))
 	_mesh(leg_r, leg, Vector3(0, -0.29, 0), col.darkened(0.4))
+	if ch.has("model"):
+		_load_model()
 
 	if is_multiplayer_authority():
 		cam = Camera3D.new()
@@ -261,6 +265,30 @@ func _ready() -> void:
 	smat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	shield_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shield_mesh.visible = false
+
+
+## Basit şekilleri gizler, yerine karakterin 3D modelini 1,9 m boyunda ve ayakları yerde koyar.
+func _load_model() -> void:
+	for mi in vis.find_children("*", "MeshInstance3D", true, false):
+		mi.visible = false
+	var scene: Node3D = load(ch.model).instantiate()
+	model = Node3D.new()
+	vis.add_child(model)
+	model.add_child(scene)
+	model_fx = StandardMaterial3D.new()
+	model_fx.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	model_fx.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	model_fx.albedo_color = Color(1, 0.1, 0.1, 0)
+	var box := AABB()
+	var inv := model.global_transform.affine_inverse()
+	for mi in scene.find_children("*", "MeshInstance3D", true, false):
+		var b: AABB = inv * mi.global_transform * mi.get_aabb()
+		box = b if box.size == Vector3.ZERO else box.merge(b)
+		mi.material_overlay = model_fx
+	var c := box.get_center()
+	scene.position = Vector3(-c.x, -box.position.y, -c.z)
+	model.scale = Vector3.ONE * (1.9 / box.size.y)
+	model.rotation.y = ch.get("model_yaw", 0.0)
 
 
 ## Karakteri tanıtan kafa süsü. Kafa pivotuna bağlı; yerel oyuncu kendininkini görmez.
@@ -712,6 +740,10 @@ func _animate(dt: float) -> void:
 	walk_t += dt * spd * 2.0
 	leg_l.rotation.x = sin(walk_t) * amp
 	leg_r.rotation.x = -sin(walk_t) * amp
+	if model: # iskeleti yok: yürürken hafifçe zıplar ve sallanır
+		model.position.y = absf(sin(walk_t)) * 0.07 * amp
+		model.rotation.x = sin(walk_t) * 0.06 * amp
+		model_fx.albedo_color.a = flash / 0.35 * 0.6
 	vis.rotation.z = lerp(vis.rotation.z, 1.5 if hp <= 0 else 0.0, 0.1) # ölünce devril
 	if swing_t > 0.0: # sağdan sola yatay savurma
 		swing_t = maxf(swing_t - dt, 0.0)
