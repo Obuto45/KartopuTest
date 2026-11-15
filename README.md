@@ -39,11 +39,25 @@ Steam App ID olarak test ID'si `480` (Spacewar) kullanılıyor. Steam'de "Spacew
 | 3 | Yıldırım asası (nişan alınan yere, en fazla 25 m, 2.5 sn bekleme) |
 | 4 | Duvar asası (önüne 3 m'lik duvar, 8 sn durur, 6 sn bekleme) |
 | 5 | Kılıç (yakın dövüş, 2.3 m, önündekine 20 hasar) |
+| Q | Karakterin özel yeteneği |
 | Sol tık | Seçili eşyayı kullan |
 | ESC | Ayarlar (ses, ekran modu, çözünürlük) / oyuna dön |
 | F10 | Lobiden çık |
 
 Can 100. Ateş topu ve kılıç 20, yıldırım 40 hasar verir. İsimlerin altında can barı görünür. Ölen oyuncu yaşayanları 3. şahıs kameradan izler; sol tık / sağ tık izlenen oyuncuyu değiştirir. Tek kişi kalınca kazanan yazılır, 3 sn sonra yeni tur başlar. Her oyuncunun kafasının üstünde Steam adı görünür.
+
+## Karakterler
+
+Menüdeki **Karakter: … – değiştir** butonundan seçilir; lobideki herkes seçimini görür.
+
+| Karakter | Can | Pasif | Q yeteneği |
+|---|---|---|---|
+| Bit-7 (Yapay Zeka) | 100 | Kalkan bekleme 5 sn | Işınlanma: 8 m ileri (5 sn) |
+| Canlı Kaan (Yayıncı) | 100 | %15 hızlı | Hype Modu: 4 sn çift atış hızı, %30 hız (14 sn) |
+| Yeşil Eda (İklim Aktivisti) | 100 | 3 sn hasarsız kalınca can yeniler | Sel Dalgası: 5 m, 15 hasar + savurma (10 sn) |
+| Kaptan Dron (Dron Pilotu) | 120 | Fazladan can | Dron Bombası: 30 m'ye, 1 sn sonra 35 hasar (9 sn) |
+
+Yeni karakter eklemek için `characters.gd` listesinin **sonuna** ekle (sıra ağda numara olarak gider).
 
 ## Dışa aktarma (exe)
 
@@ -78,6 +92,7 @@ gh release create v0.4 KartopuTest_v0.4_Windows.zip --title "v0.4" --notes "Değ
 | `settings.gd` (autoload `Settings`) | Ses ve ekran ayarları, `user://settings.cfg` |
 | `lightning.gd` | Yıldırım: uyarı halkası, şimşek efekti, alan hasarı |
 | `wall.gd` | Duvar asasının geçici duvarı |
+| `characters.gd` | Karakter listesi: renk, can, hız, pasif, Q yeteneği |
 | `forest.gd` | Ormanlık harita: ağaçlar, kayalar, çimen, çiçekler (sabit tohum, herkeste aynı) |
 | `updater.gd` (autoload `Updater`) | GitHub Release'ten otomatik güncelleme |
 | `tests/autotest.tscn` | İki örnekli uçtan uca test |

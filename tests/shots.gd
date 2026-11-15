@@ -14,6 +14,10 @@ func _ready() -> void:
 	await get_tree().create_timer(0.2).timeout
 	await _shot("settings")
 	main._close_settings()
+	main._open_chars()
+	await get_tree().create_timer(0.2).timeout
+	await _shot("chars")
+	main.char_wrap.hide()
 	Net.host_local()
 	main._on_start()
 	await get_tree().create_timer(0.5).timeout
@@ -37,6 +41,7 @@ func _ready() -> void:
 	dummy.set_multiplayer_authority(2)
 	dummy.spawn_pos = me.global_position + Vector3(0, 0, -6)
 	Net.names[2] = "Sinan"
+	Net.chars[2] = 3 # Kaptan Dron: kask görünsün
 	main.players.add_child(dummy)
 	me.rotation.y = 0.0
 	me.look.rotation.x = -0.1
@@ -44,6 +49,9 @@ func _ready() -> void:
 	dummy.hp = 60
 	await get_tree().create_timer(0.1).timeout
 	await _shot("nametag")
+	me.set_hp(25) # can barı: kritik seviye + beyaz iz
+	await get_tree().create_timer(0.3).timeout
+	await _shot("hud")
 	dummy.net_pos += Vector3(0, 0, -8) # uzakta isim/can barı ölçeği
 	me.rotation.y = 0.0
 	me.look.rotation.x = -0.1

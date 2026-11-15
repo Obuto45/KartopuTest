@@ -12,6 +12,8 @@ const LOCAL_PORT := 7777
 var steam_ok := false
 var lobby_id := 0
 var names := {} # peer_id -> görünen ad
+var chars := {} # peer_id -> karakter numarası (characters.gd LIST sırası)
+var my_char := 0
 
 
 func _ready() -> void:
@@ -26,7 +28,7 @@ func _ready() -> void:
 	else:
 		push_warning("Steam başlatılamadı: %s" % r)
 	multiplayer.peer_connected.connect(func(_id): lobby_changed.emit())
-	multiplayer.peer_disconnected.connect(func(id): names.erase(id); lobby_changed.emit())
+	multiplayer.peer_disconnected.connect(func(id): names.erase(id); chars.erase(id); lobby_changed.emit())
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(func(): status.emit("Bağlantı başarısız."); leave())
 	multiplayer.server_disconnected.connect(func(): status.emit("Host ayrıldı."); leave())
@@ -158,6 +160,7 @@ func leave() -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	names.clear()
+	chars.clear()
 	left.emit()
 
 
@@ -172,19 +175,43 @@ func _register_self() -> void:
 		n += " #%d" % (multiplayer.get_unique_id() % 1000) # aynı PC'de iki pencere ayırt edilsin
 	if multiplayer.is_server():
 		names[1] = n
+		chars[1] = my_char
 		lobby_changed.emit()
 	else:
-		register_name.rpc_id(1, n)
+		register_name.rpc_id(1, n, my_char)
+
+
+## Karakter değişince lobiye bildir (bağlı değilsek sadece hatırla).
+func set_char(c: int) -> void:
+	my_char = c
+	if not online():
+		return
+	if multiplayer.is_server():
+		chars[1] = c
+		sync_names.rpc(names, chars)
+		lobby_changed.emit()
+	else:
+		register_char.rpc_id(1, c)
 
 
 @rpc("any_peer", "reliable")
-func register_name(n: String) -> void:
-	names[multiplayer.get_remote_sender_id()] = n
-	sync_names.rpc(names)
+func register_name(n: String, c: int) -> void:
+	var id := multiplayer.get_remote_sender_id()
+	names[id] = n
+	chars[id] = c
+	sync_names.rpc(names, chars)
+	lobby_changed.emit()
+
+
+@rpc("any_peer", "reliable")
+func register_char(c: int) -> void:
+	chars[multiplayer.get_remote_sender_id()] = c
+	sync_names.rpc(names, chars)
 	lobby_changed.emit()
 
 
 @rpc("authority", "reliable")
-func sync_names(d: Dictionary) -> void:
+func sync_names(d: Dictionary, c: Dictionary) -> void:
 	names = d
+	chars = c
 	lobby_changed.emit()
