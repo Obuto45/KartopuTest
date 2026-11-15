@@ -1,0 +1,7 @@
+# Godot önbelleği
+.godot/
+
+# Derleme çıktıları
+build/
+*.zip
+*.rar

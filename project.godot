@@ -1,0 +1,16 @@
+config_version=5
+
+[application]
+
+config/name="KartopuTest"
+run/main_scene="res://main.tscn"
+
+[autoload]
+
+Net="*res://net.gd"
+Sfx="*res://sfx.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
