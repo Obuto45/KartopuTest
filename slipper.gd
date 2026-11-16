@@ -1,9 +1,9 @@
 extends Node3D
-## Güdümlü mermi (characters.gd'deki "homing" verisi): terlik, seken okey taşı, futbol topu.
+## Güdümlü mermi (characters.gd'deki "homing" verisi): bumerang, seken kart, futbol topu.
 ## Her makinede aynı hedefi kovalar; isabete yalnızca hedefin kendi makinesi karar verir
 ## (hasar modeliyle aynı: herkes kendi oyuncusuna uygular).
 
-const BOUNCE_R := 12.0 # okey taşı bu mesafedeki sıradaki oyuncuya seker
+const BOUNCE_R := 12.0 # kart bu mesafedeki sıradaki oyuncuya seker
 
 var thrower: Node3D
 var target: Node3D
@@ -35,13 +35,13 @@ func _ready() -> void:
 	body = Node3D.new()
 	add_child(body)
 	match h.look:
-		"tile": # krem rengi okey taşı, üstünde kırmızı sayı lekesi
+		"card": # oyun kartı: beyaz yüz, kırmızı karo
 			var b := BoxMesh.new()
-			b.size = Vector3(0.2, 0.28, 0.07)
-			_part(b, Color(0.96, 0.92, 0.8))
+			b.size = Vector3(0.22, 0.32, 0.012)
+			_part(b, Color(0.97, 0.97, 0.95))
 			var dot := BoxMesh.new()
-			dot.size = Vector3(0.08, 0.12, 0.075)
-			_part(dot, Color(0.85, 0.1, 0.1))
+			dot.size = Vector3(0.08, 0.08, 0.016)
+			_part(dot, Color(0.85, 0.1, 0.1)).rotation.z = PI / 4
 		"ball": # futbol topu
 			var b := SphereMesh.new()
 			b.radius = 0.2; b.height = 0.4
@@ -50,13 +50,12 @@ func _ready() -> void:
 			patch.radius = 0.09; patch.height = 0.18
 			for p in [Vector3(0.14, 0.05, 0.1), Vector3(-0.12, 0.1, -0.1), Vector3(0, -0.16, 0.08), Vector3(0.02, 0.15, -0.12)]:
 				_part(patch, Color(0.1, 0.1, 0.1), p)
-		_: # terlik
-			var b := BoxMesh.new()
-			b.size = Vector3(0.16, 0.05, 0.36) # taban
-			_part(b, Color(0.2, 0.45, 0.9))
-			var t := TorusMesh.new() # üstteki bant
-			t.inner_radius = 0.06; t.outer_radius = 0.085
-			_part(t, Color(0.95, 0.95, 0.95), Vector3(0, 0.03, -0.06)).rotation.z = PI / 2
+		_: # bumerang: iki kollu, ahşap
+			var arm := BoxMesh.new()
+			arm.size = Vector3(0.07, 0.03, 0.34)
+			for a in [0.6, -0.6]:
+				var mi := _part(arm, Color(0.72, 0.48, 0.25), Vector3(sin(a) * 0.15, 0, cos(a) * 0.15 - 0.1))
+				mi.rotation.y = a
 
 
 func _physics_process(dt: float) -> void:
@@ -69,7 +68,10 @@ func _physics_process(dt: float) -> void:
 	var to := aim - global_position
 	dir = dir.lerp(to.normalized(), minf(turn * dt, 1.0)).normalized()
 	global_position += dir * speed * dt
-	body.rotate_x(-dt * 18.0) # takla atarak gelsin
+	if h.look == "ball":
+		body.rotate_x(-dt * 18.0) # top takla atar
+	else:
+		body.rotate_y(dt * 18.0) # bumerang ve kart yatay döner
 	if to.length() > 0.8:
 		return
 	Sfx.play3d(Sfx.hurt, aim, 2.0)

@@ -15,7 +15,7 @@ func _ready() -> void:
 	var main = load("res://main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)
 	await _wait(0.3)
-	Net.set_char(9) # Vitrin Mankeni: pasifi yok, sıyrılma şansı sonucu bozmasın
+	Net.set_char(9) # Manken: pasifi yok, sıyrılma şansı sonucu bozmasın
 	Net.host_local()
 	main._on_start()
 	await _wait(0.6)

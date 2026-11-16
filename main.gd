@@ -397,7 +397,7 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 	vp.add_child(sun)
 	var pcam := Camera3D.new()
 	pcam.fov = 32
-	pcam.position = Vector3(0, 1.45, 5.6)
+	pcam.position = Vector3(0, 1.35, 6.6)
 	pcam.rotation.x = -0.03
 	vp.add_child(pcam)
 	char_view = Node3D.new()

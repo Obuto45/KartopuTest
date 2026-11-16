@@ -10,7 +10,7 @@ func _ready() -> void:
 	get_tree().root.add_child.call_deferred(main)
 	await _wait(0.3)
 	if role == "host":
-		Net.set_char(3) # Kahvehane Dayısı
+		Net.set_char(3) # Joker
 		Net.host_local()
 		while multiplayer.get_peers().is_empty():
 			await _wait(0.2)
@@ -20,7 +20,7 @@ func _ready() -> void:
 		var me = main.players.get_node("1")
 		var other = main.players.get_children().filter(func(p): return p != me)[0]
 		print("HOST players=", main.players.get_child_count(), " names=", Net.names, " label=", other.name_lbl.text)
-		print("HOST chars me=", me.ch.name, " other=", other.ch.name, " (Kahvehane Dayısı / Terlikli Anne bekleniyor)")
+		print("HOST chars me=", me.ch.name, " other=", other.ch.name, " (Joker / Bumerang bekleniyor)")
 		for i in 6:
 			me.rocket_n += 1; me.fire_rocket.rpc(other.global_position + Vector3(0, 1.0, -3), Vector3(0, 0, 1), me.rocket_n, false)
 			await _wait(0.4)
@@ -39,12 +39,12 @@ func _ready() -> void:
 		print("HOST sword other.hp=", other.hp, " (100 -> 80 bekleniyor)")
 		me.use_skill.rpc(me.global_position, me.global_position, Vector3(0, 0, 1), other.get_multiplayer_authority())
 		await _wait(3.0)
-		print("HOST tile other.hp=", other.hp, " (80 -> 60 bekleniyor)")
+		print("HOST card other.hp=", other.hp, " (80 -> 60 bekleniyor)")
 		await _wait(3.0)
-		print("HOST me.hp=", me.hp, " shield=", me.shield_on, " (dururken kalkan aldı, istemcinin terliği onu kırdı)")
+		print("HOST me.hp=", me.hp, " shield=", me.shield_on, " (dururken kalkan aldı, istemcinin bumerangı onu kırdı)")
 		await _wait(1.0)
 	else:
-		Net.set_char(1) # Terlikli Anne
+		Net.set_char(1) # Bumerang
 		Net.join_local()
 		while main.players == null:
 			await _wait(0.2)
@@ -59,7 +59,7 @@ func _ready() -> void:
 		await _wait(2.3)
 		print("CLIENT after restart hp=", me.hp, " pos=", me.global_position.round(), " own_cam=", me.cam.current)
 		me._use_skill()
-		print("CLIENT slipper skill_cd=", me.skill_cd, " (8 bekleniyor) quote=", me.quote_lbl.text)
+		print("CLIENT boomerang skill_cd=", me.skill_cd, " (8 bekleniyor) quote=", me.quote_lbl.text, " (Kaçamazsın! bekleniyor)")
 		for i in 9:
 			await _wait(1.0)
 			print("CLIENT t+", i + 1, " hp=", me.hp, " hud=", main.hp_txt.text)
