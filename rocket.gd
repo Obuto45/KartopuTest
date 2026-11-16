@@ -81,18 +81,22 @@ func _ready() -> void:
 	add_child(light)
 
 	# Alev izi: namluda başlarsa atanın kamerasını kapatır; _physics_process açar.
-	fire = Fx.parts(Fx.quad("glow", 0.36), 26, 0.3, 0.5, 1.5, [Color(1.0, 0.85, 0.4, 0.9), Color(1.0, 0.4, 0.05, 0.6), Color(0.6, 0.1, 0.0, 0.0)], 1.0, 0.3, false)
+	fire = Fx.parts(Fx.quad("glow", 0.42), 48, 0.3, 0.5, 1.5, [Color(1.0, 0.8, 0.35, 0.6), Color(1.0, 0.4, 0.05, 0.45), Color(0.6, 0.1, 0.0, 0.0)], 1.0, 0.3, false)
 	fire.emitting = false
 	fire.local_coords = false
 	fire.direction = Vector3(0, 0, 1)
 	fire.spread = 20.0
-	fire.position.z = 0.25
+	fire.position.z = 0.5
 	add_child(fire)
 	# Duman izi dünyaya bağlı: roket patlayıp silinince havada asılı kalıp dağılır.
-	smoke = Fx.parts(Fx.quad("puff", 0.75), 26, 1.1, 0.1, 0.5, [Color(0.5, 0.35, 0.2, 0.0), Color(0.42, 0.4, 0.38, 0.55), Color(0.55, 0.54, 0.52, 0.0)], 0.35, 1.0, false)
+	smoke = Fx.parts(Fx.quad("puff", 1.0), 56, 1.1, 0.1, 0.5, [Color(0.5, 0.35, 0.2, 0.0), Color(0.42, 0.4, 0.38, 0.55), Color(0.55, 0.54, 0.52, 0.0)], 0.35, 1.0, false)
 	smoke.emitting = false
 	smoke.gravity = Vector3(0, 0.6, 0)
-	smoke.position = global_position
+	smoke.transform = global_transform
+	# Yayıcı karede ~0.5 m yol alır: uçuş ekseninde uzun kutudan çıksın, iz boncuk boncuk olmasın.
+	for p in [fire, smoke]:
+		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		p.emission_box_extents = Vector3(0.03, 0.03, 0.28)
 	get_parent().add_child.call_deferred(smoke) # ebeveyn şu an bizi eklemekle meşgul
 	tree_exiting.connect(func() -> void:
 		smoke.emitting = false

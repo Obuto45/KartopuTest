@@ -5,7 +5,7 @@ uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
 uniform vec3 top_col : source_color = vec3(0.16, 0.36, 0.72);
 uniform vec3 horizon_col : source_color = vec3(0.98, 0.78, 0.56);
 uniform vec3 sun_col : source_color = vec3(1.0, 0.72, 0.4);
-uniform vec3 ground_col : source_color = vec3(0.2, 0.24, 0.16);
+uniform vec3 ground_col : source_color = vec3(0.42, 0.4, 0.26);
 
 void sky() {
 	float y = EYEDIR.y;

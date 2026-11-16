@@ -3,7 +3,7 @@ shader_type spatial;
 // zemine değen yerde koyuluk. blocks=1 -> örülmüş taş blok deseni (sınır duvarı).
 uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
 uniform vec3 tint : source_color = vec3(1.0);
-uniform vec3 moss_col : source_color = vec3(0.22, 0.36, 0.1);
+uniform vec3 moss_col : source_color = vec3(0.27, 0.4, 0.1);
 uniform float moss = 0.7;
 uniform float blocks = 0.0;
 uniform float streak = 0.0; // kabuk için dikey çizgiler
@@ -34,11 +34,11 @@ void fragment() {
 			col *= mix(0.35, 1.0, smoothstep(0.012, 0.05, edge));
 		}
 		// Duvarın tepesinden aşağı sarkan ve dibinden tırmanan yosun.
-		m = max(m, smoothstep(0.55, 0.9, n * 0.9 + (wp.y - 2.3) * 0.5));
+		m = max(m, smoothstep(0.55, 0.9, n * 0.9 + (min(wp.y, 3.0) - 2.6) * 0.5));
 		m = max(m, smoothstep(0.5, 0.9, n * 0.8 + (0.9 - wp.y) * 0.5) * 0.7);
 	}
 	col = mix(col, moss_col * (0.6 + 0.8 * fine), m * moss);
-	col *= mix(0.55, 1.0, smoothstep(0.0, 0.6, wp.y));
+	col *= mix(0.65, 1.0, smoothstep(0.0, 0.6, wp.y));
 	ALBEDO = col;
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.2;

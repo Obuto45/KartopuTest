@@ -27,11 +27,11 @@ void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
 	// Gürültü parçacığa göre döner, tepe aydınlığı dönmez: her bulut farklı ama ışık hep yukarıdan.
 	vec2 q = mat2(vec2(cos(ang), sin(ang)), vec2(-sin(ang), cos(ang))) * p + ang;
-	float n = noise(q * 2.2) * 0.65 + noise(q * 5.0) * 0.35;
+	float n = noise(q * 1.8) * 0.75 + noise(q * 4.3) * 0.25;
 	float body = 1.0 - length(p) + (n - 0.5) * 0.7;
 	float eat = (1.0 - COLOR.a) * 0.45;
 	ALBEDO = COLOR.rgb * (0.8 - p.y * 0.3 + n * 0.25);
 	// Zemine / duvara gömülen bulut keskin çizgi bırakmasın.
 	vec4 back = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, texture(depth_tex, SCREEN_UV).r, 1.0);
-	ALPHA = smoothstep(0.08 + eat, 0.5 + eat, body) * COLOR.a * clamp((VERTEX.z - back.z / back.w) * 2.5, 0.0, 1.0);
+	ALPHA = smoothstep(0.05 + eat, 0.6 + eat, body) * COLOR.a * clamp((VERTEX.z - back.z / back.w) * 2.5, 0.0, 1.0);
 }

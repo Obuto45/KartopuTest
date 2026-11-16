@@ -58,12 +58,12 @@ func _ready() -> void:
 		m.albedo_color = Color(0.25, 0.1, 0.05)
 		m.emission_enabled = true
 		m.emission = Color(1.0, 0.4, 0.05)
-		m.emission_energy_multiplier = 3.0
+		m.emission_energy_multiplier = 1.6
 		rock.material_override = m
 		rock.position = Vector3(6, 30, 4)
 		add_child(rock)
 		# Ateş ve duman kuyruğu dünyada kalır (local_coords kapalı), taş önünden kaçar.
-		var flame := Fx.parts(Fx.quad("glow", 1.8), 36, 0.45, 0.0, 1.5, [Color(1.0, 0.85, 0.4, 0.9), Color(1.0, 0.4, 0.05, 0.6), Color(0.5, 0.08, 0.0, 0.0)], 1.0, 0.3, false)
+		var flame := Fx.parts(Fx.quad("glow", 1.5), 26, 0.4, 0.0, 1.5, [Color(1.0, 0.6, 0.2, 0.55), Color(0.9, 0.3, 0.04, 0.4), Color(0.5, 0.08, 0.0, 0.0)], 1.0, 0.3, false)
 		var smoke := Fx.parts(Fx.quad("puff", 2.4), 30, 1.3, 0.0, 1.0, [Color(0.3, 0.14, 0.05, 0.0), Color(0.12, 0.1, 0.09, 0.7), Color(0.25, 0.24, 0.23, 0.0)], 0.5, 1.0, false)
 		for p in [smoke, flame]:
 			p.local_coords = false

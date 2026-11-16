@@ -30,22 +30,22 @@ func _ready() -> void:
 	cs.position.y = SIZE.y * 0.5
 	add_child(cs)
 
-	# Dipte toz ve moloz: duvar hareket ederken yerde kalsın diye top_level.
-	var dust := Fx.parts(Fx.quad("puff", 1.3), 14, 1.1, 0.6, 2.2, [Color(0.5, 0.42, 0.32, 0.0), Color(0.5, 0.43, 0.34, 0.7), Color(0.55, 0.5, 0.42, 0.0)], 0.4, 1.0)
+	# Dipte toz ve moloz: local_coords kapalı, çıkan parçacık duvarla birlikte yükselmez.
+	var dust := Fx.parts(Fx.quad("puff", 1.7), 18, 1.2, 0.8, 2.6, [Color(0.5, 0.42, 0.31, 0.9), Color(0.5, 0.43, 0.34, 0.6), Color(0.52, 0.47, 0.4, 0.0)], 0.45, 1.0)
 	var bm2 := BoxMesh.new()
-	bm2.size = Vector3(0.12, 0.09, 0.1)
+	bm2.size = Vector3(0.17, 0.12, 0.14)
 	bm2.material = Fx.mat("chunk")
-	var rubble := Fx.parts(bm2, 12, 0.9, 3.0, 6.5, [Color(0.5, 0.47, 0.43), Color(0.35, 0.3, 0.25)], 1.0, 0.4)
+	var rubble := Fx.parts(bm2, 12, 0.9, 3.0, 6.5, [Color(0.32, 0.24, 0.16), Color(0.25, 0.2, 0.15)], 1.0, 0.4)
 	rubble.gravity = Vector3(0, -16, 0)
 	rubble.particle_flag_align_y = true
 	for p in [dust, rubble]:
-		p.top_level = true
+		p.local_coords = false
+		p.position.y = SIZE.y # duvar henüz yerin altında: yayıcı zemin hizasında
 		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-		p.emission_box_extents = Vector3(SIZE.x * 0.5, 0.1, SIZE.z * 0.5)
+		p.emission_box_extents = Vector3(SIZE.x * 0.5, 0.1, SIZE.z) # duvarın iki yüzünden de taşsın
 		p.direction = Vector3.UP
 		p.spread = 70.0
 		add_child(p)
-		p.global_transform = global_transform
 		p.emitting = true
 
 	Sfx.play3d(Sfx.rumble, global_position + Vector3.UP, 0.0)
@@ -54,6 +54,8 @@ func _ready() -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "position:y", top, 0.2).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(LIFE)
-	tw.tween_callback(dust.restart) # batarken de toz kalkar
+	tw.tween_callback(func() -> void: # batarken de toz kalkar; duvar artık yukarıda, yayıcı dibe iner
+		dust.position.y = 0.0
+		dust.restart())
 	tw.tween_property(self, "position:y", top - SIZE.y, 0.4)
 	tw.tween_callback(queue_free)

@@ -6,7 +6,7 @@ extends Node3D
 const HALF := 30.0 # oyun alanı 60 x 60 m
 const MASK_HALF := 50.0 # zemin maskesinin kapladığı yarı kenar (m)
 const MASK_N := 128
-const BARK := Color(0.3, 0.19, 0.11)
+const BARK := Color(0.44, 0.3, 0.19)
 
 var spawns: Array = [] # oyuncu doğma noktaları, etrafı boş kalır
 var _vis := RandomNumberGenerator.new()
@@ -14,7 +14,7 @@ var _fn := FastNoiseLite.new()
 var _noise: ImageTexture
 var _mask: Image # R: ağaç altı gölge, G: toprak (patika, ağaç dibi)
 var _rock_mat: ShaderMaterial
-var _rock_cols := [Color(0.5, 0.49, 0.46), Color(0.58, 0.54, 0.47), Color(0.4, 0.4, 0.4)]
+var _rock_cols := [Color(0.54, 0.5, 0.44), Color(0.62, 0.56, 0.46), Color(0.44, 0.42, 0.39)]
 # Ağaç ve süs parçaları tek tek düğüm olmaz: [Transform3D, Color] listelerinde toplanır, sonda MultiMesh olur.
 var _trunks := []
 var _blobs := []
@@ -90,11 +90,11 @@ func _ready() -> void:
 	_props(used)
 	ground_mat.set_shader_parameter("mask_tex", ImageTexture.create_from_image(_mask))
 	_grass(ground_mat, 18000)
-	_flowers(ground_mat, 900)
+	_flowers(ground_mat, 750)
 	_ambient()
 
 	# Toplanan parçalar: tür başına tek çizim.
-	var bark_mat := _smat("res://shaders/stone.gdshader", {"tint": BARK, "moss": 0.45, "streak": 1.0})
+	var bark_mat := _smat("res://shaders/stone.gdshader", {"tint": BARK, "moss": 0.25, "streak": 1.0})
 	var leaf_mat := _smat("res://shaders/foliage.gdshader")
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.3; trunk.bottom_radius = 0.55; trunk.height = 1.0
@@ -102,7 +102,7 @@ func _ready() -> void:
 	# Birim gövde: taban y=0, dipte kök yayılması, hafif eğrilik. Örnek ölçeği boyu verir.
 	_multimesh(_deform(trunk, func(v: Vector3) -> Vector3:
 		v.y += 0.5
-		var k := 1.0 + 0.9 * exp(-v.y * 14.0) * (1.0 + 0.5 * sin(atan2(v.z, v.x) * 3.0))
+		var k := 1.0 + 0.45 * exp(-v.y * 14.0) * (1.0 + 0.4 * sin(atan2(v.z, v.x) * 3.0))
 		return Vector3(v.x * k + sin(v.y * 4.0) * 0.05, v.y, v.z * k + cos(v.y * 3.0) * 0.04)), _trunks, bark_mat, true)
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.04; cone.bottom_radius = 1.0; cone.height = 1.0
@@ -145,12 +145,12 @@ func _environment() -> void:
 	env.ssao_intensity = 2.2
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.86, 0.74, 0.6)
-	env.fog_density = 0.006
+	env.fog_density = 0.004
 	env.fog_sun_scatter = 0.25
 	env.fog_sky_affect = 0.2 # gök kendi rengini korusun
 	# Hacimsel sis: ağaç aralarından güneş huzmeleri. Pahalı olan tek ayar bu; yoğunluk düşük tutulur.
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.01
+	env.volumetric_fog_density = 0.007
 	env.volumetric_fog_albedo = Color(1.0, 0.9, 0.76)
 	env.volumetric_fog_anisotropy = 0.6
 	env.volumetric_fog_length = 70.0
@@ -249,7 +249,7 @@ func _tree(pos: Vector3, s: float, rng: RandomNumberGenerator, collide: bool) ->
 	var pine := _vis.randf() < 0.35
 	var leaf := Color(0.07, 0.2, 0.06).lerp(Color(0.2, 0.33, 0.05), _vis.randf())
 	if pine:
-		leaf = Color(0.04, 0.15, 0.08).lerp(Color(0.08, 0.22, 0.08), _vis.randf())
+		leaf = Color(0.07, 0.2, 0.1).lerp(Color(0.12, 0.27, 0.1), _vis.randf())
 	elif _vis.randf() < 0.14: # ara sıra sonbahar tonu
 		leaf = Color(0.5, 0.26, 0.04).lerp(Color(0.55, 0.42, 0.05), _vis.randf())
 	var top := Vector3(0, trunk_h + 0.6 * s, 0)
@@ -263,9 +263,9 @@ func _tree(pos: Vector3, s: float, rng: RandomNumberGenerator, collide: bool) ->
 	if pine: # üst üste 5 kat, yukarı doğru daralır; en alt kat baş hizasının üstünde
 		for k in 5:
 			var f := k / 4.0
-			var rad := lerpf(3.0, 1.1, f) * s
+			var rad := lerpf(2.7, 1.1, f) * s
 			_cones.append([Transform3D(Basis(Vector3.UP, rot + k * 1.3).scaled(Vector3(rad, lerpf(3.8, 3.2, f) * s, rad)),
-				pos + Vector3(0, lerpf(3.4, 9.6, f) * s, 0)), leaf * lerpf(0.75, 1.15, f)])
+				pos + Vector3(0, lerpf(3.8, 9.6, f) * s, 0)), leaf * lerpf(0.85, 1.15, f)])
 	else: # yanlarda sarkan küçük kümeler: taç düzgün top olmasın
 		for k in 3:
 			var a := rot + k * TAU / 3.0 + _vis.randf_range(-0.5, 0.5)
@@ -359,10 +359,10 @@ func _wall_dress(wall_mat: Material) -> void:
 	var pillars := []
 	for i in 36:
 		var t := (i % 9) / 9.0 * 2.0 - 1.0 # köşe payandası bir kez
-		var q := Vector3(t * HALF, 1.75, HALF).rotated(Vector3.UP, floorf(i / 9.0) * PI * 0.5)
-		pillars.append([Transform3D(Basis(), q), Color.WHITE])
+		var q := Vector3(t * HALF, 1.85, HALF).rotated(Vector3.UP, floorf(i / 9.0) * PI * 0.5)
+		pillars.append([Transform3D(Basis(), q), Color(1.2, 1.17, 1.1)]) # duvardan bir ton açık
 	var pb := BoxMesh.new()
-	pb.size = Vector3(1.3, 3.5, 1.3)
+	pb.size = Vector3(1.5, 3.7, 1.5)
 	_multimesh(pb, pillars, wall_mat, true)
 	for i in 110:
 		var q := Vector3(_vis.randf_range(-HALF, HALF), 0, HALF).rotated(Vector3.UP, (i % 4) * PI * 0.5)
@@ -546,7 +546,7 @@ func _flowers(ground_mat: ShaderMaterial, n: int) -> void:
 	var colors := [Color(0.95, 0.2, 0.25), Color(1.0, 0.85, 0.2), Color(0.97, 0.97, 0.97),
 		Color(0.7, 0.35, 0.9), Color(0.35, 0.55, 1.0), Color(1.0, 0.55, 0.15)]
 	var head := SphereMesh.new()
-	head.radius = 0.08; head.height = 0.1
+	head.radius = 0.06; head.height = 0.08
 	head.radial_segments = 8; head.rings = 4
 	var stem := CylinderMesh.new()
 	stem.top_radius = 0.012; stem.bottom_radius = 0.012; stem.height = 0.3

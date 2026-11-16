@@ -47,13 +47,13 @@ func _ready() -> void:
 		await _wait(2.0)
 	if what.is_empty() or "wall" in what:
 		me.spawn_wall(me._ground(p + Vector3(0, 0, -4)), 0.3, 0)
-		await _seq("wall", [0.1, 0.3, 1.0])
-		await _wait(7.0)
-		await _seq("wallend", [0.25, 0.6])
+		await _seq("wall", [0.15, 0.4, 0.8])
+		await _wait(7.4)
+		await _seq("wallend", [0.2, 0.5])
 	if what.is_empty() or "zone" in what:
 		me._area({"r": 3.0, "delay": 1.2, "boom": true, "dmg": 1, "color": Color(1, 0.4, 0.1)}, me._ground(p + Vector3(0, 0, -8)), Vector3.FORWARD)
 		me._area({"r": 2.0, "linger": 3.0, "dmg": 1, "color": Color(0.3, 0.8, 1.0)}, me._ground(p + Vector3(-4, 0, -6)), Vector3.FORWARD)
-		await _seq("zone", [0.3, 0.9, 1.1, 1.3])
+		await _seq("zone", [0.3, 0.9, 1.05, 1.15, 1.3])
 		var d: CharacterBody3D = load("res://player.gd").new()
 		d.name = "2"
 		d.set_multiplayer_authority(2)
