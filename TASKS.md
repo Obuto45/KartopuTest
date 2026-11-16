@@ -1,11 +1,12 @@
 # Tasks
 
-Bazuka Savaşı → 4 kişilik co-op roguelite (dalga savunması). Son sürüm: v1.0.
+Bazuka Savaşı: iki mod. **Arena** (PvP, olduğu gibi kalıyor) + **Hikaye Modu** (co-op, dalga savunması, yapılacak). Son sürüm: v1.0.
 Kural: işe başlamadan görevin yanına adını yaz (`[Sinan]`, `[Arkadaş]`), aynı dosyada ikiniz aynı anda çalışmayın, işe başlamadan `git pull` yapın.
 
 ## Active
 
-### Aşama 1: Prototip (eğlenceli mi?)
+### Aşama 1: Hikaye Modu prototipi (eğlenceli mi?)
+Menüde "HİKAYE MODU" kartı şu an "YAKINDA" olarak kapalı; bu aşama bitince açılacak.
 - [ ] **Dalga sistemi** - dalga sayacı, 60–90 sn dalga, 15 sn mola, ekranda "Dalga 3/10"
 - [ ] **İlk düşman: Sürüngen** - yavaş, kalabalık, tek roketle ölür; duvar dışındaki ormandan gelir
   - Yapay zekâ: en yakın oyuncuya yürü, yakındaysa vur
@@ -22,7 +23,6 @@ Birlikte karar verilecekler:
 - [ ] **Dost ateşi** - açık mı (düşük hasar, komik) kapalı mı?
 - [ ] **Koşu süresi** - 10 dalga ≈ 20–25 dk uygun mu?
 - [ ] **Oyunun adı** - "Bazuka Savaşı" co-op'a uyuyor mu, Steam adı ne olacak?
-- [ ] **Mevcut PvP** - ayrı mod olarak kalsın mı, kaldırılsın mı?
 - [ ] **Steam** - uygulama kaydı (Steamworks, 100 $), şu an test AppID'si kullanılıyor
 
 ## Someday
@@ -52,6 +52,8 @@ Birlikte karar verilecekler:
 - [ ] **Denenmedi** - gerçek Steam maçı, eski sürümden otomatik güncelleme
 
 ## Done
+- [x] ~~Mevcut PvP "Arena" modu olarak kalıyor, co-op "Hikaye Modu" olarak eklenecek~~ (2026-11-16, karar)
+- [x] ~~Yeni ana menü: canlı 3D giriş ekranı, ana menü, mod seçimi (Arena / Hikaye yakında), Arena lobisi~~ (2026-11-16)
 - [x] ~~v1.0: görsel yenileme (orman, efektler, karakter hareketi)~~ (2026-11-16)
 - [x] ~~v0.9: karakterler yeniden adlandırıldı~~ (2026-11-16)
 - [x] ~~v0.8: 52 karakter, bazuka, karakter seçim ekranı~~ (2026-11-16)

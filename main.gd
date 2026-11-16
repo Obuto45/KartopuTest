@@ -3,6 +3,7 @@ extends Node3D
 
 const PlayerScript := preload("res://player.gd")
 const ForestScript := preload("res://forest.gd")
+const ExplosionScript := preload("res://explosion.gd")
 const Chars := preload("res://characters.gd")
 const HP_W := 316.0 # can barının iç genişliği (px)
 const STATUS := {"stun": "SERSEMLEDİN", "blind": "KÖR OLDUN", "silence": "SUSTURULDUN", "confuse": "YÖNLER TERS",
@@ -10,6 +11,11 @@ const STATUS := {"stun": "SERSEMLEDİN", "blind": "KÖR OLDUN", "silence": "SUST
 	"rapid": "SERİ ATEŞ", "multi": "ÜÇLÜ ATIŞ", "armor": "ZIRH", "size": "BOY DEĞİŞTİ", "invis": "GÖRÜNMEZ",
 	"float": "SÜZÜLÜYOR", "regen": "İYİLEŞİYOR"}
 const SPAWNS := [Vector3(-14, 1, -14), Vector3(14, 1, 14), Vector3(-14, 1, 14), Vector3(14, 1, -14)]
+const MENU_SPOT := Vector3(14, 0, 14) # menü sahnesi bir doğma noktasında: etrafı ağaçsız
+const MENU_CREW := [40, 50, 34, 8, 26] # seçilen karakterin yanında duranlar
+# Menü kamerası [konum, bakılan nokta], ekibe göre: giriş ekranı geniş ve ortalı, menüde ekip sağda.
+const CAM_INTRO := [Vector3(0, 1.75, 6.6), Vector3(0, 1.55, 0)] # 6,6 m: daha geride ağaç var
+const CAM_MENU := [Vector3(0.6, 1.4, 6.6), Vector3(-2.6, 1.1, 0)]
 
 var ui: Control
 var info: Label
@@ -45,6 +51,15 @@ var ingame_box: VBoxContainer
 var world: Node3D
 var players: Node3D
 var round_over := false
+var pages := {} # menü sayfaları: intro, main, modes, lobby
+var page := ""
+var shade: TextureRect # soldan kararma: menü yazıları okunsun
+var prompt: Label # giriş ekranında yanıp sönen yazı
+var menu_bg: Node3D # menüde arkadaki canlı orman sahnesi
+var menu_cam: Camera3D
+var cam_k := 0.0 # 0 giriş çerçevesi, 1 menü çerçevesi
+var menu_t := 0.0
+var boom_t := 1.5
 
 
 func _ready() -> void:
@@ -56,6 +71,8 @@ func _ready() -> void:
 	Net.invited.connect(_on_invited)
 	Updater.status.connect(func(m): info.text = m)
 	multiplayer.peer_disconnected.connect(_on_peer_left)
+	_set_menu_bg(true)
+	_show_page("intro")
 	_refresh()
 	if "--selftest" in OS.get_cmdline_user_args(): # yayın öncesi: paketlenmiş exe'de haritayı açıp bir kare kaydeder
 		Net.host_local()
@@ -137,7 +154,46 @@ func _make_theme() -> Theme:
 	p.set_border_width_all(2)
 	p.border_color = Color(0.95, 0.5, 0.15, 0.45)
 	t.set_stylebox("panel", "PanelContainer", p)
+	# Ana menü düğmeleri: büyük, sola yaslı, üstüne gelince turuncu şerit ve içeri kayma.
+	t.set_type_variation("BigButton", "Button")
+	var mn := _sb(Color(0, 0, 0, 0), 4, 0)
+	mn.content_margin_left = 22
+	var mh := _sb(Color(0.95, 0.45, 0.1, 0.9), 4, 0)
+	mh.content_margin_left = 40
+	mh.border_width_left = 6
+	mh.border_color = Color(1.0, 0.85, 0.4)
+	for k in ["normal", "hover", "pressed", "disabled"]:
+		t.set_stylebox(k, "BigButton", mh if k != "normal" and k != "disabled" else mn)
+	t.set_font_size("font_size", "BigButton", 30)
+	t.set_constant("outline_size", "BigButton", 6)
+	t.set_color("font_outline_color", "BigButton", Color(0, 0, 0, 0.7))
 	return t
+
+
+## Oyunun logosu: kalın sistem yazı tipi, koyu dış hat ve gölge.
+func _logo(parent: Node, text: String, size: int, c := Color(1.0, 0.62, 0.18)) -> Label:
+	var l := _lbl(parent, text, size)
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	var f := SystemFont.new()
+	f.font_names = PackedStringArray(["Impact", "Arial Black", "Sans-Serif"])
+	f.font_weight = 900
+	l.add_theme_font_override("font", f)
+	l.add_theme_color_override("font_color", c)
+	l.add_theme_color_override("font_outline_color", Color(0.1, 0.03, 0.0))
+	l.add_theme_constant_override("outline_size", maxi(size / 7, 4))
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
+	l.add_theme_constant_override("shadow_offset_y", maxi(size / 16, 2))
+	l.add_theme_constant_override("shadow_outline_size", maxi(size / 7, 4))
+	return l
+
+
+## Okunaklı küçük yazı: menü sahnenin üstünde durduğu için dış hatlı.
+func _txt(parent: Node, text: String, size: int, alpha := 0.85) -> Label:
+	var l := _lbl(parent, text, size)
+	l.modulate.a = alpha
+	l.add_theme_constant_override("outline_size", 5)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	return l
 
 
 func _build_ui() -> void:
@@ -145,70 +201,7 @@ func _build_ui() -> void:
 	add_child(layer)
 	var theme := _make_theme()
 
-	ui = Control.new()
-	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
-	ui.theme = theme
-	layer.add_child(ui)
-	var bg := TextureRect.new() # menü arka planı: koyu lacivertten mora geçiş
-	var grad := Gradient.new()
-	grad.set_color(0, Color(0.04, 0.06, 0.14))
-	grad.set_color(1, Color(0.22, 0.07, 0.16))
-	var gt := GradientTexture2D.new()
-	gt.gradient = grad
-	gt.fill_to = Vector2(0, 1)
-	bg.texture = gt
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_SCALE
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	ui.add_child(bg)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	ui.add_child(center)
-	var panel := PanelContainer.new()
-	center.add_child(panel)
-	var v := VBoxContainer.new()
-	v.custom_minimum_size = Vector2(460, 0)
-	v.add_theme_constant_override("separation", 9)
-	panel.add_child(v)
-
-	var title := _lbl(v, "BAZUKA SAVAŞI", 46)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-	var sub := _lbl(v, "Steam: " + (Net.my_name() if Net.steam_ok else "BAĞLI DEĞİL (Steam açık mı?)"), 15)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.modulate = Color(1, 1, 1, 0.7)
-	sub.text += "   •   sürüm " + Updater.version()
-	invite_box = VBoxContainer.new() # gelen davetler burada çıkar
-	v.add_child(invite_box)
-	char_btn = _btn(v, "", _open_chars)
-	_update_char_btn()
-	_btn(v, "Steam Lobisi Kur", Net.host_steam)
-	_btn(v, "Arkadaşlar (davet et / lobisine katıl)", _show_friends)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size.y = 0
-	friends_box = VBoxContainer.new()
-	friends_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(friends_box)
-	v.add_child(scroll)
-	start_btn = _btn(v, "▶  Oyunu Başlat (host)", _on_start)
-	members = _lbl(v, "", 16)
-	_btn(v, "Lobiden Çık", Net.leave)
-	v.add_child(HSeparator.new())
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 9)
-	v.add_child(row)
-	for b in [_btn(row, "Ayarlar", _open_settings), _btn(row, "Çıkış", get_tree().quit)]:
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var test := HBoxContainer.new()
-	test.add_theme_constant_override("separation", 9)
-	v.add_child(test)
-	var tl := _lbl(test, "Tek PC testi:", 14)
-	tl.modulate = Color(1, 1, 1, 0.6)
-	tl.autowrap_mode = TextServer.AUTOWRAP_OFF # HBox içinde harf harf kırılmasın
-	for b in [_btn(test, "Yerel Host", Net.host_local), _btn(test, "Yerel Katıl", Net.join_local)]:
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info = _lbl(v, "Arkadaşın daveti kabul edince lobiye girer. Sonra 'Oyunu Başlat'.", 14)
-	info.modulate = Color(1, 1, 1, 0.75)
+	_build_menu(layer, theme)
 
 	hud = Control.new()
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -319,6 +312,280 @@ func _update_hp_bar(me: Node, dt: float) -> void:
 			hp_ticks.add_child(line)
 	char_lbl.text = "%s  •  %s" % [me.ch.name, me.ch.role]
 	char_lbl.modulate = me.ch.color.lightened(0.3)
+
+
+# ---------- Menü ----------
+
+func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
+	ui = Control.new()
+	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE # boş yere tıklama giriş ekranını geçebilsin
+	ui.theme = theme
+	layer.add_child(ui)
+	shade = TextureRect.new()
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.02, 0.02, 0.06, 0.94))
+	grad.set_color(1, Color(0.02, 0.02, 0.06, 0.0))
+	grad.add_point(0.5, Color(0.02, 0.02, 0.06, 0.5))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	shade.texture = gt
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(shade)
+	for edge in [Control.PRESET_TOP_WIDE, Control.PRESET_BOTTOM_WIDE]: # sinematik siyah şeritler
+		var bar := ColorRect.new()
+		bar.color = Color(0, 0, 0, 0.85)
+		bar.set_anchors_preset(edge)
+		bar.custom_minimum_size.y = 34
+		if edge == Control.PRESET_BOTTOM_WIDE:
+			bar.offset_top = -34
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(bar)
+
+	# Giriş ekranı
+	var intro := _page("intro")
+	var iv := VBoxContainer.new()
+	iv.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	iv.offset_top = 90
+	iv.alignment = BoxContainer.ALIGNMENT_CENTER
+	iv.add_theme_constant_override("separation", 4)
+	intro.add_child(iv)
+	_logo(iv, "BAZUKA SAVAŞI", 124).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_txt(iv, "R O K E T L E R    •    K A O S    •    A R K A D A Ş L A R", 20).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt = _txt(intro, "BAŞLAMAK İÇİN BİR TUŞA BAS", 24, 1.0)
+	prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	prompt.offset_top = -110; prompt.offset_bottom = -70
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# Ana menü: solda büyük düğmeler, sağda canlı sahnedeki ekip
+	var mv := _column(_page("main"))
+	_logo(mv, "BAZUKA\nSAVAŞI", 76)
+	_txt(mv, "4 kişilik bazuka kaosu", 18, 0.75)
+	mv.add_child(_gap(36))
+	_big(mv, "OYNA", _show_page.bind("modes"))
+	char_btn = _big(mv, "", _open_chars)
+	_update_char_btn()
+	_big(mv, "AYARLAR", _open_settings)
+	_big(mv, "ÇIKIŞ", get_tree().quit)
+	mv.add_child(_gap(30))
+	var steam := _txt(mv, ("●  Steam: " + Net.my_name()) if Net.steam_ok else "●  Steam bağlı değil (Steam açık mı?)", 15, 0.7)
+	steam.add_theme_color_override("font_color", Color(0.5, 1.0, 0.55) if Net.steam_ok else Color(1.0, 0.6, 0.5))
+
+	# Mod seçimi: iki büyük kart
+	var modes := _page("modes")
+	var mc := VBoxContainer.new()
+	mc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mc.alignment = BoxContainer.ALIGNMENT_CENTER
+	mc.add_theme_constant_override("separation", 26)
+	modes.add_child(mc)
+	_logo(mc, "OYUN MODU SEÇ", 58, Color.WHITE).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var cards := HBoxContainer.new()
+	cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards.add_theme_constant_override("separation", 30)
+	mc.add_child(cards)
+	_mode_card(cards, "ARENA", "PvP  •  2–4 oyuncu", Color(1.0, 0.55, 0.15),
+		"Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır.",
+		"▶  ARENAYA GİR", _show_page.bind("lobby"))
+	_mode_card(cards, "HİKAYE MODU", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
+		"Arkadaşlarınla omuz omuza. Dalga dalga gelen düşmanlara karşı hayatta kal, güçlen, boss'u devir.",
+		"YAKINDA", Callable())
+	var back := _btn(mc, "◀  Geri", _show_page.bind("main"))
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	back.custom_minimum_size.x = 220
+
+	# Arena lobisi: Steam lobisi, arkadaşlar, başlat
+	var lv := _column(_page("lobby"))
+	_logo(lv, "ARENA", 72)
+	_txt(lv, "Lobi kur, arkadaşlarını davet et, savaşı başlat.", 17, 0.75)
+	lv.add_child(_gap(14))
+	var panel := PanelContainer.new()
+	lv.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 9)
+	panel.add_child(v)
+	_btn(v, "Steam Lobisi Kur", Net.host_steam)
+	_btn(v, "Arkadaşlar (davet et / lobisine katıl)", _show_friends)
+	var scroll := ScrollContainer.new()
+	friends_box = VBoxContainer.new()
+	friends_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(friends_box)
+	v.add_child(scroll)
+	_btn(v, "Karakter Değiştir", _open_chars)
+	start_btn = _btn(v, "▶  Oyunu Başlat (host)", _on_start)
+	start_btn.custom_minimum_size.y = 48
+	members = _lbl(v, "", 16)
+	_btn(v, "Lobiden Çık", Net.leave)
+	var test := HBoxContainer.new()
+	test.add_theme_constant_override("separation", 9)
+	v.add_child(test)
+	var tl := _lbl(test, "Tek PC testi:", 14)
+	tl.modulate = Color(1, 1, 1, 0.6)
+	tl.autowrap_mode = TextServer.AUTOWRAP_OFF # HBox içinde harf harf kırılmasın
+	for b in [_btn(test, "Yerel Host", Net.host_local), _btn(test, "Yerel Katıl", Net.join_local)]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lv.add_child(_gap(6))
+	_btn(lv, "◀  Geri", _show_page.bind("modes"))
+
+	# Her sayfada görünenler: alt bilgi satırı, sürüm, gelen davetler
+	info = _txt(ui, "", 15, 0.8)
+	info.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	info.offset_left = 40; info.offset_right = -260; info.offset_top = -78; info.offset_bottom = -42
+	var ver := _txt(ui, "sürüm " + Updater.version(), 14, 0.55)
+	ver.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver.offset_left = -200; ver.offset_right = -24; ver.offset_top = -64; ver.offset_bottom = -42
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	invite_box = VBoxContainer.new() # gelen davetler sağ üstte çıkar
+	invite_box.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	invite_box.offset_left = -380; invite_box.offset_right = -30; invite_box.offset_top = 60
+	ui.add_child(invite_box)
+
+
+func _big(parent: Node, text: String, cb: Callable) -> Button:
+	var b := _btn(parent, text, cb)
+	b.theme_type_variation = "BigButton"
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.custom_minimum_size.y = 56
+	return b
+
+
+func _page(n: String) -> Control:
+	var c := Control.new()
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.hide()
+	ui.add_child(c)
+	pages[n] = c
+	return c
+
+
+## Sol sütun: ana menü ve lobi burada, sağ taraf sahneye kalır.
+func _column(parent: Control) -> VBoxContainer:
+	var c := VBoxContainer.new()
+	c.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	c.offset_left = 90; c.offset_right = 90 + 470
+	c.alignment = BoxContainer.ALIGNMENT_CENTER
+	c.add_theme_constant_override("separation", 6)
+	parent.add_child(c)
+	return c
+
+
+func _gap(h: float) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size.y = h
+	return c
+
+
+func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String, btn: String, cb: Callable) -> void:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(400, 380)
+	var sb := _sb(Color(0.05, 0.06, 0.1, 0.88), 16, 28)
+	sb.set_border_width_all(2)
+	sb.border_width_top = 6
+	sb.border_color = c
+	card.add_theme_stylebox_override("panel", sb)
+	parent.add_child(card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	card.add_child(v)
+	_logo(v, title, 46, c)
+	var t := _txt(v, tag, 18, 0.8)
+	t.add_theme_color_override("font_color", c.lightened(0.4))
+	_txt(v, desc, 17, 0.9).size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var b := _btn(v, btn, cb if cb.is_valid() else func(): pass)
+	b.custom_minimum_size.y = 54
+	b.add_theme_font_size_override("font_size", 20)
+	if not cb.is_valid(): # henüz yok: soluk kart, kapalı düğme, köşede "YAKINDA" bandı
+		b.disabled = true
+		card.modulate = Color(0.8, 0.8, 0.85)
+		var badge := _logo(card, "YAKINDA", 22, Color.WHITE)
+		badge.size_flags_horizontal = Control.SIZE_SHRINK_END
+		badge.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		var bs := _sb(Color(0.85, 0.2, 0.25), 6, 8)
+		badge.add_theme_stylebox_override("normal", bs)
+		badge.rotation_degrees = 8
+
+
+func _show_page(n: String) -> void:
+	page = n
+	for k in pages:
+		pages[k].visible = k == n
+	var p: Control = pages[n]
+	p.modulate.a = 0.0
+	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(p, "modulate:a", 1.0, 0.35)
+	tw.tween_property(shade, "modulate:a", 0.25 if n == "intro" else (0.75 if n == "modes" else 1.0), 0.6)
+	tw.tween_property(self, "cam_k", 0.0 if n == "intro" else 1.0, 1.4)
+	var first := p.get_child(0) as Control # içerik soldan kayarak gelsin
+	tw.tween_property(first, "position:x", first.position.x, 0.4).from(first.position.x - 50)
+
+
+## Menüdeki canlı sahne: orman, seçili karakter ve ekibi, arkada ara ara patlamalar.
+func _set_menu_bg(on: bool) -> void:
+	if menu_bg:
+		remove_child(menu_bg)
+		menu_bg.queue_free()
+		menu_bg = null
+	if not on:
+		return
+	menu_bg = Node3D.new()
+	add_child(menu_bg)
+	var forest: Node3D = ForestScript.new()
+	forest.spawns = SPAWNS
+	menu_bg.add_child(forest)
+	menu_cam = Camera3D.new()
+	menu_cam.fov = 62
+	menu_bg.add_child(menu_cam)
+	menu_cam.current = true
+	_menu_crew()
+
+
+func _menu_crew() -> void:
+	var old := menu_bg.get_node_or_null("Crew")
+	if old:
+		menu_bg.remove_child(old)
+		old.queue_free()
+	var crew := Node3D.new()
+	crew.name = "Crew"
+	crew.position = MENU_SPOT
+	crew.rotation.y = PI / 4 # ekibin önü (+Z) köşeye, kamera haritanın içine baksın
+	menu_bg.add_child(crew)
+	var ids := [Net.my_char]
+	ids.append_array(MENU_CREW.filter(func(i): return i != Net.my_char).slice(0, 4))
+	var spots := [Vector3(0, 0, 0.3), Vector3(-1.45, 0, -0.6), Vector3(1.45, 0, -0.6), Vector3(-2.8, 0, -1.5), Vector3(2.8, 0, -1.5)]
+	for k in ids.size():
+		var m: Node3D = load("res://models/chars/%s.glb" % Chars.get_char(ids[k]).model).instantiate()
+		m.scale = Vector3.ONE * 0.72
+		m.position = spots[k]
+		m.rotation.y = -spots[k].x * 0.1 # hafifçe ortaya dönük
+		crew.add_child(m)
+		var ap: AnimationPlayer = m.find_children("*", "AnimationPlayer", true, false)[0]
+		ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
+		ap.play("Idle")
+		ap.seek(randf() * ap.current_animation_length) # hepsi aynı anda sallanmasın
+
+
+func _menu_anim(dt: float) -> void:
+	menu_t += dt
+	var crew := menu_bg.get_node_or_null("Crew") as Node3D
+	if crew == null:
+		return
+	var sway := Vector3(sin(menu_t * 0.13) * 0.5, sin(menu_t * 0.21) * 0.1, sin(menu_t * 0.09) * 0.3)
+	var pos: Vector3 = CAM_INTRO[0].lerp(CAM_MENU[0], cam_k) + sway
+	var at: Vector3 = CAM_INTRO[1].lerp(CAM_MENU[1], cam_k)
+	menu_cam.global_position = crew.global_transform * pos
+	menu_cam.look_at(crew.global_transform * at)
+	prompt.modulate.a = 0.45 + 0.55 * absf(sin(menu_t * 2.2))
+	boom_t -= dt
+	if boom_t <= 0.0: # ekibin arkasında, ormanın içinde patlamalar
+		boom_t = randf_range(2.0, 3.8)
+		var fx: Node3D = ExplosionScript.new()
+		fx.position = crew.global_transform * Vector3(randf_range(-9, 9), 0.3, randf_range(-24, -11))
+		fx.scale = Vector3.ONE * randf_range(1.0, 1.7)
+		menu_bg.add_child(fx)
+		Sfx.play3d(Sfx.boom, fx.position, -6.0)
 
 
 # ---------- Karakter seçimi ----------
@@ -456,12 +723,14 @@ func _open_chars() -> void:
 func _pick_char(i: int) -> void:
 	Net.set_char(i)
 	_update_char_btn()
+	if menu_bg:
+		_menu_crew()
 	char_wrap.hide()
 
 
 func _update_char_btn() -> void:
 	var c := Chars.get_char(Net.my_char)
-	char_btn.text = "Karakter: %s (%s)  –  değiştir" % [c.name, c.role]
+	char_btn.text = "KARAKTER  ·  %s" % c.name.to_upper()
 
 
 func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
@@ -585,9 +854,13 @@ func _refresh() -> void:
 		lines.append(("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + Chars.get_char(Net.chars.get(id, 0)).name)
 	members.text = "Lobidekiler:\n" + "\n".join(lines) if Net.online() else ""
 	start_btn.disabled = not (Net.online() and multiplayer.is_server())
+	if Net.online() and world == null and page in ["intro", "main", "modes"]:
+		_show_page("lobby")
 
 
 func _process(dt: float) -> void:
+	if menu_bg:
+		_menu_anim(dt)
 	if players == null:
 		return
 	var me = players.get_node_or_null(str(multiplayer.get_unique_id()))
@@ -620,6 +893,14 @@ func _cd_text(t: float) -> String:
 
 
 func _unhandled_input(e: InputEvent) -> void:
+	if world == null and not char_wrap.visible and not settings_wrap.visible:
+		if page == "intro" and (e is InputEventKey or e is InputEventMouseButton) and e.pressed:
+			_show_page("main")
+			get_viewport().set_input_as_handled()
+			return
+		if e.is_action_pressed("ui_cancel") and page in ["modes", "lobby"]:
+			_show_page("modes" if page == "lobby" else "main")
+			return
 	if e.is_action_pressed("ui_cancel"):
 		if char_wrap.visible:
 			char_wrap.hide()
@@ -648,6 +929,7 @@ func _on_start() -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game(ids: Array) -> void:
 	_clear_world()
+	_set_menu_bg(false)
 	_build_world()
 	for i in ids.size():
 		var p: CharacterBody3D = PlayerScript.new()
@@ -718,6 +1000,9 @@ func _back_to_menu() -> void:
 	settings_wrap.hide()
 	ui.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if menu_bg == null:
+		_set_menu_bg(true)
+	_show_page("lobby" if Net.online() else "main")
 	_refresh()
 
 
