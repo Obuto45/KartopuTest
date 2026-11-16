@@ -15,6 +15,9 @@ var next := 0.0
 var delay := 0.0
 var fill_mat: StandardMaterial3D
 var rock: MeshInstance3D
+var ring: MeshInstance3D
+
+const Fx := preload("res://explosion.gd")
 
 
 func _flat(m: Mesh, alpha: float) -> StandardMaterial3D:
@@ -33,25 +36,43 @@ func _flat(m: Mesh, alpha: float) -> StandardMaterial3D:
 
 func _ready() -> void:
 	delay = 1.0 if a.get("mine", false) else a.get("delay", 0.0)
-	var ring := TorusMesh.new()
-	ring.inner_radius = a.r * 0.96; ring.outer_radius = a.r
-	_flat(ring, 0.9)
+	var col: Color = a.get("color", Color.WHITE)
+	ring = Fx.ground(a.r, Color(col, 0.95), Vector4(0.95, 0.05, 0.0, 1.8)) # parlak, nabız atan sınır halkası
+	ring.position.y = 0.07
+	add_child(ring)
 	var disc := CylinderMesh.new()
 	disc.top_radius = a.r; disc.bottom_radius = a.r; disc.height = 0.04
 	fill_mat = _flat(disc, 0.22)
+	if delay > 0.0: # geri sayım: içten dışa dolan leke, sınıra değdiği an vurur
+		var fill := Fx.ground(a.r, Color(col, 0.4), Vector4(0.0, 0.02, 0.06, 1.4))
+		fill.position.y = 0.09
+		add_child(fill)
+		Fx.anim(create_tween(), fill, "shape", Vector4(0.0, 0.02, 0.06, 1.4), Vector4(0.0, 0.98, 0.06, 1.4), delay)
 	if a.get("boom", false) and delay > 0.0 and not a.has("linger") and not a.has("mine"): # gökten düşen taş
 		var s := SphereMesh.new()
 		s.radius = 0.7; s.height = 1.4
+		s.radial_segments = 10; s.rings = 5 # köşeli: kaya gibi
 		rock = MeshInstance3D.new()
 		rock.mesh = s
 		var m := StandardMaterial3D.new()
 		m.albedo_color = Color(0.25, 0.1, 0.05)
 		m.emission_enabled = true
 		m.emission = Color(1.0, 0.4, 0.05)
-		m.emission_energy_multiplier = 2.5
+		m.emission_energy_multiplier = 3.0
 		rock.material_override = m
 		rock.position = Vector3(6, 30, 4)
 		add_child(rock)
+		# Ateş ve duman kuyruğu dünyada kalır (local_coords kapalı), taş önünden kaçar.
+		var flame := Fx.parts(Fx.quad("glow", 1.8), 36, 0.45, 0.0, 1.5, [Color(1.0, 0.85, 0.4, 0.9), Color(1.0, 0.4, 0.05, 0.6), Color(0.5, 0.08, 0.0, 0.0)], 1.0, 0.3, false)
+		var smoke := Fx.parts(Fx.quad("puff", 2.4), 30, 1.3, 0.0, 1.0, [Color(0.3, 0.14, 0.05, 0.0), Color(0.12, 0.1, 0.09, 0.7), Color(0.25, 0.24, 0.23, 0.0)], 0.5, 1.0, false)
+		for p in [smoke, flame]:
+			p.local_coords = false
+			rock.add_child(p)
+		var light := OmniLight3D.new()
+		light.light_color = Color(1.0, 0.5, 0.15)
+		light.light_energy = 6.0
+		light.omni_range = 9.0
+		rock.add_child(light)
 		create_tween().tween_property(rock, "position", Vector3.ZERO, delay).set_ease(Tween.EASE_IN)
 
 
@@ -61,6 +82,7 @@ func _physics_process(dt: float) -> void:
 		queue_free()
 		return
 	fill_mat.albedo_color.a = 0.16 + 0.1 * absf(sin(t * 6.0)) # nabız
+	ring.set_instance_shader_parameter("shape", Vector4(0.95, 0.05, 0.0, 1.3 + absf(sin(t * 6.0))))
 	if a.get("mine", false):
 		if t > MINE_LIFE:
 			queue_free()

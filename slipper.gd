@@ -16,6 +16,8 @@ var bounces := 0 # isabetten sonra kaç kez daha seker
 var hit := [] # vurulanlar: aynı kişiye iki kez sekmez
 var body: Node3D
 
+const Fx := preload("res://explosion.gd")
+
 
 func _part(m: Mesh, c: Color, pos := Vector3.ZERO) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -34,6 +36,11 @@ func _ready() -> void:
 	bounces = h.get("bounces", 0)
 	body = Node3D.new()
 	add_child(body)
+	# Arkasında kısa, yumuşak ışık izi: havada dönen mermi kolay seçilsin.
+	var tc: Color = {"card": Color(1.0, 0.3, 0.3), "ball": Color(0.85, 0.92, 1.0)}.get(h.look, Color(1.0, 0.7, 0.3))
+	var trail := Fx.parts(Fx.quad("glow", 0.34), 14, 0.35, 0.0, 0.2, [Color(tc, 0.5), Color(tc, 0.0)], 1.0, 0.25, false)
+	trail.local_coords = false
+	add_child(trail)
 	match h.look:
 		"card": # oyun kartı: beyaz yüz, kırmızı karo
 			var b := BoxMesh.new()

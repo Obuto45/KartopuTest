@@ -12,6 +12,23 @@ var done := false
 var fire: CPUParticles3D
 var spd := SPEED
 var big := false # gülle: iri ve ağır
+var light: OmniLight3D
+var smoke: CPUParticles3D
+
+const Fx := preload("res://explosion.gd")
+
+
+func _piece(m: PrimitiveMesh, c: Color, y: float, metal := 0.6) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = m
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = c
+	mat.metallic = metal; mat.roughness = 0.4
+	mi.material_override = mat
+	mi.position.z = -y # +y: burun tarafı
+	mi.rotation.x = -PI / 2 # uzun eksen uçuş yönünde
+	add_child(mi)
+	return mi
 
 
 func _ready() -> void:
@@ -19,20 +36,31 @@ func _ready() -> void:
 	var up := Vector3.UP if abs(dir.y) < 0.99 else Vector3.FORWARD
 	look_at(global_position + dir, up)
 
-	# Roket gövdesi (uzun ekseni uçuş yönünde) + arkasında alev topu ve alev izi.
-	var shell := MeshInstance3D.new()
-	var cm := CapsuleMesh.new()
-	cm.radius = 0.07; cm.height = 0.42
-	shell.mesh = cm
-	shell.rotation.x = PI / 2
-	var sm0 := StandardMaterial3D.new()
-	sm0.albedo_color = Color(0.2, 0.2, 0.22) if big else Color(0.75, 0.2, 0.15)
-	sm0.metallic = 0.6; sm0.roughness = 0.4
-	shell.material_override = sm0
-	add_child(shell)
-	if big:
-		cm.radius = 0.22; cm.height = 0.44 # top gülle
-	for layer in [[0.12, Color(1.0, 0.95, 0.6, 1.0)], [0.2, Color(1.0, 0.45, 0.05, 0.55)]]:
+	if big: # top gülle
+		var ball := SphereMesh.new()
+		ball.radius = 0.22; ball.height = 0.44
+		_piece(ball, Color(0.2, 0.2, 0.22), 0.0)
+	else: # roket: gövde + sivri burun + beyaz şerit + lüle + dört kanat
+		var tube := CylinderMesh.new()
+		tube.top_radius = 0.06; tube.bottom_radius = 0.06; tube.height = 0.3
+		_piece(tube, Color(0.75, 0.2, 0.15), 0.0)
+		var nose := CylinderMesh.new()
+		nose.top_radius = 0.0; nose.bottom_radius = 0.06; nose.height = 0.15
+		_piece(nose, Color(0.9, 0.9, 0.88), 0.225, 0.2)
+		var band := CylinderMesh.new()
+		band.top_radius = 0.064; band.bottom_radius = 0.064; band.height = 0.04
+		_piece(band, Color(0.9, 0.9, 0.88), 0.08, 0.2)
+		var noz := CylinderMesh.new()
+		noz.top_radius = 0.035; noz.bottom_radius = 0.055; noz.height = 0.06
+		_piece(noz, Color(0.12, 0.12, 0.14), -0.18)
+		var fin := PrismMesh.new()
+		fin.size = Vector3(0.1, 0.14, 0.012)
+		fin.left_to_right = 0.0 # dik kenar gövdede, eğik kenar öne bakar
+		for i in 4:
+			var f := _piece(fin, Color(0.25, 0.25, 0.28), -0.1)
+			f.rotate_z(i * PI / 2)
+			f.position += f.basis.x * 0.1
+	for layer in [[0.1, Color(2.5, 2.2, 1.4, 1.0)], [0.19, Color(1.0, 0.45, 0.05, 0.5)]]: # çekirdek 1'in üstünde: ışıma yakalar
 		var mi := MeshInstance3D.new()
 		var s := SphereMesh.new()
 		s.radius = layer[0]; s.height = layer[0] * 2
@@ -46,38 +74,32 @@ func _ready() -> void:
 		mi.position.z = 0.25 # roketin arkasında
 		add_child(mi)
 
-	var light := OmniLight3D.new()
+	light = OmniLight3D.new()
 	light.light_color = Color(1.0, 0.5, 0.15)
 	light.light_energy = 3.0
 	light.omni_range = 4.0
 	add_child(light)
 
-	fire = CPUParticles3D.new()
-	fire.emitting = false # namluda başlarsa atanın kamerasını kapatır; _physics_process açar
-	fire.amount = 60
-	fire.lifetime = 0.4
+	# Alev izi: namluda başlarsa atanın kamerasını kapatır; _physics_process açar.
+	fire = Fx.parts(Fx.quad("glow", 0.36), 26, 0.3, 0.5, 1.5, [Color(1.0, 0.85, 0.4, 0.9), Color(1.0, 0.4, 0.05, 0.6), Color(0.6, 0.1, 0.0, 0.0)], 1.0, 0.3, false)
+	fire.emitting = false
 	fire.local_coords = false
 	fire.direction = Vector3(0, 0, 1)
-	fire.spread = 25.0
-	fire.initial_velocity_min = 0.5
-	fire.initial_velocity_max = 1.5
-	fire.gravity = Vector3(0, 2.0, 0) # alev yukarı kıvrılır
-	fire.scale_amount_min = 0.8
-	fire.scale_amount_max = 1.4
-	var ramp := Gradient.new() # sarı -> turuncu -> sönük kırmızı
-	ramp.set_color(0, Color(1.0, 0.75, 0.2, 1.0))
-	ramp.set_color(1, Color(0.6, 0.1, 0.0, 0.0))
-	ramp.add_point(0.4, Color(1.0, 0.4, 0.05, 0.7))
-	fire.color_ramp = ramp
-	var sm := SphereMesh.new()
-	sm.radius = 0.09; sm.height = 0.18
-	var smat := StandardMaterial3D.new()
-	smat.vertex_color_use_as_albedo = true # renk rampası parçacıklara uygulansın
-	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	sm.material = smat
-	fire.mesh = sm
+	fire.spread = 20.0
+	fire.position.z = 0.25
 	add_child(fire)
+	# Duman izi dünyaya bağlı: roket patlayıp silinince havada asılı kalıp dağılır.
+	smoke = Fx.parts(Fx.quad("puff", 0.75), 26, 1.1, 0.1, 0.5, [Color(0.5, 0.35, 0.2, 0.0), Color(0.42, 0.4, 0.38, 0.55), Color(0.55, 0.54, 0.52, 0.0)], 0.35, 1.0, false)
+	smoke.emitting = false
+	smoke.gravity = Vector3(0, 0.6, 0)
+	smoke.position = global_position
+	get_parent().add_child.call_deferred(smoke) # ebeveyn şu an bizi eklemekle meşgul
+	tree_exiting.connect(func() -> void:
+		smoke.emitting = false
+		if smoke.is_inside_tree():
+			smoke.create_tween().tween_callback(smoke.queue_free).set_delay(1.2)
+		else:
+			smoke.queue_free())
 
 
 func _physics_process(dt: float) -> void:
@@ -85,6 +107,9 @@ func _physics_process(dt: float) -> void:
 		return
 	life -= dt
 	fire.emitting = life < 2.93 # ~2 m sonra iz başlar
+	smoke.emitting = fire.emitting
+	smoke.position = global_position - dir * 0.5
+	light.light_energy = 2.4 + randf() * 1.6 # alev titrer
 	var from := global_position
 	var to := from + dir * spd * dt
 	var hit = null
