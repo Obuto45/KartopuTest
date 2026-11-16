@@ -13,3 +13,6 @@ build/
 .claude/settings.local.json
 
 .claude-flow/
+
+# Referans depolar (yerel, git dışı)
+_referans/
