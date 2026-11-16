@@ -33,5 +33,5 @@ void fragment() {
 	ALBEDO = COLOR.rgb * (0.8 - p.y * 0.3 + n * 0.25);
 	// Zemine / duvara gömülen bulut keskin çizgi bırakmasın.
 	vec4 back = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, texture(depth_tex, SCREEN_UV).r, 1.0);
-	ALPHA = smoothstep(0.05 + eat, 0.6 + eat, body) * COLOR.a * clamp((VERTEX.z - back.z / back.w) * 2.5, 0.0, 1.0);
+	ALPHA = smoothstep(0.05 + eat, 0.6 + eat, body) * COLOR.a * smoothstep(1.0, 0.7, length(p)) * clamp((VERTEX.z - back.z / back.w) * 2.5, 0.0, 1.0);
 }

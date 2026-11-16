@@ -30,7 +30,10 @@ func _ready() -> void:
 	cs.position.y = SIZE.y * 0.5
 	add_child(cs)
 
-	# Dipte toz ve moloz: local_coords kapalı, çıkan parçacık duvarla birlikte yükselmez.
+	# Dipte toz ve moloz. Taşıyıcı düğüm duvarın tersine hareket eder: toz zeminde kalır.
+	var base := Node3D.new()
+	base.position.y = SIZE.y
+	add_child(base)
 	var dust := Fx.parts(Fx.quad("puff", 1.7), 18, 1.2, 0.8, 2.6, [Color(0.5, 0.42, 0.31, 0.9), Color(0.5, 0.43, 0.34, 0.6), Color(0.52, 0.47, 0.4, 0.0)], 0.45, 1.0)
 	var bm2 := BoxMesh.new()
 	bm2.size = Vector3(0.17, 0.12, 0.14)
@@ -39,13 +42,11 @@ func _ready() -> void:
 	rubble.gravity = Vector3(0, -16, 0)
 	rubble.particle_flag_align_y = true
 	for p in [dust, rubble]:
-		p.local_coords = false
-		p.position.y = SIZE.y # duvar henüz yerin altında: yayıcı zemin hizasında
 		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 		p.emission_box_extents = Vector3(SIZE.x * 0.5, 0.1, SIZE.z) # duvarın iki yüzünden de taşsın
 		p.direction = Vector3.UP
 		p.spread = 70.0
-		add_child(p)
+		base.add_child(p)
 		p.emitting = true
 
 	Sfx.play3d(Sfx.rumble, global_position + Vector3.UP, 0.0)
@@ -53,9 +54,9 @@ func _ready() -> void:
 	position.y -= SIZE.y # yerin altından yükselir
 	var tw := create_tween()
 	tw.tween_property(self, "position:y", top, 0.2).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(base, "position:y", 0.0, 0.2).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(LIFE)
-	tw.tween_callback(func() -> void: # batarken de toz kalkar; duvar artık yukarıda, yayıcı dibe iner
-		dust.position.y = 0.0
-		dust.restart())
+	tw.tween_callback(dust.restart) # batarken de toz kalkar
 	tw.tween_property(self, "position:y", top - SIZE.y, 0.4)
+	tw.parallel().tween_property(base, "position:y", SIZE.y, 0.4)
 	tw.tween_callback(queue_free)

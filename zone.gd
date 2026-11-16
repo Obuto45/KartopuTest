@@ -51,15 +51,12 @@ func _ready() -> void:
 	if a.get("boom", false) and delay > 0.0 and not a.has("linger") and not a.has("mine"): # gökten düşen taş
 		var s := SphereMesh.new()
 		s.radius = 0.7; s.height = 1.4
-		s.radial_segments = 10; s.rings = 5 # köşeli: kaya gibi
+		s.radial_segments = 24; s.rings = 12
 		rock = MeshInstance3D.new()
 		rock.mesh = s
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.25, 0.1, 0.05)
-		m.emission_enabled = true
-		m.emission = Color(1.0, 0.4, 0.05)
-		m.emission_energy_multiplier = 1.6
-		rock.material_override = m
+		rock.material_override = Fx.mat("ball") # ateş topu gölgelendiricisi yarı soğumuş halde: kor damarlı yamuk taş
+		rock.set_instance_shader_parameter("progress", 0.42)
+		rock.set_instance_shader_parameter("seed", randf() * 20.0)
 		rock.position = Vector3(6, 30, 4)
 		add_child(rock)
 		# Ateş ve duman kuyruğu dünyada kalır (local_coords kapalı), taş önünden kaçar.
@@ -70,7 +67,7 @@ func _ready() -> void:
 			rock.add_child(p)
 		var light := OmniLight3D.new()
 		light.light_color = Color(1.0, 0.5, 0.15)
-		light.light_energy = 6.0
+		light.light_energy = 3.0
 		light.omni_range = 9.0
 		rock.add_child(light)
 		create_tween().tween_property(rock, "position", Vector3.ZERO, delay).set_ease(Tween.EASE_IN)
