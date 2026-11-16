@@ -30,11 +30,11 @@ func _ready() -> void:
 	cs.position.y = SIZE.y * 0.5
 	add_child(cs)
 
-	# Dipte toz ve moloz. Taşıyıcı düğüm duvarın tersine hareket eder: toz zeminde kalır.
+	# Dipte toz ve moloz: dünyaya bırakılır, duvar yükselip batarken zeminde kalır.
 	var base := Node3D.new()
-	base.position.y = SIZE.y
-	add_child(base)
-	var dust := Fx.parts(Fx.quad("puff", 1.7), 18, 1.2, 0.8, 2.6, [Color(0.5, 0.42, 0.31, 0.9), Color(0.5, 0.43, 0.34, 0.6), Color(0.52, 0.47, 0.4, 0.0)], 0.45, 1.0)
+	base.transform = transform
+	Fx.drop(self, base, 1.3)
+	var dust := Fx.parts(Fx.quad("puff", 1.7), 18, 1.2, 0.8, 2.6, [Color(0.4, 0.33, 0.24, 0.9), Color(0.42, 0.36, 0.28, 0.6), Color(0.45, 0.4, 0.33, 0.0)], 0.45, 1.0)
 	var bm2 := BoxMesh.new()
 	bm2.size = Vector3(0.17, 0.12, 0.14)
 	bm2.material = Fx.mat("chunk")
@@ -54,9 +54,7 @@ func _ready() -> void:
 	position.y -= SIZE.y # yerin altından yükselir
 	var tw := create_tween()
 	tw.tween_property(self, "position:y", top, 0.2).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(base, "position:y", 0.0, 0.2).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(LIFE)
 	tw.tween_callback(dust.restart) # batarken de toz kalkar
 	tw.tween_property(self, "position:y", top - SIZE.y, 0.4)
-	tw.parallel().tween_property(base, "position:y", SIZE.y, 0.4)
 	tw.tween_callback(queue_free)

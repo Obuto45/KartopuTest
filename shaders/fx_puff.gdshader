@@ -6,16 +6,6 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabl
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 varying float ang;
 
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float noise(vec2 x) {
-	vec2 i = floor(x), f = fract(x);
-	f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
-}
-
 void vertex() {
 	ang = INSTANCE_CUSTOM.x + float(INSTANCE_ID) * 2.4;
 	vec3 s = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
@@ -27,8 +17,9 @@ void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
 	// Gürültü parçacığa göre döner, tepe aydınlığı dönmez: her bulut farklı ama ışık hep yukarıdan.
 	vec2 q = mat2(vec2(cos(ang), sin(ang)), vec2(-sin(ang), cos(ang))) * p + ang;
-	float n = noise(q * 1.8) * 0.75 + noise(q * 4.3) * 0.25;
-	float body = 1.0 - length(p) + (n - 0.5) * 0.7;
+	// İç içe sinüsler: ızgarasız, yuvarlak hatlı bulut (değer gürültüsü kenarda köşeli duruyordu).
+	float n = 0.5 + 0.22 * (sin(q.x * 2.6 + 1.5 * sin(q.y * 1.9)) + sin(q.y * 3.1 + 1.5 * sin(q.x * 2.3 + 1.3))) + 0.06 * sin(q.x * 6.1 + q.y * 5.3);
+	float body = 1.0 - length(p) + (n - 0.5) * 0.55;
 	float eat = (1.0 - COLOR.a) * 0.45;
 	ALBEDO = COLOR.rgb * (0.8 - p.y * 0.3 + n * 0.25);
 	// Zemine / duvara gömülen bulut keskin çizgi bırakmasın.

@@ -81,7 +81,7 @@ func _ready() -> void:
 	add_child(light)
 
 	# Alev izi: namluda başlarsa atanın kamerasını kapatır; _physics_process açar.
-	fire = Fx.parts(Fx.quad("glow", 0.42), 48, 0.3, 0.5, 1.5, [Color(1.0, 0.8, 0.35, 0.6), Color(1.0, 0.4, 0.05, 0.45), Color(0.6, 0.1, 0.0, 0.0)], 1.0, 0.3, false)
+	fire = Fx.parts(Fx.quad("glow", 0.42), 48, 0.3, 0.5, 1.5, [Color(1.0, 0.62, 0.2, 0.55), Color(1.0, 0.35, 0.05, 0.4), Color(0.6, 0.1, 0.0, 0.0)], 1.0, 0.3, false)
 	fire.emitting = false
 	fire.local_coords = false
 	fire.direction = Vector3(0, 0, 1)
@@ -97,13 +97,7 @@ func _ready() -> void:
 	for p in [fire, smoke]:
 		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 		p.emission_box_extents = Vector3(0.03, 0.03, 0.28)
-	get_parent().add_child.call_deferred(smoke) # ebeveyn şu an bizi eklemekle meşgul
-	tree_exiting.connect(func() -> void:
-		smoke.emitting = false
-		if smoke.is_inside_tree():
-			smoke.create_tween().tween_callback(smoke.queue_free).set_delay(1.2)
-		else:
-			smoke.queue_free())
+	Fx.drop(self, smoke, 1.2)
 
 
 func _physics_process(dt: float) -> void:

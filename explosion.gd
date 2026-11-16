@@ -89,6 +89,19 @@ static func anim(tw: Tween, mi: GeometryInstance3D, param: String, from: Variant
 	return tw.tween_method(func(v: Variant) -> void: mi.set_instance_shader_parameter(param, v), from, to, d)
 
 
+## Efekti sahibinin yanına (dünyaya) bırakır: sahibi hareket etse de silinse de efekt yerinde kalır,
+## sahibi gidince `linger` sn sonra kendini siler.
+static func drop(owner: Node, fx: Node3D, linger: float) -> void:
+	owner.get_parent().add_child.call_deferred(fx) # ebeveyn şu an sahibini eklemekle meşgul
+	owner.tree_exiting.connect(func() -> void:
+		if fx is CPUParticles3D:
+			fx.emitting = false
+		if fx.is_inside_tree():
+			fx.create_tween().tween_callback(fx.queue_free).set_delay(linger)
+		else:
+			fx.queue_free())
+
+
 func _ready() -> void:
 	var k := scale.x
 	get_tree().call_group("players", "shake", global_position, k)
