@@ -1,94 +1,95 @@
 extends Node
-## Görsel kontrol: menü, ayarlar, duvar ve yıldırım ekran görüntüleri (user:// içine).
+## Görsel kontrol: menü, karakter seçimi, silahlar, modeller ve yetenek efektleri (user:// içine PNG).
 
 func _shot(n: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(OS.get_user_data_dir() + "/" + n + ".png")
 
+func _wait(t: float) -> void:
+	await get_tree().create_timer(t).timeout
+
+func _dummy(main: Node, id: int, chr: int, pos: Vector3) -> CharacterBody3D:
+	var d: CharacterBody3D = load("res://player.gd").new()
+	d.name = str(id)
+	d.set_multiplayer_authority(id)
+	d.spawn_pos = pos
+	Net.chars[id] = chr
+	main.players.add_child(d)
+	d.net_yaw = PI # bize baksın
+	return d
+
 func _ready() -> void:
 	var main = load("res://main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)
-	await get_tree().create_timer(0.5).timeout
+	await _wait(0.5)
 	await _shot("menu")
 	main._open_settings()
-	await get_tree().create_timer(0.2).timeout
+	await _wait(0.2)
 	await _shot("settings")
 	main._close_settings()
 	main._open_chars()
-	await get_tree().create_timer(0.2).timeout
+	await _wait(0.4)
 	await _shot("chars")
+	main._show_char(40) # Ulu Büyücü
+	await _wait(0.4)
+	await _shot("chars2")
 	main.char_wrap.hide()
 	Net.host_local()
 	main._on_start()
-	await get_tree().create_timer(0.5).timeout
+	await _wait(0.5)
 	var me = main.players.get_node("1")
 	me.rotation.y = PI * 0.75
 	me.look.rotation.x = 0.05
-	await get_tree().create_timer(0.3).timeout
-	await _shot("forest")
-	me.look.rotation.x = -0.2
-	me._set_slot(4)
-	me._place_wall()
-	await get_tree().create_timer(0.4).timeout
-	me.rotation.y += 0.6
-	me._set_slot(3)
-	me._cast_lightning()
-	await get_tree().create_timer(0.42).timeout
-	await _shot("lightning")
-	# Sahte ikinci oyuncu: isim etiketi ve ölünce izleme kamerası.
-	var dummy: CharacterBody3D = load("res://player.gd").new()
-	dummy.name = "2"
-	dummy.set_multiplayer_authority(2)
-	dummy.spawn_pos = me.global_position + Vector3(0, 0, -6)
+	await _wait(0.3)
+	await _shot("forest") # kendi gözünden bazuka
+	me.rotation.y = 0.0
+	me.look.rotation.x = -0.1
+	var p: Vector3 = me.global_position
 	Net.names[2] = "Sinan"
-	Net.chars[2] = 3 # Kahvehane Dayısı
-	main.players.add_child(dummy)
-	for k in 2: # Keloğlan ve Terlikli Anne de yan yana görünsün
-		var d: CharacterBody3D = load("res://player.gd").new()
-		d.name = str(3 + k)
-		d.set_multiplayer_authority(3 + k)
-		d.spawn_pos = me.global_position + Vector3(-1.6 + k * 3.2, 0, -4.5)
-		Net.chars[3 + k] = k
-		main.players.add_child(d)
-		d.net_yaw = PI # bize baksın
-	dummy.net_yaw = PI
-	me.rotation.y = 0.0
-	me.look.rotation.x = -0.1
-	await get_tree().create_timer(0.6).timeout
-	dummy.hp = 60
-	await get_tree().create_timer(0.1).timeout
-	await _shot("nametag")
-	main.players.get_node("4").say("Gel buraya!")
-	main.players.get_node("3").net_speed = 7.0 # Keloğlan yürüyor: bacak ve kol salınımı görünsün
-	await get_tree().create_timer(0.35).timeout
-	await get_tree().create_timer(0.1).timeout
+	var dayi := _dummy(main, 2, 3, p + Vector3(0, 0, -4.5))
+	var wiz := _dummy(main, 3, 40, p + Vector3(-1.8, 0, -4.5))
+	var cow := _dummy(main, 4, 50, p + Vector3(1.8, 0, -4.5))
+	var knight := _dummy(main, 5, 34, p + Vector3(3.6, 0, -4.5))
+	cow.slot = 4 # kılıçlı
+	knight.slot = 2 # eli boş
+	await _wait(0.7)
+	dayi.hp = 60
+	wiz.say("Gökten ne yağıyor?")
+	await _wait(0.2)
 	await _shot("looks")
-	for n in ["2", "3"]: # yandan: kol, silah ve adım görünsün
-		main.players.get_node(n).net_yaw = PI / 2
-		main.players.get_node(n).net_pos += Vector3(0, 0, 2.0)
-	main.players.get_node("2").net_speed = 7.0
-	await get_tree().create_timer(0.5).timeout
+	for d in [dayi, wiz, cow, knight]: # yandan: kol, silah ve koşu görünsün
+		d.net_yaw = PI / 2
+		d.net_speed = 7.0
+	wiz.net_pitch = 0.5 # yukarı nişan
+	await _wait(0.5)
 	await _shot("side")
-	for n in ["2", "3"]:
-		main.players.get_node(n).net_speed = 0.0
+	for d in [dayi, wiz, cow, knight]:
+		d.net_yaw = PI
+		d.net_speed = 0.0
+	wiz.net_pitch = 0.0
+	wiz.use_skill(wiz.global_position, p + Vector3(0, 0, -9), Vector3(0, 0, -1), 0) # meteor arkaya düşer
+	knight.use_skill(knight.global_position, knight.global_position, Vector3(0, 0, 1), 0) # Devleş
+	cow.net_air = true # zıplama animasyonu
+	await _wait(0.8)
+	await _shot("skills")
+	await _wait(0.35)
+	await _shot("meteor")
+	cow.net_air = false
 	me.set_hp(25) # can barı: kritik seviye + beyaz iz
-	await get_tree().create_timer(0.3).timeout
-	await _shot("hud")
-	dummy.net_pos += Vector3(0, 0, -8) # uzakta isim/can barı ölçeği
-	me.rotation.y = 0.0
-	me.look.rotation.x = -0.1
-	await get_tree().create_timer(0.6).timeout
-	await _shot("far")
-	me._set_slot(5)
-	await get_tree().create_timer(0.3).timeout
-	await _shot("sword")
-	me.rotation.y = 0.0
-	var kel = main.players.get_node("3")
-	kel.use_skill("flash", kel.global_position)
-	await get_tree().create_timer(0.8).timeout
-	await _shot("flash")
+	me.buffs["slow"] = [0.5, 3.0]
+	me.buffs["burn"] = [6, 4.0]
+	me._set_slot(4)
+	me.swing_t = 0.12
+	await _wait(0.1)
+	await _shot("hud") # kendi gözünden kılıç + durum yazıları
+	me._set_slot(3)
+	me.spawn_wall(me._ground(p + Vector3(0, 0, -2.5)), 0.0, 0)
+	dayi.hp = 0 # ölüm animasyonu
+	dayi.net_pos = p + Vector3(-3.5, 0, -3.0)
+	await _wait(1.3)
+	await _shot("wall")
 	me.hp = 0
 	me.dead_t = 2.0
-	await get_tree().create_timer(0.6).timeout
+	await _wait(0.6)
 	await _shot("spectate")
 	get_tree().quit()

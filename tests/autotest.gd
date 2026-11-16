@@ -1,5 +1,5 @@
 extends Node
-## Tek PC uçtan uca test: godot --headless res://tests/autotest.tscn -- host|join
+## Tek PC uçtan uca ağ testi (iki süreç): godot --headless res://tests/autotest.tscn -- host|join
 
 func _wait(t: float) -> void:
 	await get_tree().create_timer(t).timeout
@@ -20,36 +20,28 @@ func _ready() -> void:
 		var me = main.players.get_node("1")
 		var other = main.players.get_children().filter(func(p): return p != me)[0]
 		print("HOST players=", main.players.get_child_count(), " names=", Net.names, " label=", other.name_lbl.text)
-		print("HOST chars me=", me.ch.name, " max_hp=", me.max_hp, " other=", other.ch.name, " (Kahvehane Dayısı 100 / Terlikli Anne bekleniyor)")
+		print("HOST chars me=", me.ch.name, " other=", other.ch.name, " (Kahvehane Dayısı / Terlikli Anne bekleniyor)")
 		for i in 6:
-			me.rocket_n += 1; me.fire_rocket.rpc(other.global_position + Vector3(0, 1.0, -3), Vector3(0, 0, 1), me.rocket_n)
+			me.rocket_n += 1; me.fire_rocket.rpc(other.global_position + Vector3(0, 1.0, -3), Vector3(0, 0, 1), me.rocket_n, false)
 			await _wait(0.4)
-			if i == 0: print("HOST after1 other.hp=", other.hp, " shield=", other.shield_on)
+			if i == 0: print("HOST after1 other.hp=", other.hp, " shield=", other.shield_on, " (100, false: kalkan emdi)")
 		await _wait(0.5)
-		print("HOST other.hp=", other.hp, " round_over=", main.round_over, " text=", main.center_lbl.text.replace("\n", " / "))
+		print("HOST other.hp=", other.hp, " (0) round_over=", main.round_over, " text=", main.center_lbl.text.replace("\n", " / "), " anim=", other.cur_anim, " (Death)")
 		await _wait(3.5)
-		print("HOST after restart other.hp=", other.hp, " round_over=", main.round_over)
-		me.cast_lightning.rpc(other.global_position)
-		await _wait(1.0)
-		print("HOST lightning other.hp=", other.hp)
-		me.spawn_wall.rpc(me.global_position + Vector3(0, 0, 3), 0.0)
+		print("HOST after restart other.hp=", other.hp, " (100) round_over=", main.round_over)
+		me.spawn_wall.rpc(me.global_position + Vector3(0, 0, 3), 0.0, 0)
 		await _wait(0.5)
-		print("HOST wall=", main.world.has_node("W1"))
+		print("HOST wall=", main.world.has_node("W1_0"))
 		me.swing.rpc(other.global_position - Vector3(0, 0, 1.5), Vector3(0, 0, 1)) # önünde: vurur
 		await _wait(0.4)
 		me.swing.rpc(other.global_position - Vector3(0, 0, 1.5), Vector3(0, 0, -1)) # arkası dönük: ıskalar
 		await _wait(0.4)
-		print("HOST sword other.hp=", other.hp, " (60 -> 40 bekleniyor)")
-		me.use_skill.rpc("pull", other.global_position - Vector3(0, 0, 2)) # 2 m yanında "gel abla gel"
-		await _wait(0.6)
-		print("HOST pull other.hp=", other.hp, " (40 -> 30 bekleniyor)")
-		print("HOST slipper dist=", me.global_position.distance_to(other.global_position))
-		me.throw_slipper.rpc(other.get_multiplayer_authority(), "tile")
+		print("HOST sword other.hp=", other.hp, " (100 -> 80 bekleniyor)")
+		me.use_skill.rpc(me.global_position, me.global_position, Vector3(0, 0, 1), other.get_multiplayer_authority())
 		await _wait(3.0)
-		print("HOST tile other.hp=", other.hp, " (30 -> 10 bekleniyor)")
-		me.throw_slipper.rpc(other.get_multiplayer_authority())
-		await _wait(4.0)
-		print("HOST slipper other.hp=", other.hp, " (10 -> 0 bekleniyor) me.hp=", me.hp, " shield=", me.shield_on, " (dururken kalkan aldı; istemcinin terliği kalkanı kırdı, sonra yeniden aldı: 100, true bekleniyor)")
+		print("HOST tile other.hp=", other.hp, " (80 -> 60 bekleniyor)")
+		await _wait(3.0)
+		print("HOST me.hp=", me.hp, " shield=", me.shield_on, " (dururken kalkan aldı, istemcinin terliği onu kırdı)")
 		await _wait(1.0)
 	else:
 		Net.set_char(1) # Terlikli Anne
@@ -67,12 +59,8 @@ func _ready() -> void:
 		await _wait(2.3)
 		print("CLIENT after restart hp=", me.hp, " pos=", me.global_position.round(), " own_cam=", me.cam.current)
 		me._use_skill()
-		print("CLIENT slipper skill_cd=", me.skill_cd, " (8 bekleniyor) quote=", me.quote_lbl.text, " rocket_speed=", 30.0 * me.ch.throw_mult, " (37.5 bekleniyor)")
-		await _wait(1.5)
-		print("CLIENT after lightning hp=", me.hp)
-		await _wait(1.5)
-		print("CLIENT after sword hp=", me.hp)
-		await _wait(7.8)
-		print("CLIENT after skills hp=", me.hp, " hud=", main.hp_txt.text)
-		await _wait(1.0)
+		print("CLIENT slipper skill_cd=", me.skill_cd, " (8 bekleniyor) quote=", me.quote_lbl.text)
+		for i in 9:
+			await _wait(1.0)
+			print("CLIENT t+", i + 1, " hp=", me.hp, " hud=", main.hp_txt.text)
 	get_tree().quit()

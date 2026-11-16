@@ -11,14 +11,27 @@ var life := 3.0
 var done := false
 var fire: CPUParticles3D
 var spd := SPEED
+var big := false # gülle: iri ve ağır
 
 
 func _ready() -> void:
-	spd = SPEED * shooter.ch.get("throw_mult", 1.0) # Terlikli Anne pasifi
+	spd = SPEED * shooter.ch.get("throw_mult", 1.0) * (0.8 if big else 1.0)
 	var up := Vector3.UP if abs(dir.y) < 0.99 else Vector3.FORWARD
 	look_at(global_position + dir, up)
 
-	# Ateş topu: parlak sarı çekirdek + turuncu alev kabuğu + alev izi.
+	# Roket gövdesi (uzun ekseni uçuş yönünde) + arkasında alev topu ve alev izi.
+	var shell := MeshInstance3D.new()
+	var cm := CapsuleMesh.new()
+	cm.radius = 0.07; cm.height = 0.42
+	shell.mesh = cm
+	shell.rotation.x = PI / 2
+	var sm0 := StandardMaterial3D.new()
+	sm0.albedo_color = Color(0.2, 0.2, 0.22) if big else Color(0.75, 0.2, 0.15)
+	sm0.metallic = 0.6; sm0.roughness = 0.4
+	shell.material_override = sm0
+	add_child(shell)
+	if big:
+		cm.radius = 0.22; cm.height = 0.44 # top gülle
 	for layer in [[0.12, Color(1.0, 0.95, 0.6, 1.0)], [0.2, Color(1.0, 0.45, 0.05, 0.55)]]:
 		var mi := MeshInstance3D.new()
 		var s := SphereMesh.new()
@@ -30,6 +43,7 @@ func _ready() -> void:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mi.material_override = m
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.position.z = 0.25 # roketin arkasında
 		add_child(mi)
 
 	var light := OmniLight3D.new()
@@ -82,10 +96,11 @@ func _physics_process(dt: float) -> void:
 			if p == shooter or p.hp <= 0:
 				continue
 			# Kalkanlı oyuncu: kalkan küresinin yüzeyinde patla.
+			var k: float = 1.0 if p.shield_on else p.size_k # Devleş / Ufal: vurulacak gövde de büyür, küçülür
 			var pts := [0.95] if p.shield_on else [0.45, 0.95, 1.6]
-			var rad: float = p.SHIELD_R if p.shield_on else HIT_RADIUS
+			var rad: float = p.SHIELD_R if p.shield_on else HIT_RADIUS * k
 			for h in pts:
-				var c: Vector3 = p.global_position + Vector3(0, h, 0)
+				var c: Vector3 = p.global_position + Vector3(0, h * k, 0)
 				var cp := Geometry3D.get_closest_point_to_segment(c, from, to)
 				if cp.distance_to(c) < rad:
 					hit = cp

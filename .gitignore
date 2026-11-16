@@ -11,3 +11,5 @@ build/
 
 # Kişisel Claude ayarları
 .claude/settings.local.json
+
+.claude-flow/

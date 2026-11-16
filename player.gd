@@ -1,23 +1,15 @@
 extends CharacterBody3D
-## Silindir gövde + yuvarlak kafa. Her oyuncu kendi hareketinin sahibi (client-authoritative):
+## Animasyonlu 3D karakter. Her oyuncu kendi hareketinin sahibi (client-authoritative):
 ## pozisyon 60 Hz unreliable gider, diğer tarafta yumuşatılır -> girişte gecikme hissi yok.
+## Hasar ve olumsuz etkileri her makine yalnızca kendi oyuncusuna uygular.
 
 const RocketScript := preload("res://rocket.gd")
 const ExplosionScript := preload("res://explosion.gd")
-const LightningScript := preload("res://lightning.gd")
 const WallScript := preload("res://wall.gd")
 const Chars := preload("res://characters.gd")
-const Rig := preload("res://rig.gd")
-const SlipperScript := preload("res://slipper.gd")
-const FLASH_R := 8.0
-const FLASH_TIME := 1.5
-const SLIPPER_RANGE := 40.0
-const PULL_R := 8.0
-const PULL_DMG := 10
-const SHOUT_TIME := 4.0
-const SHOUT_DMG := 30
-const TILE_RANGE := 30.0
-const SIT_TIME := 2.0 # Kahvehane Dayısı bu kadar durunca kalkan alır
+const HomingScript := preload("res://slipper.gd")
+const ZoneScript := preload("res://zone.gd")
+const SIT_TIME := 2.0 # sit_shield pasifi: bu kadar durunca kalkan alır
 const SPEED := 7.0
 const ACCEL := 60.0 # yerde hızlanma (m/s²)
 const FRICTION := 45.0 # yerde tuş yokken yavaşlama
@@ -33,61 +25,66 @@ const DASH_CD := 0.9
 const MAX_HP := 100
 const DAMAGE := 20 # 5 isabette ölüm
 const THROW_CD := 0.8 # roket atış aralığı
-const SHIELD_CD := 8.0
 const SHIELD_R := 1.25
 const BLAST_RADIUS := 2.5 # patlama bu mesafedekilere hasar verir
-const LIGHTNING_CD := 2.5
-const LIGHTNING_RANGE := 25.0 # en fazla bu uzaklığa yıldırım indirilir
-const LIGHTNING_R := 2.2
-const LIGHTNING_DMG := 40 # ateş topunun 2 katı
+const BIG_RADIUS := 4.5 # gülle
+const BIG_DMG := 40
 const WALL_CD := 6.0
 const WALL_DIST := 2.5 # duvar önümüzde bu mesafede çıkar
 const SWORD_CD := 0.5
 const SWORD_RANGE := 2.3 # kılıç bu mesafeye kadar önündekine vurur
 const SWORD_DMG := 20
-const SLOT_COLORS := {1: Color(1.0, 0.4, 0.05), 3: Color(0.4, 0.75, 1.0), 4: Color(0.6, 0.45, 0.3)}
+const MODEL_SCALE := 0.72 # Quaternius modelleri ~2,6 birim boyunda
+const TIMED := ["haste", "power", "rapid", "multi", "armor", "size"] # atanın [değer, süre] güçleri
+const DEBUFFS := ["slow", "vuln", "burn"] # kurbana [değer, süre]
+const FLAGS := ["stun", "blind", "silence", "confuse"] # kurbana süre
+
+
+## Animasyondan sonra çalışır: sağ kolu silaha uzatır, kafayı bakışa çevirir.
+class ArmAim extends SkeletonModifier3D:
+	var p: Node
+
+	func _process_modification() -> void:
+		p._pose(get_skeleton())
+
 
 var spawn_pos := Vector3.ZERO
 var rocket_n := 0
 var flash := 0.0 # hasar efekti süresi
-var body_mat: StandardMaterial3D
-var base_col: Color
 var hp := MAX_HP
 var max_hp := MAX_HP
 var ch: Dictionary # seçilen karakter (characters.gd)
+var sk: Dictionary # karakterin Q yeteneği
 var skill_cd := 0.0
-var shout_t := 0.0 # > 0 iken Pazarcı Abi'nin ateş topları güçlü
-var blind_t := 0.0 # > 0 iken ekran beyaz (Keloğlan'ın flaşı; yalnızca yerel oyuncu)
-var head_mat: StandardMaterial3D
-var model: Node3D # karakterin 3D modeli (varsa)
-var model_fx: StandardMaterial3D # modelin üstüne binen kırmızı hasar parlaması
-var skel: Skeleton3D # modele kodla takılan iskelet (rig.gd)
-var arm_down := [Quaternion(), Quaternion()] # [sağ, sol] kolu aşağı sarkıtan dönüş
-var arm_straight := [Quaternion(), Quaternion()] # ön kolu üst kolla hizalayan dönüş
-var arm_dir := Vector3.DOWN # sağ üst kolun modeldeki duruş yönü
+var buffs := {} # ad -> [değer, kalan süre]: süreli güçler ve olumsuz etkiler
+var tick_t := 0.0
+var regen_acc := 0.0
+var land_wait := -1.0 # >= 0: sıçradı, yere inince alan etkisi tetiklenecek
+var size_k := 1.0
+var model: Node3D
+var model_fx: StandardMaterial3D # modelin üstüne binen renk parlaması (hasar, güç)
+var anim: AnimationPlayer
+var cur_anim := ""
+var b_arm := -1
+var b_fore := -1
+var b_head := -1
 var quote_lbl: Label3D
 var quote_t := 0.0
-var still_t := 0.0 # yerinde durma süresi (Kahvehane Dayısı pasifi)
+var still_t := 0.0 # yerinde durma süresi (sit_shield)
 var cd := 0.0
-var slot := 1 # 1 = ateş asası, 2 = kalkan, 3 = yıldırım asası, 4 = duvar asası
-var lightning_cd := 0.0
+var slot := 1 # 1 = bazuka, 2 = kalkan, 3 = duvar, 4 = kılıç
 var wall_cd := 0.0
-var gem_mat: StandardMaterial3D
-var gem_glow: OmniLight3D
 var shield_on := false
 var shield_cd := 0.0
 var shield_mesh: MeshInstance3D
-var gun: MeshInstance3D
+var gun: Node3D
 var air_jumps := 1
 var dash_t := 0.0
 var dash_cd := 0.0
-var walk_t := 0.0
 
 var vis: Node3D
 var look: Node3D # kafa / kamera pivotu (pitch)
 var cam: Camera3D
-var leg_l: Node3D
-var leg_r: Node3D
 
 var sword: Node3D
 var sword_cd := 0.0
@@ -108,6 +105,7 @@ var net_pos := Vector3.ZERO
 var net_yaw := 0.0
 var net_pitch := 0.0
 var net_speed := 0.0
+var net_air := false
 
 
 func _mesh(parent: Node, m: Mesh, pos: Vector3, c: Color) -> MeshInstance3D:
@@ -128,6 +126,19 @@ func _bar_mat(mi: MeshInstance3D) -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
+## Süreli etkinin değeri (yoksa d) ve kalan süresi.
+func bv(k: String, d := 1.0) -> float:
+	return buffs[k][0] if buffs.has(k) else d
+
+
+func bt(k: String) -> float:
+	return buffs[k][1] if buffs.has(k) else 0.0
+
+
+func _world() -> Node:
+	return get_parent().get_parent()
+
+
 func _ready() -> void:
 	add_to_group("players")
 	position = spawn_pos
@@ -142,37 +153,23 @@ func _ready() -> void:
 	add_child(cs)
 
 	ch = Chars.get_char(Net.chars.get(get_multiplayer_authority(), 0))
-	max_hp = ch.hp
+	sk = ch.sk
+	max_hp = ch.get("hp", MAX_HP)
 	hp = max_hp
-	var col: Color = ch.color
 	vis = Node3D.new()
 	add_child(vis)
-
-	var body := CylinderMesh.new()
-	body.top_radius = 0.36; body.bottom_radius = 0.38; body.height = 0.95
-	base_col = col
-	body_mat = _mesh(vis, body, Vector3(0, 1.05, 0), col).material_override
-
 	look = Node3D.new()
 	look.position.y = 1.7
 	vis.add_child(look)
-	var head := SphereMesh.new()
-	head.radius = 0.3; head.height = 0.6
-	head_mat = _mesh(look, head, Vector3.ZERO, Color(1.0, 0.85, 0.7)).material_override
-	var eye := SphereMesh.new()
-	eye.radius = 0.05; eye.height = 0.1
-	_mesh(look, eye, Vector3(-0.11, 0.06, -0.27), Color.BLACK)
-	_mesh(look, eye, Vector3(0.11, 0.06, -0.27), Color.BLACK)
-	_accessory(ch.look, col)
+	_load_model()
 
-	var leg := CylinderMesh.new()
-	leg.top_radius = 0.11; leg.bottom_radius = 0.1; leg.height = 0.58
-	leg_l = Node3D.new(); leg_l.position = Vector3(-0.17, 0.58, 0); vis.add_child(leg_l)
-	leg_r = Node3D.new(); leg_r.position = Vector3(0.17, 0.58, 0); vis.add_child(leg_r)
-	_mesh(leg_l, leg, Vector3(0, -0.29, 0), col.darkened(0.4))
-	_mesh(leg_r, leg, Vector3(0, -0.29, 0), col.darkened(0.4))
-	if ch.has("model"):
-		_load_model()
+	# Bazuka ve kılıç kafa pivotuna bağlı (bakışla birlikte döner); sağ kol onlara uzanır.
+	gun = _prop("res://models/bazooka.glb", 0.95, Vector3(0, PI / 2, 0), Vector3(0.5, 0.5, 0.5))
+	gun.position = Vector3(0.3, -0.33, -0.5)
+	sword = _prop("res://models/sword.glb", 1.05, Vector3(-PI / 2, 0, 0), Vector3(0.5, 0.1, 0.5)) # kabzadan tut
+	sword.position = Vector3(0.34, -0.36, -0.4)
+	sword.rotation = Vector3(0.9, 0.2, 0) # dinlenme: ucu yukarıda, hafif içe dönük
+	sword.visible = false
 
 	if is_multiplayer_authority():
 		cam = Camera3D.new()
@@ -180,9 +177,12 @@ func _ready() -> void:
 		cam.near = 0.05
 		look.add_child(cam)
 		cam.current = true
-		for mi in vis.find_children("*", "MeshInstance3D", true, false):
+		for mi in model.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY # kendini görme, gölgen kalsın
+		for mi in gun.find_children("*", "MeshInstance3D", true, false) + sword.find_children("*", "MeshInstance3D", true, false):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	else:
+		var col: Color = ch.color
 		name_lbl = Label3D.new()
 		name_lbl.position.y = 2.3 # vis'e değil gövdeye bağlı: ölünce devrilmez
 		name_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -204,66 +204,6 @@ func _ready() -> void:
 		hp_fill = _mesh(hp_bar, fg, Vector3(0, 0, 0.005), Color(0.3, 0.9, 0.3))
 		_bar_mat(hp_fill)
 
-	# Ateş asası: kafa pivotuna bağlı, sağ altta (herkes görür). Yerel +Y ileriyi gösterir.
-	var staff: String = ch.get("staff", "")
-	var pole := CylinderMesh.new()
-	pole.top_radius = 0.022; pole.bottom_radius = 0.035; pole.height = 1.0
-	var pole_col := Color(0.4, 0.24, 0.12)
-	match staff:
-		"oklava":
-			pole.top_radius = 0.026; pole.bottom_radius = 0.026
-			pole_col = Color(0.87, 0.72, 0.47)
-		"leek":
-			pole.top_radius = 0.03; pole.bottom_radius = 0.024
-			pole_col = Color(0.96, 0.96, 0.88)
-		"cane":
-			pole.top_radius = 0.022; pole.bottom_radius = 0.022
-			pole_col = Color(0.2, 0.13, 0.08)
-	gun = _mesh(look, pole, Vector3(0.3, -0.35, -0.45), pole_col)
-	gun.rotation.x = -PI / 2 + 0.45 # ucu hafif yukarı bakar, kristal görünsün
-	_staff_parts(staff)
-	var gem := PrismMesh.new()
-	gem.size = Vector3(0.11, 0.2, 0.11)
-	var crystal := _mesh(gun, gem, Vector3(0, 0.6, 0), Color(1.0, 0.45, 0.1))
-	var cm: StandardMaterial3D = crystal.material_override
-	cm.emission_enabled = true
-	cm.emission = Color(1.0, 0.4, 0.05)
-	cm.emission_energy_multiplier = 3.0
-	var gem_lo := _mesh(gun, gem, Vector3(0, 0.5, 0), Color.WHITE) # alt yarısı: ters prizma, aynı malzeme
-	gem_lo.material_override = cm
-	gem_lo.rotation.x = PI
-	gem_lo.scale.y = 0.5
-	var glow := OmniLight3D.new()
-	glow.light_color = Color(1.0, 0.5, 0.15)
-	glow.light_energy = 0.8
-	glow.omni_range = 1.5
-	glow.position.y = 0.6
-	gun.add_child(glow)
-	gem_mat = cm
-	gem_glow = glow
-
-	# Kılıç: sağ elde, yerel -Z ileri. Pivot kabzada; savurunca Y ekseninde döner.
-	sword = Node3D.new()
-	sword.position = Vector3(0.34, -0.36, -0.4)
-	look.add_child(sword)
-	var blade := BoxMesh.new()
-	blade.size = Vector3(0.015, 0.07, 0.75) # keskin kenar yukarı
-	var bm := _mesh(sword, blade, Vector3(0, 0, -0.47), Color(0.85, 0.87, 0.9)).material_override as StandardMaterial3D
-	bm.metallic = 0.5; bm.roughness = 0.3
-	var guard := BoxMesh.new()
-	guard.size = Vector3(0.04, 0.24, 0.04)
-	_mesh(sword, guard, Vector3(0, 0, -0.08), Color(0.95, 0.75, 0.2))
-	var grip := CylinderMesh.new()
-	grip.top_radius = 0.022; grip.bottom_radius = 0.022; grip.height = 0.18
-	_mesh(sword, grip, Vector3(0, 0, 0.02), Color(0.3, 0.18, 0.1)).rotation.x = PI / 2
-	sword.rotation = Vector3(0.9, 0.2, 0) # dinlenme: ucu yukarıda, hafif içe dönük
-	sword.visible = false
-	if skel and not is_multiplayer_authority():
-		_weapons_to_hand() # kendi gözünden bakarken silah ekranın önünde kalır
-	if is_multiplayer_authority():
-		for mi in sword.find_children("*", "MeshInstance3D", true, false):
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-
 	# Kalkan: yarı saydam mavi küre, içeriden de görünsün.
 	var sph := SphereMesh.new()
 	sph.radius = SHIELD_R; sph.height = SHIELD_R * 2
@@ -276,167 +216,74 @@ func _ready() -> void:
 	shield_mesh.visible = false
 
 
-## Basit şekilleri gizler, yerine karakterin 3D modelini 1,9 m boyunda ve ayakları yerde koyar.
+## Karakterin iskeletli modelini yükler: ayaklar yerde, yüzü -Z'ye (ileri) dönük.
 func _load_model() -> void:
-	for mi in vis.find_children("*", "MeshInstance3D", true, false):
-		mi.visible = false
-	var scene: Node3D = load(ch.model).instantiate()
-	model = Node3D.new()
+	model = load("res://models/chars/%s.glb" % ch.model).instantiate()
 	vis.add_child(model)
-	model.add_child(scene)
+	model.scale = Vector3.ONE * MODEL_SCALE
+	model.rotation.y = PI # modellerin önü +Z'ye bakıyor
 	model_fx = StandardMaterial3D.new()
 	model_fx.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	model_fx.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	model_fx.albedo_color = Color(1, 0.1, 0.1, 0)
-	var box := AABB()
-	var inv := model.global_transform.affine_inverse()
-	for mi in scene.find_children("*", "MeshInstance3D", true, false):
-		var b: AABB = inv * mi.global_transform * mi.get_aabb()
-		box = b if box.size == Vector3.ZERO else box.merge(b)
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		mi.material_overlay = model_fx
-	var c := box.get_center()
-	scene.position = Vector3(-c.x, -box.position.y, -c.z)
-	model.scale = Vector3.ONE * (1.9 / box.size.y)
-	model.rotation.y = ch.get("model_yaw", 0.0)
-	if ch.has("rig"):
-		var skin_mi: MeshInstance3D = scene.find_children("*", "MeshInstance3D", true, false)[0]
-		skel = Rig.build(skin_mi, ch.rig, ch.model)
-		var segs := Rig.segments(ch.rig)
-		arm_dir = (segs[Rig.ARM_R][1] - segs[Rig.ARM_R][0]).normalized()
-		for k in 2: # 0 sağ (+Z), 1 sol (-Z)
-			var up_i: int = Rig.ARM_R + k * 2
-			var u: Vector3 = (segs[up_i][1] - segs[up_i][0]).normalized()
-			var f: Vector3 = (segs[up_i + 1][1] - segs[up_i + 1][0]).normalized()
-			arm_down[k] = Quaternion(u, Vector3(0, -1, 0.12 if k == 0 else -0.12).normalized())
-			arm_straight[k] = Quaternion(f, u)
+	anim = model.find_children("*", "AnimationPlayer", true, false)[0]
+	for n in ["Idle", "Run", "Walk"]: # dosyada döngü işareti yok
+		if anim.has_animation(n):
+			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+	var skel: Skeleton3D = model.find_children("*", "Skeleton3D", true, false)[0]
+	b_arm = skel.find_bone("UpperArm.R")
+	b_fore = skel.find_bone("LowerArm.R")
+	b_head = skel.find_bone("Head")
+	var aim := ArmAim.new()
+	aim.p = self
+	skel.add_child(aim)
 
 
-## Asayı ve kılıcı kafa pivotundan alıp sağ ele bağlar (yalnızca iskeletli modelde, başkalarının gözünde).
-func _weapons_to_hand() -> void:
-	var segs := Rig.segments(ch.rig)
-	var hand := BoneAttachment3D.new()
-	skel.add_child(hand)
-	hand.bone_name = "fore_r"
+## Silah modeli: en uzun kenarı length olacak şekilde ölçekler, rot ile çevirir ve
+## kutusunun anchor (0..1) noktasını tutucunun merkezine getirir.
+func _prop(path: String, length: float, rot: Vector3, anchor: Vector3) -> Node3D:
 	var holder := Node3D.new()
-	hand.add_child(holder)
-	# Kol nişan alırken (pitch 0) tutucunun -Z'si karakterin önüne (+X), Y'si yukarı baksın.
-	var aim: Quaternion = Quaternion(arm_dir, _aim_dir(0.0)) * arm_straight[0]
-	holder.basis = Basis(aim.inverse()) * Basis(Vector3(0, 0, 1), Vector3(0, 1, 0), Vector3(-1, 0, 0))
-	holder.scale = Vector3.ONE / model.scale.x # model büyütülmüş; silah gerçek boyunda kalsın
-	holder.position = (segs[Rig.FORE_R][1] - segs[Rig.FORE_R][0]) * 0.85 # avuç içi
-	gun.reparent(holder, false)
-	gun.position = gun.basis.y * 0.25 # sapın alt üçte birinden tut
-	sword.reparent(holder, false)
-	sword.position = Vector3.ZERO
+	look.add_child(holder)
+	var scene: Node3D = load(path).instantiate()
+	holder.add_child(scene)
+	var box := AABB()
+	for mi in scene.find_children("*", "MeshInstance3D", true, false):
+		var xf: Transform3D = mi.transform
+		var n := mi.get_parent()
+		while n != scene:
+			xf = n.transform * xf
+			n = n.get_parent()
+		box = xf * mi.get_aabb() if box.size == Vector3.ZERO else box.merge(xf * mi.get_aabb())
+	scene.rotation = rot
+	scene.scale = Vector3.ONE * (length / box.get_longest_axis_size())
+	scene.position = -(scene.basis * (box.position + box.size * anchor))
+	return holder
 
 
-## Sağ kolun nişan yönü (model uzayında): ileri, bakış açısı kadar yukarı/aşağı, hafif dışa ve aşağı.
-func _aim_dir(pitch: float) -> Vector3:
-	return Vector3(cos(pitch), sin(pitch) - 0.18, 0.22).normalized()
+## ArmAim çağırır (iskelet uzayı: +Z ön, +Y yukarı). Kemiklerin yerel +Y'si uzunluk yönüdür.
+func _pose(s: Skeleton3D) -> void:
+	if hp <= 0:
+		return
+	if b_head >= 0:
+		var h := s.get_bone_global_pose(b_head)
+		h.basis = Basis(Vector3.RIGHT, -look.rotation.x * 0.6) * h.basis
+		s.set_bone_global_pose(b_head, h)
+	if (slot == 1 or slot == 4) and b_arm >= 0 and b_fore >= 0:
+		var grip: Vector3 = s.global_transform.affine_inverse() * (sword if slot == 4 else gun).global_position
+		_aim_bone(s, b_arm, (grip - s.get_bone_global_pose(b_arm).origin).normalized() + Vector3.DOWN * 0.45)
+		_aim_bone(s, b_fore, grip - s.get_bone_global_pose(b_fore).origin)
 
 
-## Ateş asasının karaktere özel süsleri. Asanın yerel +Y'si uç tarafıdır (kristal 0.6'da).
-func _staff_parts(staff: String) -> void:
-	var gold := Color(0.95, 0.75, 0.2)
-	var ring := TorusMesh.new()
-	ring.inner_radius = 0.04; ring.outer_radius = 0.065
-	match staff:
-		"crook": # çoban değneği: uçta kıvrık kanca, sapta ip sargısı
-			_mesh(gun, ring, Vector3(0, 0.44, 0.06), Color(0.4, 0.24, 0.12)).rotation.z = PI / 2
-			var wrap := CylinderMesh.new()
-			wrap.top_radius = 0.034; wrap.bottom_radius = 0.036; wrap.height = 0.12
-			_mesh(gun, wrap, Vector3(0, -0.2, 0), Color(0.8, 0.7, 0.45))
-		"oklava": # oklava: iki ucu koyu, ortası açık renk tahta
-			var cap := CylinderMesh.new()
-			cap.top_radius = 0.03; cap.bottom_radius = 0.03; cap.height = 0.07
-			for y in [-0.46, 0.4]:
-				_mesh(gun, cap, Vector3(0, y, 0), Color(0.6, 0.42, 0.22))
-		"leek": # pırasa: beyaz sap, yeşil üst, yapraklar
-			var green := CylinderMesh.new()
-			green.top_radius = 0.04; green.bottom_radius = 0.031; green.height = 0.45
-			_mesh(gun, green, Vector3(0, 0.25, 0), Color(0.3, 0.62, 0.22))
-			var leaf := PrismMesh.new()
-			leaf.size = Vector3(0.07, 0.22, 0.02)
-			for i in 3:
-				var a := TAU * i / 3.0
-				var l := _mesh(gun, leaf, Vector3(cos(a) * 0.05, 0.5, sin(a) * 0.05), Color(0.2, 0.5, 0.18))
-				l.basis = Basis(Vector3(-sin(a), 0, cos(a)), -0.5)
-		"cane": # baston: tutma yerinde kıvrık sap, uçta pirinç halka
-			_mesh(gun, ring, Vector3(0, -0.5, 0.06), Color(0.2, 0.13, 0.08)).rotation.z = PI / 2
-			var gm := _mesh(gun, ring, Vector3(0, 0.44, 0), gold).material_override as StandardMaterial3D
-			gm.metallic = 1.0; gm.roughness = 0.3
-		_: # büyücü asası: altın halkalar ve kristali tutan pençeler
-			for y in [0.3, 0.44]:
-				var gm := _mesh(gun, ring, Vector3(0, y, 0), gold).material_override as StandardMaterial3D
-				gm.metallic = 1.0; gm.roughness = 0.3
-			var claw := CylinderMesh.new()
-			claw.top_radius = 0.008; claw.bottom_radius = 0.015; claw.height = 0.16
-			for i in 3:
-				var a := TAU * i / 3.0
-				var c := _mesh(gun, claw, Vector3(cos(a) * 0.05, 0.53, sin(a) * 0.05), gold)
-				c.basis = Basis(Vector3(-sin(a), 0, cos(a)), -0.35) # uçları dışa açık
-
-
-## Karakteri tanıtan kafa süsü. Kafa pivotuna bağlı; yerel oyuncu kendininkini görmez.
-func _accessory(kind: String, col: Color) -> void:
-	match kind:
-		"bald": # parlak kel kafa + yamalı yelek
-			head_mat.roughness = 0.12
-			head_mat.metallic_specular = 1.0
-			var glint := SphereMesh.new()
-			glint.radius = 0.045; glint.height = 0.09
-			var g: StandardMaterial3D = _mesh(look, glint, Vector3(0.09, 0.22, -0.14), Color.WHITE).material_override
-			g.emission_enabled = true
-			g.emission = Color.WHITE
-			var patch := BoxMesh.new()
-			patch.size = Vector3(0.15, 0.15, 0.03)
-			_mesh(vis, patch, Vector3(-0.15, 1.2, -0.37), Color(0.85, 0.7, 0.25)).rotation.z = 0.3
-			_mesh(vis, patch, Vector3(0.14, 0.9, -0.37), Color(0.3, 0.45, 0.75)).rotation.z = -0.2
-		"curlers": # bigudiler + önlük
-			var cur := CylinderMesh.new()
-			cur.top_radius = 0.055; cur.bottom_radius = 0.055; cur.height = 0.16
-			for i in 5:
-				var a := PI * (0.15 + 0.7 * i / 4.0)
-				var cc := Color(1.0, 0.75, 0.85) if i % 2 == 0 else Color(0.6, 0.85, 1.0)
-				_mesh(look, cur, Vector3(cos(a) * 0.2, 0.22 + sin(a) * 0.04, 0.08 - sin(a) * 0.08), cc).rotation.z = PI / 2
-			var apron := BoxMesh.new()
-			apron.size = Vector3(0.5, 0.62, 0.03)
-			_mesh(vis, apron, Vector3(0, 0.98, -0.37), Color(0.97, 0.95, 0.9))
-		"cap": # kasket + bıyık + omuzda domates kasası
-			var top := CylinderMesh.new()
-			top.top_radius = 0.33; top.bottom_radius = 0.31; top.height = 0.1
-			_mesh(look, top, Vector3(0, 0.2, 0.02), Color(0.35, 0.3, 0.25))
-			var brim := BoxMesh.new()
-			brim.size = Vector3(0.34, 0.03, 0.2)
-			_mesh(look, brim, Vector3(0, 0.16, -0.3), Color(0.3, 0.25, 0.2))
-			var stache := BoxMesh.new()
-			stache.size = Vector3(0.22, 0.05, 0.05)
-			_mesh(look, stache, Vector3(0, -0.07, -0.28), Color(0.15, 0.1, 0.07))
-			var crate := BoxMesh.new()
-			crate.size = Vector3(0.32, 0.14, 0.24)
-			_mesh(vis, crate, Vector3(-0.45, 1.58, 0.05), Color(0.6, 0.42, 0.22))
-			var tom := SphereMesh.new()
-			tom.radius = 0.07; tom.height = 0.13
-			for x in [-0.55, -0.45, -0.35]:
-				_mesh(vis, tom, Vector3(x, 1.69, 0.05), Color(0.9, 0.12, 0.08))
-		"dayi": # kasket + gür kır bıyık + koyu yelek
-			var top := CylinderMesh.new()
-			top.top_radius = 0.33; top.bottom_radius = 0.31; top.height = 0.09
-			_mesh(look, top, Vector3(0, 0.2, 0.02), Color(0.45, 0.45, 0.5))
-			var brim := BoxMesh.new()
-			brim.size = Vector3(0.34, 0.03, 0.2)
-			_mesh(look, brim, Vector3(0, 0.16, -0.3), Color(0.38, 0.38, 0.43))
-			var stache := BoxMesh.new()
-			stache.size = Vector3(0.3, 0.08, 0.06)
-			_mesh(look, stache, Vector3(0, -0.08, -0.28), Color(0.8, 0.8, 0.8))
-			var vest := BoxMesh.new()
-			vest.size = Vector3(0.2, 0.7, 0.03)
-			for x in [-0.2, 0.2]:
-				_mesh(vis, vest, Vector3(x, 1.05, -0.37), Color(0.2, 0.18, 0.22))
+func _aim_bone(s: Skeleton3D, i: int, dir: Vector3) -> void:
+	var g := s.get_bone_global_pose(i)
+	g.basis = Basis(Quaternion(g.basis.y.normalized(), dir.normalized())) * g.basis
+	s.set_bone_global_pose(i, g)
 
 
 func _speed() -> float:
-	return SPEED * ch.speed
+	return SPEED * ch.get("speed", 1.0) * bv("haste") * bv("slow")
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -508,60 +355,53 @@ func _physics_process(dt: float) -> void:
 
 func _local(dt: float) -> void:
 	var alive := hp > 0
-	var active := alive and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	var active := alive and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and bt("stun") <= 0.0
+	var can_act := active and bt("silence") <= 0.0
 	var on_floor := is_on_floor()
 	if not alive:
 		_spectate(dt)
 	if on_floor:
-		air_jumps = 1
+		air_jumps = ch.get("air_jumps", 1)
 	cd -= dt
 	dash_cd -= dt
 	shield_cd -= dt
-	lightning_cd -= dt
 	wall_cd -= dt
 	sword_cd -= dt
 	skill_cd -= dt
-	if alive and ch.get("sit_shield", false): # Kahvehane Dayısı: oturan (duran) adam kalkan alır
-		still_t = still_t + dt if Vector2(velocity.x, velocity.z).length() < 0.5 else minf(still_t, 0.0)
-		if still_t >= SIT_TIME and not shield_on:
-			still_t = -4.0 # sıradaki kalkan en erken 6 sn sonra
-			set_shield.rpc(true)
+	if alive:
+		_tick(dt, on_floor)
 
 	var dir := Vector3.ZERO
 	if active:
 		var iv := Input.get_vector("left", "right", "fwd", "back")
+		if bt("confuse") > 0.0:
+			iv = -iv # kafası karışık: yönler ters
 		dir = (transform.basis * Vector3(iv.x, 0, iv.y)).normalized()
 		if Input.is_action_just_pressed("jump"):
 			if on_floor:
-				velocity.y = JUMP
+				velocity.y = JUMP * ch.get("jump", 1.0)
 			elif air_jumps > 0: # çift zıplama
 				air_jumps -= 1
-				velocity.y = AIR_JUMP
+				velocity.y = AIR_JUMP * ch.get("jump", 1.0)
 		if Input.is_action_just_pressed("dash") and dash_cd <= 0.0: # yerde ve havada
 			var d := dir if dir != Vector3.ZERO else -transform.basis.z
 			velocity = d * DASH_SPEED
 			dash_t = DASH_TIME
 			dash_cd = DASH_CD
 			Sfx.play2d(Sfx.whoosh, -2.0)
-		if Input.is_action_just_pressed("slot1"):
-			_set_slot(1)
-		if Input.is_action_just_pressed("slot2"):
-			_set_slot(2)
-			_try_shield()
-		if Input.is_action_just_pressed("slot3"):
-			_set_slot(3)
-		if Input.is_action_just_pressed("slot4"):
-			_set_slot(4)
-		if Input.is_action_just_pressed("slot5"):
-			_set_slot(5)
-		if Input.is_action_just_pressed("skill") and skill_cd <= 0.0:
+		for s in [1, 2, 3, 4]:
+			if Input.is_action_just_pressed("slot%d" % s):
+				_set_slot(s)
+				if s == 2:
+					_try_shield()
+		if can_act and Input.is_action_just_pressed("skill") and skill_cd <= 0.0:
 			_use_skill()
 
 	if dash_t > 0.0:
 		dash_t -= dt # dash sırasında yerçekimi/sürtünme yok
 	else:
 		if not on_floor:
-			var g := GRAVITY * (FALL_MULT if velocity.y < 0.0 else 1.0)
+			var g := GRAVITY * (FALL_MULT if velocity.y < 0.0 else 1.0) * (0.25 if bt("float") > 0.0 else 1.0)
 			velocity.y = max(velocity.y - g * dt, -MAX_FALL)
 		var a := AIR_ACCEL
 		if on_floor:
@@ -570,106 +410,98 @@ func _local(dt: float) -> void:
 		velocity.x = hv.x
 		velocity.z = hv.y
 
-	if active and Input.is_action_just_pressed("throw"):
+	if can_act and Input.is_action_just_pressed("throw"):
 		if slot == 2:
 			_try_shield()
-		elif slot == 3 and lightning_cd <= 0.0:
-			_cast_lightning()
-		elif slot == 4 and wall_cd <= 0.0:
-			_place_wall()
-		elif slot == 5 and sword_cd <= 0.0:
+		elif slot == 3 and wall_cd <= 0.0:
+			wall_cd = ch.get("wall_cd", WALL_CD)
+			spawn_wall.rpc(_ground(global_position - transform.basis.z * WALL_DIST), rotation.y, 0)
+		elif slot == 4 and sword_cd <= 0.0:
 			sword_cd = SWORD_CD
 			swing.rpc(global_position, -transform.basis.z)
-	if active and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
-		cd = THROW_CD
-		var b := cam.global_basis
-		var target := cam.global_position - b.z * 200.0
-		var q := PhysicsRayQueryParameters3D.create(cam.global_position, target)
-		q.exclude = [get_rid()]
-		var r := get_world_3d().direct_space_state.intersect_ray(q)
-		if r:
-			target = r.position
-		# Asanın kristalinden çık, nişangahın gösterdiği noktaya git.
-		var origin := cam.global_position + b.x * 0.3 - b.y * 0.09 - b.z * 0.99 # kristalin konumu
-		rocket_n += 1
-		fire_rocket.rpc(origin, (target - origin).normalized(), rocket_n)
+	if can_act and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
+		cd = THROW_CD * ch.get("fire_cd", 1.0) * bv("rapid")
+		_shoot(int(bv("multi")), 0.07, false)
 
 	move_and_slide()
 	if global_position.y < -20.0:
 		global_position = spawn_pos
 		velocity = Vector3.ZERO
-	sync_state.rpc(global_position, rotation.y, look.rotation.x, Vector2(velocity.x, velocity.z).length(), slot)
+	sync_state.rpc(global_position, rotation.y, look.rotation.x, Vector2(velocity.x, velocity.z).length(), slot, not is_on_floor())
+
+
+## Yalnızca sahibinde: can yenileme, yanma, durunca kalkan, sıçrayıştan iniş.
+func _tick(dt: float, on_floor: bool) -> void:
+	tick_t += dt
+	if tick_t >= 1.0:
+		tick_t -= 1.0
+		regen_acc += ch.get("regen", 0.0) + bv("regen", 0.0)
+		if regen_acc >= 1.0:
+			gain(int(regen_acc))
+			regen_acc -= int(regen_acc)
+		if bt("burn") > 0.0:
+			take_hit(int(bv("burn")), true)
+	if ch.get("sit_shield", false):
+		still_t = still_t + dt if Vector2(velocity.x, velocity.z).length() < 0.5 else minf(still_t, 0.0)
+		if still_t >= SIT_TIME and not shield_on:
+			still_t = -4.0 # sıradaki kalkan en erken 6 sn sonra
+			set_shield.rpc(true)
+	if land_wait >= 0.0:
+		land_wait += dt
+		if (land_wait > 0.25 and on_floor) or land_wait > 3.0:
+			land_wait = -1.0
+			skill_area.rpc(global_position, -transform.basis.z)
 
 
 @rpc("authority", "unreliable_ordered")
-func sync_state(p: Vector3, yaw: float, pitch: float, spd: float, s: int) -> void:
+func sync_state(p: Vector3, yaw: float, pitch: float, spd: float, s: int, air: bool) -> void:
 	net_pos = p
 	net_yaw = yaw
 	net_pitch = pitch
 	net_speed = spd
-	if s != slot:
-		_set_slot(s)
+	net_air = air
+	slot = s
 
 
 func _set_slot(s: int) -> void:
 	slot = s
-	gun.visible = s != 2 and s != 5 # kalkanda ve kılıçta asa yok
-	sword.visible = s == 5
-	if SLOT_COLORS.has(s): # her asanın kristal rengi farklı
-		gem_mat.albedo_color = SLOT_COLORS[s]
-		gem_mat.emission = SLOT_COLORS[s]
-		gem_glow.light_color = SLOT_COLORS[s]
 
 
 func _player_rids() -> Array:
 	return get_tree().get_nodes_in_group("players").map(func(p): return p.get_rid())
 
 
-func _cast_lightning() -> void:
-	var space := get_world_3d().direct_space_state
-	var from := cam.global_position
-	var to := from - cam.global_basis.z * LIGHTNING_RANGE
-	var q := PhysicsRayQueryParameters3D.create(from, to)
-	q.exclude = [get_rid()]
-	var r := space.intersect_ray(q)
-	var p: Vector3 = r.position if r else to
-	# Nişan havadaysa (ya da oyuncuya denk geldiyse) altındaki zemine indir.
-	var dq := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 0.5, p + Vector3.DOWN * 60.0)
-	dq.exclude = _player_rids()
-	var down := space.intersect_ray(dq)
-	if down:
-		p = down.position
-	elif not r:
-		return # harita dışı
-	lightning_cd = LIGHTNING_CD
-	cast_lightning.rpc(p)
-
-
-@rpc("authority", "call_local", "reliable")
-func cast_lightning(pos: Vector3) -> void:
-	var l: Node3D = LightningScript.new()
-	l.caster = self
-	l.radius = LIGHTNING_R
-	l.position = pos
-	get_parent().get_parent().add_child(l)
-
-
-func _place_wall() -> void:
-	var p := global_position - transform.basis.z * WALL_DIST
-	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 2.0, p + Vector3.DOWN * 6.0)
+## Noktanın altındaki zemini bulur (oyuncuları saymaz).
+func _ground(p: Vector3) -> Vector3:
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 2.0, p + Vector3.DOWN * 60.0)
 	q.exclude = _player_rids()
 	var r := get_world_3d().direct_space_state.intersect_ray(q)
 	if r:
 		p.y = r.position.y
-	wall_cd = WALL_CD
-	spawn_wall.rpc(p, rotation.y)
+	return p
 
 
-## Oyuncu başına tek duvar: yenisi eskisini siler.
+## Nişangâhın gösterdiği yöne n roket (yelpaze açısı: spread radyan).
+func _shoot(n: int, spread: float, big: bool) -> void:
+	var b := cam.global_basis
+	var target := cam.global_position - b.z * 200.0
+	var q := PhysicsRayQueryParameters3D.create(cam.global_position, target)
+	q.exclude = [get_rid()]
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	if r:
+		target = r.position
+	var origin := cam.global_position + b.x * 0.3 - b.y * 0.33 - b.z * 1.05 # bazukanın namlusu
+	var d := (target - origin).normalized()
+	for i in n:
+		rocket_n += 1
+		fire_rocket.rpc(origin, d.rotated(Vector3.UP, spread * (i - (n - 1) * 0.5)), rocket_n, big)
+
+
+## Oyuncu başına her numaradan tek duvar: yenisi eskisini siler.
 @rpc("authority", "call_local", "reliable")
-func spawn_wall(pos: Vector3, yaw: float) -> void:
-	var world := get_parent().get_parent()
-	var wname := "W%d" % get_multiplayer_authority()
+func spawn_wall(pos: Vector3, yaw: float, k: int) -> void:
+	var world := _world()
+	var wname := "W%d_%d" % [get_multiplayer_authority(), k]
 	var old := world.get_node_or_null(wname)
 	if old:
 		world.remove_child(old) # isim hemen boşalsın
@@ -681,71 +513,193 @@ func spawn_wall(pos: Vector3, yaw: float) -> void:
 	world.add_child(w)
 
 
-## Q: karakterin özel yeteneği. Karar yerel makinede, etkiyi use_skill herkese yayar.
+# ---------- Q: karakter yeteneği (characters.gd'deki "sk" verisini yorumlar) ----------
+
+func _nearest(max_d: float) -> Node3D:
+	var best: Node3D = null
+	for p in get_parent().get_children():
+		var d := global_position.distance_to(p.global_position)
+		if p != self and p.hp > 0 and d < max_d:
+			best = p
+			max_d = d
+	return best
+
+
+## Nişangâhın gösterdiği nokta (en çok max_d uzakta); boşluğa bakıyorsa altındaki zemin.
+func _aim_point(max_d: float) -> Vector3:
+	var from := cam.global_position
+	var to := from - cam.global_basis.z * max_d
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = [get_rid()]
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	return r.position if r else _ground(to)
+
+
+## Karar yerel makinede verilir, etkiyi use_skill herkese yayar.
 func _use_skill() -> void:
-	match ch.skill:
-		"slipper", "tile":
-			var best: Node3D = null
-			var bd := SLIPPER_RANGE if ch.skill == "slipper" else TILE_RANGE
-			for p in get_parent().get_children():
-				var d := global_position.distance_to(p.global_position)
-				if p != self and p.hp > 0 and d < bd:
-					best = p
-					bd = d
-			if best == null:
-				return # kovalanacak kimse yok: bekleme süresi harcanmasın
-			throw_slipper.rpc(best.get_multiplayer_authority(), ch.skill)
-		_:
-			use_skill.rpc(ch.skill, global_position)
+	var target_id := 0
+	if sk.has("range"):
+		var best := _nearest(sk.range)
+		if best == null:
+			return # hedef yok: bekleme süresi harcanmasın
+		target_id = best.get_multiplayer_authority()
+		if sk.has("backstab"): # hedefin arkasına geç, ona dön
+			global_position = best.global_position + best.transform.basis.z * 1.6
+			rotation.y = best.rotation.y
+			velocity = Vector3.ZERO
+	var aim := global_position
+	if sk.has("area") and sk.area.get("at", "") == "aim":
+		aim = _aim_point(sk.area.range)
 	skill_cd = ch.cd
+	use_skill.rpc(global_position, aim, -transform.basis.z, target_id)
 
 
 @rpc("authority", "call_local", "reliable")
-func use_skill(kind: String, pos: Vector3) -> void:
+func use_skill(pos: Vector3, aim: Vector3, fwd: Vector3, target_id: int) -> void:
 	say(ch.quote)
-	match kind:
-		"flash":
-			_ring_fx(pos + Vector3.UP * 1.7, Color(1, 1, 0.85, 0.9), FLASH_R, 0.35)
-			Sfx.play3d(Sfx.shield_up, pos + Vector3.UP, 4.0)
-			var me := _local_player()
-			if me and me != self and me.hp > 0:
-				var eye: Vector3 = me.look.global_position
-				var to := pos + Vector3.UP * 1.7 - eye
-				if to.length() < FLASH_R and (-me.look.global_basis.z).dot(to.normalized()) > 0.3: # bakıyorsa
-					me.blind_t = FLASH_TIME
-		"pull":
-			shout_t = SHOUT_TIME
-			var ring := _ring_fx(pos + Vector3.UP * 0.2, Color(0.95, 0.3, 0.15, 0.8), PULL_R, 0.0)
-			var tw := ring.create_tween() # dışarıdan içe daralır: çekiliyorsun
-			tw.tween_property(ring, "scale", Vector3.ONE * 0.3, 0.4)
-			tw.tween_callback(ring.queue_free)
-			Sfx.play3d(Sfx.whoosh, pos + Vector3.UP, 4.0)
-			var me := _local_player()
-			if me and me != self and me.hp > 0:
-				var to: Vector3 = pos - me.global_position
-				to.y = 0.0
-				if to.length() < PULL_R:
-					me.velocity += to.normalized() * minf(to.length() * 2.0, 14.0) + Vector3.UP * 4.0
-					if me.shield_on:
-						me.set_shield.rpc(false)
-					else:
-						me.take_hit(PULL_DMG)
+	Sfx.play3d(Sfx.whoosh, pos + Vector3.UP, 2.0)
+	var s: Dictionary = sk.get("self", {})
+	for k in TIMED:
+		if s.has(k):
+			buffs[k] = s[k].duplicate()
+	for k in ["invis", "float"]:
+		if s.has(k):
+			buffs[k] = [1.0, s[k]]
+	if not s.is_empty():
+		_ring_fx(pos + Vector3.UP * 0.2, Color(ch.color, 0.85), 1.6, 0.4)
+	var target: Node3D = get_parent().get_node_or_null(str(target_id)) if target_id != 0 else null
+	if is_multiplayer_authority():
+		_self_skill(s, fwd, target)
+	if target and sk.has("swap") and target.is_multiplayer_authority(): # kurban benim yerime gelir
+		target.global_position = pos
+		target.velocity = Vector3.ZERO
+	if target and sk.has("homing"):
+		var h: Node3D = HomingScript.new()
+		h.thrower = self
+		h.h = sk.homing
+		h.target = target
+		h.dir = (-look.global_basis.z + Vector3.UP * 0.4).normalized() # önce havaya kalkar
+		h.position = look.global_position + h.dir * 0.6
+		_world().add_child(h)
+	if sk.has("area") and not sk.area.get("land", false):
+		_area(sk.area, aim if sk.area.get("at", "") == "aim" else pos, fwd)
 
 
+## Yeteneğin atanı etkileyen kısmı; yalnızca atanın kendi makinesinde çalışır.
+func _self_skill(s: Dictionary, fwd: Vector3, target: Node3D) -> void:
+	var flat := Vector3(fwd.x, 0, fwd.z).normalized()
+	var heal: int = s.get("heal", 0) + int((max_hp - hp) * s.get("heal_missing", 0.0))
+	if heal > 0:
+		gain(heal)
+	if s.has("regen"):
+		buffs["regen"] = s.regen.duplicate()
+	if s.has("confuse"):
+		buffs["confuse"] = [1.0, s.confuse]
+	if s.get("shield", false) and not shield_on:
+		set_shield.rpc(true)
+	if s.has("leap"):
+		velocity = flat * s.leap[0] + Vector3.UP * s.leap[1]
+		if sk.has("area") and sk.area.get("land", false):
+			land_wait = 0.0
+	if s.has("blink"):
+		var d: float = s.blink
+		var from := global_position + Vector3.UP * 0.9
+		var q := PhysicsRayQueryParameters3D.create(from, from + flat * d)
+		q.exclude = _player_rids()
+		var r := get_world_3d().direct_space_state.intersect_ray(q)
+		if r:
+			d = maxf(from.distance_to(r.position) - 0.6, 0.0) # duvarın içine girme
+		global_position += flat * d
+	if s.get("reset", false):
+		cd = 0.0; shield_cd = 0.0; wall_cd = 0.0; dash_cd = 0.0; sword_cd = 0.0
+	if sk.has("volley"):
+		_shoot(sk.volley[0], sk.volley[1], sk.volley[2])
+	if sk.has("walls"): # önüne ve iki yanına
+		for i in sk.walls:
+			var ang: float = [0.0, 1.15, -1.15][i % 3]
+			spawn_wall.rpc(_ground(global_position + flat.rotated(Vector3.UP, ang) * WALL_DIST), rotation.y + ang, i + 1)
+	if target and sk.has("swap"):
+		global_position = target.global_position
+		velocity = Vector3.ZERO
+
+
+## Sıçrayışın inişi gibi sonradan tetiklenen alan etkisi.
 @rpc("authority", "call_local", "reliable")
-func throw_slipper(target_id: int, kind := "slipper") -> void:
-	say(ch.quote)
-	var target := get_parent().get_node_or_null(str(target_id))
-	if target == null:
+func skill_area(pos: Vector3, dir: Vector3) -> void:
+	_area(sk.area, pos, dir)
+
+
+## Alan etkisi: anlıksa hemen uygular; gecikmeli / kalıcı / kapansa zone.gd devralır.
+func _area(a: Dictionary, at: Vector3, dir: Vector3) -> void:
+	if a.has("delay") or a.has("linger") or a.has("mine"):
+		var z: Node3D = ZoneScript.new()
+		z.caster = self
+		z.a = a
+		z.position = at
+		_world().add_child(z)
 		return
-	var s: Node3D = SlipperScript.new()
-	s.thrower = self
-	s.kind = kind
-	s.target = target
-	s.dir = (-look.global_basis.z + Vector3.UP * 0.4).normalized() # önce havaya kalkar
-	s.position = look.global_position + s.dir * 0.6
-	get_parent().get_parent().add_child(s)
-	Sfx.play3d(Sfx.whoosh, s.position, 2.0)
+	var col := Color(a.get("color", ch.color), 0.85)
+	_ring_fx(at + Vector3.UP * 0.2, col, a.r, 0.35)
+	if a.get("beam", false):
+		_beam_fx(gun.global_position, at, col)
+	if a.get("boom", false):
+		boom_fx(at, 1.0)
+	hit_local(a, at, dir)
+
+
+## Bu makinedeki oyuncu (atan değilse) etki alanındaysa etkiyi ona uygular.
+func hit_local(a: Dictionary, at: Vector3, dir: Vector3) -> void:
+	var me := _local_player()
+	if me == null or me == self or me.hp <= 0:
+		return
+	var c: Vector3 = me.global_position + Vector3.UP * 0.9
+	if minf(c.distance_to(at), me.global_position.distance_to(at)) > a.r:
+		return
+	if a.has("cone"): # yalnızca önündeki yay
+		var to: Vector3 = me.global_position - at
+		to.y = 0.0
+		if to.length() > 0.3 and dir.dot(to.normalized()) < a.cone:
+			return
+	if a.get("gaze", false) and (-me.look.global_basis.z).dot((at + Vector3.UP * 1.7 - me.look.global_position).normalized()) < 0.3:
+		return # bakmıyor
+	affect(me, a, at)
+
+
+## Etkiyi kurbana uygular (kurbanın kendi makinesinde çağrılır). Kalkan bir etkiyi tümüyle emer.
+func affect(me: Node, e: Dictionary, from: Vector3) -> void:
+	if me.shield_on:
+		me.set_shield.rpc(false)
+		return
+	var away: Vector3 = me.global_position - from
+	away.y = 0.0
+	var dist := away.length()
+	away = away.normalized() if dist > 0.05 else -transform.basis.z
+	if e.has("knock"):
+		me.velocity += away * e.knock + Vector3.UP * e.get("up", 3.0)
+	elif e.has("up"):
+		me.velocity.y = e.up
+	if e.has("pull"):
+		me.velocity += -away * minf(dist * 2.0, e.pull) + Vector3.UP * 4.0
+	if e.has("yank"): # atanın yanına
+		var to: Vector3 = global_position - me.global_position
+		me.velocity = to.normalized() * minf(to.length() * 2.2, e.yank) + Vector3.UP * 5.0
+	for k in DEBUFFS:
+		if e.has(k):
+			me.buffs[k] = e[k].duplicate()
+	for k in FLAGS:
+		if e.has(k):
+			me.buffs[k] = [1.0, e[k]]
+	if e.has("drain"):
+		gain.rpc_id(get_multiplayer_authority(), e.drain)
+	if e.get("dmg", 0) > 0:
+		me.take_hit(e.dmg)
+
+
+## Can kazanma; başka makineler (can emme) sahibine bildirir.
+@rpc("any_peer", "call_local", "reliable")
+func gain(n: int) -> void:
+	if is_multiplayer_authority() and hp > 0 and hp < max_hp:
+		set_hp.rpc(mini(hp + n, max_hp))
 
 
 ## Kafa üstünde 2 sn replik balonu (herkes görür).
@@ -769,24 +723,44 @@ func _local_player() -> Node:
 	return get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
 
 
-## Yere yatık halka efekti. fade > 0 ise o sürede genişleyip söner ve silinir.
-func _ring_fx(pos: Vector3, c: Color, r: float, fade: float) -> MeshInstance3D:
+## Yere yatık halka efekti: fade sürede genişleyip söner ve silinir.
+func _ring_fx(pos: Vector3, c: Color, r: float, fade: float) -> void:
 	var t := TorusMesh.new()
-	t.inner_radius = 0.9; t.outer_radius = 1.0
-	var mi := _mesh(get_parent().get_parent(), t, pos, c)
+	t.inner_radius = 0.92; t.outer_radius = 1.0
+	var mi := _mesh(_world(), t, pos, c)
 	_bar_mat(mi)
-	mi.scale = Vector3.ONE * r
-	if fade > 0.0:
-		var tw := mi.create_tween().set_parallel()
-		tw.tween_property(mi, "scale", Vector3.ONE * r, fade).from(Vector3.ONE * 0.2)
-		tw.tween_property(mi.material_override, "albedo_color:a", 0.0, fade)
-		tw.chain().tween_callback(mi.queue_free)
-	return mi
+	var tw := mi.create_tween().set_parallel()
+	tw.tween_property(mi, "scale", Vector3.ONE * r, fade).from(Vector3.ONE * 0.2)
+	tw.tween_property(mi.material_override, "albedo_color:a", 0.0, fade + 0.15)
+	tw.chain().tween_callback(mi.queue_free)
+
+
+## İki nokta arasında kısa süre görünen ışın (kurşun, kement, iğne).
+func _beam_fx(from: Vector3, to: Vector3, c: Color) -> void:
+	var d := to - from
+	if d.length() < 0.1:
+		return
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.035; cyl.bottom_radius = 0.035; cyl.height = d.length()
+	var mi := _mesh(_world(), cyl, (from + to) * 0.5, c)
+	_bar_mat(mi)
+	mi.basis = Basis(Quaternion(Vector3.UP, d.normalized()))
+	var tw := mi.create_tween()
+	tw.tween_property(mi.material_override, "albedo_color:a", 0.0, 0.3)
+	tw.tween_callback(mi.queue_free)
+
+
+func boom_fx(pos: Vector3, k: float) -> void:
+	var fx: Node3D = ExplosionScript.new()
+	fx.position = pos
+	fx.scale = Vector3.ONE * k
+	_world().add_child(fx)
+	Sfx.play3d(Sfx.boom, pos, 4.0)
 
 
 func _try_shield() -> void:
 	if not shield_on and shield_cd <= 0.0:
-		shield_cd = ch.shield_cd
+		shield_cd = ch.get("shield_cd", 8.0)
 		set_shield.rpc(true)
 
 
@@ -795,7 +769,6 @@ func set_shield(on: bool) -> void:
 	if on == shield_on:
 		return
 	shield_on = on
-	shield_mesh.visible = on
 	var pos := global_position + Vector3.UP
 	Sfx.play3d(Sfx.shield_up if on else Sfx.shield_break, pos, 0.0)
 
@@ -803,7 +776,7 @@ func set_shield(on: bool) -> void:
 func _remote(dt: float) -> void:
 	var k: float = min(1.0, dt * 18.0)
 	if global_position.distance_to(net_pos) > 6.0:
-		global_position = net_pos # ışınlanma (respawn)
+		global_position = net_pos # ışınlanma (respawn, yer değiştirme)
 	else:
 		global_position = global_position.lerp(net_pos, k)
 	rotation.y = lerp_angle(rotation.y, net_yaw, k)
@@ -811,19 +784,42 @@ func _remote(dt: float) -> void:
 
 
 func _animate(dt: float) -> void:
-	var spd: float = Vector2(velocity.x, velocity.z).length() if is_multiplayer_authority() else net_speed
-	var amp: float = clamp(spd / SPEED, 0.0, 1.0) * 0.7
-	walk_t += dt * spd * 2.0
-	leg_l.rotation.x = sin(walk_t) * amp
-	leg_r.rotation.x = -sin(walk_t) * amp
-	if model:
-		model.position.y = absf(sin(walk_t)) * 0.07 * amp
-		model_fx.albedo_color.a = flash / 0.35 * 0.6
-		if skel:
-			_pose(sin(walk_t) * amp / 0.7)
-		else: # iskeleti yok: yürürken yalnızca sallanır
-			model.rotation.x = sin(walk_t) * 0.06 * amp
-	vis.rotation.z = lerp(vis.rotation.z, 1.5 if hp <= 0 else 0.0, 0.1) # ölünce devril
+	var mine := is_multiplayer_authority()
+	var spd: float = Vector2(velocity.x, velocity.z).length() if mine else net_speed
+	var air: bool = not is_on_floor() if mine else net_air
+	var want := "Idle"
+	if hp <= 0:
+		want = "Death"
+	elif air:
+		want = "Jump"
+	elif spd > 0.5:
+		want = "Run" if anim.has_animation("Run") else "Walk"
+	if want != cur_anim:
+		cur_anim = want
+		anim.play(want, 0.15)
+	anim.speed_scale = clampf(spd / SPEED, 0.7, 1.7) if want == "Run" or want == "Walk" else 1.0
+
+	for k in buffs.keys(): # süreli etkiler
+		buffs[k][1] -= dt
+		if buffs[k][1] <= 0.0:
+			buffs.erase(k)
+	var hidden := bt("invis") > 0.0 and not mine and hp > 0 # görünmezlik: yalnızca başkalarına
+	vis.visible = not hidden
+	size_k = lerpf(size_k, bv("size"), 0.15)
+	vis.scale = Vector3.ONE * size_k
+	gun.visible = hp > 0 and slot == 1
+	sword.visible = hp > 0 and slot == 4
+	shield_mesh.visible = shield_on and not hidden
+	flash = max(flash - dt, 0.0)
+	if flash > 0.0:
+		model_fx.albedo_color = Color(1, 0.1, 0.1, flash / 0.35 * 0.6)
+	elif buffs.has("armor") and bv("armor") < 1.0:
+		model_fx.albedo_color = Color(1.0, 0.85, 0.3, 0.35) # zırhlı
+	elif bt("power") > 0.0:
+		model_fx.albedo_color = Color(1.0, 0.45, 0.1, 0.3) # güçlü
+	else:
+		model_fx.albedo_color.a = 0.0
+
 	if swing_t > 0.0: # sağdan sola yatay savurma
 		swing_t = maxf(swing_t - dt, 0.0)
 		var k := 1.0 - swing_t / 0.25
@@ -834,69 +830,44 @@ func _animate(dt: float) -> void:
 		var n := Net.display_name(get_multiplayer_authority())
 		if name_lbl.text != n:
 			name_lbl.text = n
+		name_lbl.visible = not hidden
 		var f := clampf(float(hp) / max_hp, 0.0, 1.0)
 		hp_fill.scale.x = maxf(f, 0.001)
 		hp_fill.position.x = -0.4 * (1.0 - f) # sola yaslı
 		(hp_fill.material_override as StandardMaterial3D).albedo_color = Color(0.95, 0.2, 0.15).lerp(Color(0.3, 0.9, 0.3), f)
-		hp_bar.visible = hp > 0
+		hp_bar.visible = hp > 0 and not hidden
 		var c := get_viewport().get_camera_3d()
 		if c:
 			hp_bar.global_basis = c.global_basis # kameraya dön
-	flash = max(flash - dt, 0.0)
-	shout_t = maxf(shout_t - dt, 0.0)
-	blind_t = maxf(blind_t - dt, 0.0)
 	if quote_lbl and quote_lbl.visible:
 		quote_t -= dt
 		quote_lbl.visible = quote_t > 0.0
-	body_mat.albedo_color = base_col.lerp(Color(1, 0.1, 0.1), flash / 0.35)
-	body_mat.emission_enabled = flash > 0.0 or shout_t > 0.0
-	body_mat.emission = Color(1, 0, 0) * (flash / 0.35) if flash > 0.0 else Color(1.0, 0.5, 0.1) * 0.6 # turuncu: bağırdı, güçlü
-
-
-## İskelet duruşu. s: -1..1 adım salınımı. Model uzayı: +X ön, +Z sağ; Z ekseninde + dönüş uzvu öne atar.
-func _pose(s: float) -> void:
-	var z := Vector3(0, 0, 1)
-	_bone(Rig.LEG_R, Quaternion(z, s * 0.6))
-	_bone(Rig.SHIN_R, Quaternion(z, -maxf(-s, 0.0) * 0.8)) # arkada kalan bacak dizden bükülür
-	_bone(Rig.LEG_L, Quaternion(z, -s * 0.6))
-	_bone(Rig.SHIN_L, Quaternion(z, -maxf(s, 0.0) * 0.8))
-	_bone(Rig.HEAD, Quaternion(z, look.rotation.x * 0.6))
-	_bone(Rig.ARM_L, Quaternion(z, s * 0.5) * arm_down[1])
-	_bone(Rig.FORE_L, arm_straight[1])
-	_bone(Rig.FORE_R, arm_straight[0])
-	if slot == 2 or hp <= 0: # elinde bir şey yok: kol sarkar ve sallanır
-		_bone(Rig.ARM_R, Quaternion(z, -s * 0.5) * arm_down[0])
-	else: # silah elde: kol baktığı yere uzanır
-		_bone(Rig.ARM_R, Quaternion(arm_dir, _aim_dir(look.rotation.x)))
-
-
-func _bone(i: int, q: Quaternion) -> void:
-	skel.set_bone_pose_rotation(i, skel.get_bone_pose_rotation(i).slerp(q, 0.3)) # yumuşak geçiş
 
 
 @rpc("authority", "call_local", "reliable")
-func fire_rocket(origin: Vector3, dir: Vector3, n: int) -> void:
+func fire_rocket(origin: Vector3, dir: Vector3, n: int, big: bool) -> void:
 	var r: Node3D = RocketScript.new()
-	r.name = "R%d_%d" % [get_multiplayer_authority(), n]
+	r.name = "%s%d_%d" % ["B" if big else "R", get_multiplayer_authority(), n] # B: gülle
 	r.shooter = self
 	r.dir = dir
+	r.big = big
 	r.position = origin
-	get_parent().get_parent().add_child(r)
+	_world().add_child(r)
 	Sfx.play3d(Sfx.fire, origin, -2.0)
 
 
 ## Atanın makinesi çarpışmayı bulunca herkese yayınlar.
 @rpc("authority", "call_local", "reliable")
 func explode(rocket_name, pos: Vector3) -> void:
-	var world := get_parent().get_parent()
-	var r := world.get_node_or_null(NodePath(str(rocket_name)))
+	var r := _world().get_node_or_null(NodePath(str(rocket_name)))
 	if r:
 		r.queue_free()
-	var fx: Node3D = ExplosionScript.new()
-	fx.position = pos
-	world.add_child(fx)
-	Sfx.play3d(Sfx.boom, pos, 4.0)
-	apply_blast(pos, BLAST_RADIUS, SHOUT_DMG if shout_t > 0.0 else DAMAGE) # Pazarcı pasifi
+	var big := str(rocket_name).begins_with("B")
+	boom_fx(pos, 1.8 if big else 1.0)
+	if big:
+		apply_blast(pos, BIG_RADIUS, BIG_DMG)
+	else:
+		apply_blast(pos, BLAST_RADIUS, int(bv("power", ch.get("rocket_dmg", DAMAGE))))
 
 
 ## Kılıç savurma: herkes animasyonu görür, her makine kendi oyuncusu vurulduysa hasarı uygular.
@@ -904,7 +875,7 @@ func explode(rocket_name, pos: Vector3) -> void:
 func swing(from: Vector3, fwd: Vector3) -> void:
 	swing_t = 0.25
 	Sfx.play3d(Sfx.whoosh, from + Vector3.UP * 1.5, 0.0)
-	var me = get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
+	var me := _local_player()
 	if me == null or me == self or me.hp <= 0:
 		return
 	var to: Vector3 = me.global_position - from
@@ -915,12 +886,12 @@ func swing(from: Vector3, fwd: Vector3) -> void:
 	if me.shield_on:
 		me.set_shield.rpc(false)
 	else:
-		me.take_hit(SWORD_DMG)
+		me.take_hit(ch.get("sword_dmg", SWORD_DMG))
 
 
 ## Hasarı her makine yalnızca kendi oyuncusu için uygular (atan hariç).
 func apply_blast(pos: Vector3, radius: float, dmg := DAMAGE) -> void:
-	var me = get_parent().get_node_or_null(str(multiplayer.get_unique_id()))
+	var me := _local_player()
 	if me == null or me == self or me.hp <= 0:
 		return
 	var c: Vector3 = me.global_position + Vector3(0, 0.95, 0)
@@ -932,11 +903,14 @@ func apply_blast(pos: Vector3, radius: float, dmg := DAMAGE) -> void:
 			me.take_hit(dmg)
 
 
-## Roket kurbanın kendi makinesinde hasar uygular.
-func take_hit(dmg := DAMAGE) -> void:
-	if randf() < ch.get("dodge", 0.0): # Keloğlan pasifi
-		say.rpc("Kafadan sekti!")
+## Hasar kurbanın kendi makinesinde uygulanır. sure: sıyrılma şansı yok (yanma).
+func take_hit(dmg := DAMAGE, sure := false) -> void:
+	if not sure and randf() < ch.get("dodge", 0.0):
+		say.rpc("Iska!")
 		return
+	dmg = roundi(dmg * bv("armor") * bv("vuln"))
+	if dmg <= 0:
+		return # hasar almıyor (Demir Kafa)
 	set_hp.rpc(hp - dmg)
 	if hp <= 0:
 		get_node("/root/Main").report_death.rpc_id(1, get_multiplayer_authority())
@@ -956,14 +930,12 @@ func set_hp(v: int) -> void:
 func respawn() -> void:
 	hp = max_hp
 	skill_cd = 0.0
-	shout_t = 0.0
-	blind_t = 0.0
+	buffs.clear()
+	land_wait = -1.0
 	still_t = 0.0
 	shield_on = false
-	shield_mesh.visible = false
 	shield_cd = 0.0
 	dash_cd = 0.0
-	lightning_cd = 0.0
 	wall_cd = 0.0
 	sword_cd = 0.0
 	velocity = Vector3.ZERO

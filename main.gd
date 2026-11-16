@@ -5,6 +5,10 @@ const PlayerScript := preload("res://player.gd")
 const ForestScript := preload("res://forest.gd")
 const Chars := preload("res://characters.gd")
 const HP_W := 316.0 # can barının iç genişliği (px)
+const STATUS := {"stun": "SERSEMLEDİN", "blind": "KÖR OLDUN", "silence": "SUSTURULDUN", "confuse": "YÖNLER TERS",
+	"slow": "YAVAŞLADIN", "vuln": "İŞARETLENDİN", "burn": "YANIYORSUN", "haste": "HIZLI", "power": "GÜÇLÜ ROKET",
+	"rapid": "SERİ ATEŞ", "multi": "ÜÇLÜ ATIŞ", "armor": "ZIRH", "size": "BOY DEĞİŞTİ", "invis": "GÖRÜNMEZ",
+	"float": "SÜZÜLÜYOR", "regen": "İYİLEŞİYOR"}
 const SPAWNS := [Vector3(-14, 1, -14), Vector3(14, 1, 14), Vector3(-14, 1, 14), Vector3(14, 1, -14)]
 
 var ui: Control
@@ -23,10 +27,14 @@ var hp_txt: Label
 var trail_f := 1.0
 var char_btn: Button
 var char_wrap: ColorRect
-var char_cards := [] # her karakter kartının StyleBoxFlat'ı
+var char_cards := [] # ızgaradaki her karakter kutusunun StyleBoxFlat'ı
+var char_sel := 0 # seçim ekranında incelenen karakter
+var char_view: Node3D # önizleme sahnesinde modelin durduğu yer
+var char_info := {} # ayrıntı panelindeki etiketler
+var status_lbl: Label # üzerimdeki süreli etkiler
 var score_lbl: Label
 var center_lbl: Label
-var blind_rect: ColorRect # Keloğlan flaşı
+var blind_rect: ColorRect # kör edici etkiler: ekran beyazlar
 var spec_lbl: Label
 var slots := [] # [[StyleBoxFlat, Label], ...]
 var settings_wrap: ColorRect
@@ -53,7 +61,7 @@ func _ready() -> void:
 
 func _setup_input() -> void:
 	var keys := {"fwd": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "jump": KEY_SPACE,
-		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "slot5": KEY_5, "skill": KEY_Q}
+		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "skill": KEY_Q}
 	for a in keys:
 		InputMap.add_action(a)
 		var ev := InputEventKey.new()
@@ -157,7 +165,7 @@ func _build_ui() -> void:
 	v.add_theme_constant_override("separation", 9)
 	panel.add_child(v)
 
-	var title := _lbl(v, "ASA SAVAŞI", 46)
+	var title := _lbl(v, "BAZUKA SAVAŞI", 46)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 	var sub := _lbl(v, "Steam: " + (Net.my_name() if Net.steam_ok else "BAĞLI DEĞİL (Steam açık mı?)"), 15)
@@ -217,16 +225,16 @@ func _build_ui() -> void:
 	spec_lbl = _full_label(22, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_TOP)
 	spec_lbl.offset_top = 60
 	_full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM).text = \
-		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD dash | 1-5 eşya | Q karakter yeteneği | Sol tık kullan | ESC menü/ayarlar | F10 çık"
+		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD atıl | 1-4 eşya | Q karakter yeteneği | Sol tık kullan | ESC menü/ayarlar | F10 çık"
 	# Alt envanter çubuğu (hotbar)
 	var bar := HBoxContainer.new()
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bar.offset_left = -295; bar.offset_right = 295
+	bar.offset_left = -245; bar.offset_right = 245
 	bar.offset_top = -140; bar.offset_bottom = -50
 	bar.add_theme_constant_override("separation", 10)
 	hud.add_child(bar)
-	for i in 6: # 1-5 eşyalar + Q karakter yeteneği
+	for i in 5: # 1-4 eşyalar + Q karakter yeteneği
 		var cell := PanelContainer.new()
 		cell.custom_minimum_size = Vector2(90, 84)
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -242,6 +250,8 @@ func _build_ui() -> void:
 		cell.add_child(l)
 		bar.add_child(cell)
 		slots.append([sb, l])
+	status_lbl = _full_label(20, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_BOTTOM)
+	status_lbl.offset_bottom = -150
 	hud.hide()
 	_build_settings(layer, theme)
 	_build_chars(layer, theme)
@@ -309,56 +319,131 @@ func _update_hp_bar(me: Node, dt: float) -> void:
 
 func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 	char_wrap = ColorRect.new()
-	char_wrap.color = Color(0.03, 0.04, 0.08, 0.97) # alttaki menü görünmesin
+	char_wrap.color = Color(0.03, 0.04, 0.08, 0.98) # alttaki menü görünmesin
 	char_wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
 	char_wrap.theme = theme
 	layer.add_child(char_wrap)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	char_wrap.add_child(center)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 28)
+	char_wrap.add_child(margin)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 16)
-	center.add_child(v)
-	var title := _lbl(v, "KARAKTERİNİ SEÇ", 36)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 14)
+	margin.add_child(v)
+	var title := _lbl(v, "KARAKTERİNİ SEÇ   •   %d karakter" % Chars.LIST.size(), 30)
 	title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 20)
 	v.add_child(row)
+
+	# Sol: kaydırmalı portre ızgarası.
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	row.add_child(scroll)
+	var grid := HFlowContainer.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	scroll.add_child(grid)
 	for i in Chars.LIST.size():
 		var c: Dictionary = Chars.LIST[i]
-		var card := PanelContainer.new()
-		var sb := _sb(Color(0.06, 0.07, 0.11, 0.95), 12, 16)
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(104, 126)
+		b.icon = load("res://icons/%s.png" % c.model)
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		b.text = c.name
+		b.add_theme_font_size_override("font_size", 11)
+		b.clip_text = true
+		b.tooltip_text = "%s – %s" % [c.name, c.skill_name]
+		var sb := _sb(Color(c.color.darkened(0.72), 0.95), 10, 6)
 		sb.set_border_width_all(3)
-		card.add_theme_stylebox_override("panel", sb)
+		for st in ["normal", "hover", "pressed", "focus"]:
+			b.add_theme_stylebox_override(st, sb)
+		b.pressed.connect(_show_char.bind(i))
+		grid.add_child(b)
 		char_cards.append(sb)
-		row.add_child(card)
-		var cv := VBoxContainer.new()
-		cv.custom_minimum_size = Vector2(220, 0)
-		cv.add_theme_constant_override("separation", 8)
-		card.add_child(cv)
-		var swatch := ColorRect.new() # karakter rengi
-		swatch.color = c.color
-		swatch.custom_minimum_size.y = 10
-		cv.add_child(swatch)
-		_lbl(cv, c.name, 24).add_theme_color_override("font_color", c.color.lightened(0.3))
-		_lbl(cv, c.role, 15).modulate = Color(1, 1, 1, 0.65)
-		_lbl(cv, "Can: %d" % c.hp, 15)
-		_lbl(cv, "Pasif: " + c.passive, 15)
-		_lbl(cv, "Q – %s (%d sn)\n%s" % [c.skill_name, c.cd, c.skill_desc], 15) \
-			.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
-		_lbl(cv, "\"%s\"" % c.quote, 16).modulate = Color(0.75, 0.9, 1.0)
-		var spacer := Control.new()
-		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		cv.add_child(spacer)
-		_btn(cv, "Seç", _pick_char.bind(i))
-	_btn(v, "Kapat", char_wrap.hide).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+
+	# Sağ: seçili karakterin 3D önizlemesi ve ayrıntıları.
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size.x = 430
+	row.add_child(panel)
+	var d := VBoxContainer.new()
+	d.add_theme_constant_override("separation", 7)
+	panel.add_child(d)
+	var svc := SubViewportContainer.new()
+	svc.stretch = true
+	svc.custom_minimum_size = Vector2(380, 280)
+	svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	d.add_child(svc)
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.transparent_bg = true
+	vp.msaa_3d = Viewport.MSAA_4X
+	svc.add_child(vp)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_CLEAR_COLOR
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color.WHITE
+	env.environment.ambient_light_energy = 0.7
+	vp.add_child(env)
+	var sun := DirectionalLight3D.new()
+	sun.rotation = Vector3(-0.7, 0.6, 0)
+	vp.add_child(sun)
+	var pcam := Camera3D.new()
+	pcam.fov = 32
+	pcam.position = Vector3(0, 1.45, 5.6)
+	pcam.rotation.x = -0.03
+	vp.add_child(pcam)
+	char_view = Node3D.new()
+	vp.add_child(char_view)
+	char_info.name = _lbl(d, "", 30)
+	char_info.role = _lbl(d, "", 15)
+	char_info.role.modulate = Color(1, 1, 1, 0.65)
+	char_info.stats = _lbl(d, "", 15)
+	char_info.passive = _lbl(d, "", 15)
+	char_info.skill = _lbl(d, "", 16)
+	char_info.skill.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+	char_info.quote = _lbl(d, "", 15)
+	char_info.quote.modulate = Color(0.75, 0.9, 1.0)
+	var btns := HBoxContainer.new()
+	btns.add_theme_constant_override("separation", 9)
+	d.add_child(btns)
+	for b in [_btn(btns, "✔  SEÇ", func(): _pick_char(char_sel)), _btn(btns, "Kapat", char_wrap.hide)]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	char_wrap.hide()
 
 
+## Seçim ekranında bir karakteri inceler: 3D model, sayılar, yetenek.
+func _show_char(i: int) -> void:
+	char_sel = i
+	var c := Chars.get_char(i)
+	for k in char_cards.size():
+		char_cards[k].border_color = Color(1, 0.85, 0.2) if k == i else Color(0.3, 0.3, 0.35, 0.5)
+	for n in char_view.get_children():
+		n.queue_free()
+	var m: Node3D = load("res://models/chars/%s.glb" % c.model).instantiate()
+	m.rotation.y = 0.35
+	char_view.add_child(m)
+	var ap: AnimationPlayer = m.find_children("*", "AnimationPlayer", true, false)[0]
+	ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
+	ap.play("Idle")
+	char_info.name.text = c.name
+	char_info.name.add_theme_color_override("font_color", c.color.lightened(0.3))
+	char_info.role.text = c.role
+	char_info.stats.text = "Can %d   •   Hız %%%d   •   Kalkan %d sn" % [c.get("hp", 100), roundi(c.get("speed", 1.0) * 100.0), c.get("shield_cd", 8.0)]
+	char_info.passive.text = "Pasif: " + Chars.passive_text(c)
+	char_info.skill.text = "Q – %s (%d sn)\n%s" % [c.skill_name, c.cd, c.skill_desc]
+	char_info.quote.text = "\"%s\"" % c.quote
+
+
 func _open_chars() -> void:
-	for i in char_cards.size():
-		char_cards[i].border_color = Color(1, 0.85, 0.2) if i == Net.my_char else Color(0.3, 0.3, 0.35, 0.6)
+	_show_char(Net.my_char)
 	char_wrap.show()
 
 
@@ -503,16 +588,19 @@ func _process(dt: float) -> void:
 	if me:
 		_update_hp_bar(me, dt)
 		dmg_rect.color.a = me.flash * 1.2
-		blind_rect.color.a = clampf(me.blind_t * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
+		blind_rect.color.a = clampf(me.bt("blind") * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
 		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
-		var q := "GÜÇLÜ" if me.shout_t > 0.0 else _cd_text(me.skill_cd)
-		var texts := ["1\nATEŞ ASASI", "2\nKALKAN\n" + sh,
-			"3\nYILDIRIM\n" + _cd_text(me.lightning_cd), "4\nDUVAR\n" + _cd_text(me.wall_cd), "5\nKILIÇ",
-			"Q\n%s\n%s" % [me.ch.skill_name, q]]
-		for i in 6:
+		var texts := ["1\nBAZUKA", "2\nKALKAN\n" + sh, "3\nDUVAR\n" + _cd_text(me.wall_cd), "4\nKILIÇ",
+			"Q\n%s\n%s" % [me.ch.skill_name, _cd_text(me.skill_cd)]]
+		for i in 5:
 			slots[i][0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
 			slots[i][1].text = texts[i]
-		slots[5][0].border_color = me.ch.color if me.skill_cd <= 0.0 else Color(0.5, 0.5, 0.5, 0.6) # Q hazırsa karakter renginde
+		slots[4][0].border_color = me.ch.color if me.skill_cd <= 0.0 else Color(0.5, 0.5, 0.5, 0.6) # Q hazırsa karakter renginde
+		var st := PackedStringArray()
+		for k in me.buffs:
+			if STATUS.has(k) and me.hp > 0:
+				st.append("%s %.1f" % [STATUS[k], me.buffs[k][1]])
+		status_lbl.text = "   ".join(st)
 		spec_lbl.text = "İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir" \
 			% Net.display_name(me.spec_target.name.to_int()) if me.hp <= 0 and is_instance_valid(me.spec_target) else ""
 	var s := PackedStringArray()
