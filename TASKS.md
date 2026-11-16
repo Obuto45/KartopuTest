@@ -1,59 +1,29 @@
-# Tasks
+oyun iki farklı moda ayrılsın arena modu ve tower defense modu 
 
-Bazuka Savaşı: iki mod. **Arena** (PvP, olduğu gibi kalıyor) + **Hikaye Modu** (co-op, dalga savunması, yapılacak). Son sürüm: v1.0.
-Kural: işe başlamadan görevin yanına adını yaz (`[Sinan]`, `[Arkadaş]`), aynı dosyada ikiniz aynı anda çalışmayın, işe başlamadan `git pull` yapın.
+tower defense kısmına odaklan 
 
-## Active
+ortada bir kule kuleni,n tepseinde rapunzel ve uzun saçları olsun rapunzelin yüzü gözükmesin kulenin canı olsun biterse game over olsun 
 
-### Aşama 1: Hikaye Modu prototipi (eğlenceli mi?)
-Menüde "HİKAYE MODU" kartı şu an "YAKINDA" olarak kapalı; bu aşama bitince açılacak.
-- [ ] **Dalga sistemi** - dalga sayacı, 60–90 sn dalga, 15 sn mola, ekranda "Dalga 3/10"
-- [ ] **İlk düşman: Sürüngen** - yavaş, kalabalık, tek roketle ölür; duvar dışındaki ormandan gelir
-  - Yapay zekâ: en yakın oyuncuya yürü, yakındaysa vur
-  - Ağ: düşmanları yalnızca lobiyi kuran oyuncu yönetir, diğerlerine konum gönderir
-  - Model: Quaternius ücretsiz canavar paketi (CC0)
-- [ ] **Dalga arası güçlendirme seçimi** - 3 kart, 1 seçim; ilk sürüm mevcut etkilerden: +1 roket, hız, yanan patlama, büyük patlama, can yenileme, 3. zıplama
-- [ ] **Yere düşme ve kaldırma** - düşen oyuncu 15 sn yerde, arkadaşı E'ye basılı tutarak kaldırır; herkes düşerse koşu biter
-- [ ] **Koşu sonu ekranı** - kazandınız / kaybettiniz, ulaşılan dalga, öldürülen düşman
-- [ ] **İlk oyun testi** - ikiniz 3 koşu oynayın, neyin sıkıcı neyin eğlenceli olduğunu buraya not edin
+etraftaki belirli uzaklıkta olan oramndan yaratıklar gelsin dalga gücüne göre yaratıkları ve boyutlarını ve güçlerini ayarla 
 
-## Waiting On
+oyuncu sayısına göre dalga ve canvarların güçlerini ayarla dengede dursun oyun 
 
-Birlikte karar verilecekler:
-- [ ] **Dost ateşi** - açık mı (düşük hasar, komik) kapalı mı?
-- [ ] **Koşu süresi** - 10 dalga ≈ 20–25 dk uygun mu?
-- [ ] **Oyunun adı** - "Bazuka Savaşı" co-op'a uyuyor mu, Steam adı ne olacak?
-- [ ] **Steam** - uygulama kaydı (Steamworks, 100 $), şu an test AppID'si kullanılıyor
+4 kişiye kadar oynanabilir co-op modu olacak
 
-## Someday
+canvarlar öldürükçe xp düşürsün xp ortak havuzda dolsun ekranın en altını kaplayan bir bar olsun xp orada gözüksün ama xp miktarı sayı olarak yazmasın 
 
-### Aşama 2: Dikey dilim
-- [ ] **Yeni düşmanlar** - Koşucu (hızlı), Atıcı (uzaktan), Kalkanlı (önden hasar almaz), Patlayan (yanına gelip patlar)
-- [ ] **Bosslar** - 5. dalgada ara boss, 10. dalgada final boss (evreler, parlayan zayıf nokta)
-- [ ] **Güçlendirmeleri genişlet** - nadirlik (sıradan/nadir/efsanevi), sinerjiler, takım güçlendirmeleri
-- [ ] **Karakter sınıfları** - 52 karakteri Tank / Hasar / Destek / Kontrol / Hareketli olarak grupla; başlangıçta 6–8 karakter açık
-- [ ] **Kalıcı ilerleme** - koşulardan para, karakter açma, küçük kalıcı bonuslar, kayıt dosyası
-- [ ] **Zorluk seviyeleri** - final boss yenilince sonraki seviye açılır
-- [ ] **Tek kişilik oyun** - zorluk oyuncu sayısına göre ayarlansın
-- [ ] **Zorluk dengesi** - oyuncu sayısı ve dalgaya göre düşman sayısı/canı
+bu xpler ile seviye atlayalım her oyuncu seviye atlasın her seviyede mevcut statları yükseltebilelim ve ya karakterlere özel güçlendirmeler alalım 
 
-### Aşama 3: Steam'e hazırlık
-- [ ] **Steam sayfası** - kapak görselleri, ekran görüntüleri, açıklama, etiketler
-- [ ] **Fragman** - 30–60 sn, en kaotik anlar
-- [ ] **Demo** - ilk 3 dalga + 4 karakter, Steam Next Fest'e başvur
-- [ ] **Yakın mesafe sesli sohbet**
-- [ ] **Yeni haritalar** - kar, çöl, mağara
-- [ ] **Erken Erişim çıkışı** - 5–10 $
+oyunda mağaza olsun mağazadan kuleyi koruyacak duvarlar dikenli duvarlar tuzaklar taretler vs. olsun bunları canvar öldürükçe satın alacağımız bir dükkan olsun 
 
-### Bilinen sorunlar (v1.0)
-- [ ] **Replik miğfere biniyor** - dev karakterlerde yazı başın içinde kalıyor
-- [ ] **Duvar dokusu** - taş duvardaki çatlak çizgileri yapay duruyor
-- [ ] **Performans** - 4 oyunculu gerçek maçta ve orta seviye ekran kartında denenmedi; kasarsa hacimsel sis ve çimen sayısı düşürülecek
-- [ ] **Denenmedi** - gerçek Steam maçı, eski sürümden otomatik güncelleme
+karkaterlerin statları olsun TAB tuşuna basınca bu statları görebilelim her seviyeden sonra bu statlara verebileceğimiz xp puanımız olsun dalga aralarında dinlenme yerlerinde de oyuncular bu statları arttırabilsin 
 
-## Done
-- [x] ~~Mevcut PvP "Arena" modu olarak kalıyor, co-op "Hikaye Modu" olarak eklenecek~~ (2026-11-16, karar)
-- [x] ~~Yeni ana menü: canlı 3D giriş ekranı, ana menü, mod seçimi (Arena / Hikaye yakında), Arena lobisi~~ (2026-11-16)
-- [x] ~~v1.0: görsel yenileme (orman, efektler, karakter hareketi)~~ (2026-11-16)
-- [x] ~~v0.9: karakterler yeniden adlandırıldı~~ (2026-11-16)
-- [x] ~~v0.8: 52 karakter, bazuka, karakter seçim ekranı~~ (2026-11-16)
+her karkater elinde silahla başlmasın silahlar oyuna girmeden önce seçilebilsin 10 tür silah olsun oyun içinde seviye atladığımız zaman nadirlik düzeyien göre yeni silahlar silahlara güçlendirmeler megabonk oyunundaki silahlar gibi örneklerden ilham alabilirsin 
+
+karkaterin zıplama yüksekliği olabilir hızı olabilir mermi hızı olabilir mermi gücü saldırı gücü olabilir zırh olabilir kritik olabilir mermi sekmesi olabilir bunun gibi statlar ve ya yetenekler ekleyebilirsin 
+
+düşman çeşitliliğinde ise dalga dalga güçelnsin dedik sadece kuleye sadece oyunculara saldıran türde yaratıklar olsun 
+
+silah türlerinde 10 türe kadar yüksel silah güçlendirmelrinde ise özellikleri ve statları san bırakıyorum silah özelinde seviye atladığımız zaman o silaha özel yükseltmeler ve güçelndirmelerd e gelebilir 
+
+oyuncuların 5 slotluk bir envanteri olsun küçük ilk 3 slot silahlar ve ekipmanlar olsun diğer 2 slot ise kurulabilir dükkandan alınan itemler olsun ve ya canvarlardan düşen ekstra eşyalar için olsun 
