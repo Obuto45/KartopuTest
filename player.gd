@@ -164,7 +164,7 @@ func _ready() -> void:
 	_load_model()
 
 	# Bazuka ve kılıç kafa pivotuna bağlı (bakışla birlikte döner); sağ kol onlara uzanır.
-	gun = _prop("res://models/bazooka.glb", 0.95, Vector3(0, PI / 2, 0), Vector3(0.5, 0.5, 0.5))
+	gun = _prop("res://models/bazooka.glb", 0.95, Vector3(0, -PI / 2, 0), Vector3(0.5, 0.5, 0.5))
 	gun.position = Vector3(0.3, -0.33, -0.5)
 	sword = _prop("res://models/sword.glb", 1.05, Vector3(-PI / 2, 0, 0), Vector3(0.5, 0.1, 0.5)) # kabzadan tut
 	sword.position = Vector3(0.34, -0.36, -0.4)
@@ -177,6 +177,11 @@ func _ready() -> void:
 		cam.near = 0.05
 		look.add_child(cam)
 		cam.current = true
+		# Kendi gözünden: silahlar küçük ve uzakta, ekranın sağ altında dursun.
+		gun.scale = Vector3.ONE * 0.45
+		gun.position = Vector3(0.27, -0.26, -0.7)
+		sword.scale = Vector3.ONE * 0.6
+		sword.position = Vector3(0.3, -0.33, -0.5)
 		for mi in model.find_children("*", "MeshInstance3D", true, false):
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY # kendini görme, gölgen kalsın
 		for mi in gun.find_children("*", "MeshInstance3D", true, false) + sword.find_children("*", "MeshInstance3D", true, false):
@@ -184,7 +189,7 @@ func _ready() -> void:
 	else:
 		var col: Color = ch.color
 		name_lbl = Label3D.new()
-		name_lbl.position.y = 2.3 # vis'e değil gövdeye bağlı: ölünce devrilmez
+		name_lbl.position.y = 2.9 # vis'e değil gövdeye bağlı: ölünce devrilmez
 		name_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		name_lbl.pixel_size = 0.006 # dünya ölçeğinde: uzaklaştıkça oyuncuyla birlikte küçülür
 		name_lbl.font_size = 36
@@ -194,7 +199,7 @@ func _ready() -> void:
 		add_child(name_lbl)
 		# Can barı: ismin altında, her karede kameraya döner.
 		hp_bar = Node3D.new()
-		hp_bar.position.y = 2.1
+		hp_bar.position.y = 2.72
 		add_child(hp_bar)
 		var bg := QuadMesh.new()
 		bg.size = Vector2(0.84, 0.11)
@@ -490,7 +495,7 @@ func _shoot(n: int, spread: float, big: bool) -> void:
 	var r := get_world_3d().direct_space_state.intersect_ray(q)
 	if r:
 		target = r.position
-	var origin := cam.global_position + b.x * 0.3 - b.y * 0.33 - b.z * 1.05 # bazukanın namlusu
+	var origin := gun.global_position - b.z * 0.45 * gun.scale.x # bazukanın namlusu
 	var d := (target - origin).normalized()
 	for i in n:
 		rocket_n += 1
@@ -707,7 +712,7 @@ func gain(n: int) -> void:
 func say(text: String) -> void:
 	if quote_lbl == null:
 		quote_lbl = Label3D.new()
-		quote_lbl.position.y = 2.6
+		quote_lbl.position.y = 3.2
 		quote_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		quote_lbl.pixel_size = 0.007
 		quote_lbl.font_size = 40
@@ -814,9 +819,9 @@ func _animate(dt: float) -> void:
 	if flash > 0.0:
 		model_fx.albedo_color = Color(1, 0.1, 0.1, flash / 0.35 * 0.6)
 	elif buffs.has("armor") and bv("armor") < 1.0:
-		model_fx.albedo_color = Color(1.0, 0.85, 0.3, 0.35) # zırhlı
+		model_fx.albedo_color = Color(1.0, 0.85, 0.3, 0.15 + 0.08 * sin(Time.get_ticks_msec() * 0.01)) # zırhlı: hafif nabız
 	elif bt("power") > 0.0:
-		model_fx.albedo_color = Color(1.0, 0.45, 0.1, 0.3) # güçlü
+		model_fx.albedo_color = Color(1.0, 0.45, 0.1, 0.15 + 0.08 * sin(Time.get_ticks_msec() * 0.01)) # güçlü
 	else:
 		model_fx.albedo_color.a = 0.0
 
