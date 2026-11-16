@@ -57,6 +57,12 @@ func _ready() -> void:
 	Updater.status.connect(func(m): info.text = m)
 	multiplayer.peer_disconnected.connect(_on_peer_left)
 	_refresh()
+	if "--selftest" in OS.get_cmdline_user_args(): # yayın öncesi: paketlenmiş exe'de haritayı açıp bir kare kaydeder
+		Net.host_local()
+		_on_start()
+		await get_tree().create_timer(3.0).timeout
+		get_viewport().get_texture().get_image().save_png(OS.get_user_data_dir() + "/selftest.png")
+		get_tree().quit()
 
 
 func _setup_input() -> void:
