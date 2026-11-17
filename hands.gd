@@ -1,5 +1,5 @@
 ## Koddan yuvarlak hatlı, parmaklı eldiven el. Kök bilekte; avuç içi -X (sağ) / +X (sol), parmaklar -Z.
-## İç çerçeve "h": avuç -Y'ye bakar, parmak bükmek rotation.x < 0 (h, kökte Z etrafında çevrilir).
+## Başparmak ve işaret parmağı kökte +Y (üst) tarafında. İç çerçeve "h": avuç -Y'ye bakar, parmak bükmek rotation.x < 0 (h, kökte Z etrafında çevrilir).
 ## Parmak i: f<i> (kök eklem) → a (orta eklem) → b (uç eklem). Başparmak: thumb (taban) → a → b.
 extends RefCounted
 
@@ -43,14 +43,15 @@ static func make(color: Color, left: bool) -> Node3D:
 	h.name = "h"
 	h.rotation.z = PI / 2 if left else -PI / 2
 	root.add_child(h)
-	var sx := -1.0 if left else 1.0 # sol elde işaret parmağı yine başparmak tarafında kalsın
+	# Başparmak/işaret h'de +X*sx → kökte +Y (iki elde de üstte): sağ el gerçekten sağ, sol el onun aynası.
+	var sx := 1.0 if left else -1.0
 	var glove := _mat(color, 0.7)
 	var pad := _mat(color.darkened(0.18), 0.85) # avuç ve parmak ucu deri yaması
 	var cuff := _mat(color.darkened(0.5), 0.75)
 	# Avuç: basık elipsoit + eklem sırtı + topuk + serçe kenarı (köşeler yumuşak)
 	_mi(h, "palm", _sphere(), glove, Vector3(0, 0.001, -0.047), Vector3.ZERO, Vector3(0.080, 0.032, 0.098))
 	_mi(h, "palm_pad", _sphere(), pad, Vector3(0, -0.005, -0.050), Vector3.ZERO, Vector3(0.068, 0.026, 0.080))
-	_mi(h, "knuckle_bar", _capsule(0.0135, 0.090), glove, Vector3(0, 0.002, -0.081), Vector3(0, 0, PI / 2))
+	_mi(h, "knuckle_bar", _capsule(0.0135, 0.074), glove, Vector3(0, 0.002, -0.081), Vector3(0, 0, PI / 2))
 	_mi(h, "heel", _capsule(0.016, 0.078), glove, Vector3(-0.002 * sx, -0.001, -0.017), Vector3(0, 0, PI / 2), Vector3(1, 0.85, 1))
 	_mi(h, "edge", _capsule(0.0135, 0.075), glove, Vector3(-0.028 * sx, -0.002, -0.048), Vector3(PI / 2, 0, 0), Vector3(0.9, 1, 1))
 	_mi(h, "thenar", _sphere(), glove, Vector3(0.020 * sx, -0.011, -0.034), Vector3(0, 0.45 * sx, 0), Vector3(0.034, 0.026, 0.056))
@@ -63,7 +64,7 @@ static func make(color: Color, left: bool) -> Node3D:
 	h.add_child(wrist)
 	_mi(wrist, "cuff", _cyl(0.034, 0.041, 0.08), cuff, Vector3.ZERO, Vector3(-PI / 2, 0, 0))
 	_mi(wrist, "rim", _torus(0.037, 0.045), cuff, Vector3(0, 0, 0.038), Vector3(PI / 2, 0, 0))
-	_mi(wrist, "strap", _cyl(0.0365, 0.0375, 0.016), glove, Vector3(0, 0, -0.016), Vector3(-PI / 2, 0, 0))
+	_mi(wrist, "strap", _cyl(0.0365, 0.0375, 0.016), pad, Vector3(0, 0, -0.016), Vector3(-PI / 2, 0, 0))
 	var joints: Array[Node3D] = []
 	for i in 4:
 		var d: Array = FINGERS[i]
@@ -73,7 +74,7 @@ static func make(color: Color, left: bool) -> Node3D:
 		f.name = "f%d" % i
 		f.position = Vector3(d[0] * sx, 0.003, d[1])
 		h.add_child(f)
-		_mi(h, "knuckle%d" % i, _sphere(), glove, Vector3(d[0] * sx, 0.010, d[1] + 0.004), Vector3.ZERO, Vector3.ONE * r * 2.2)
+		_mi(h, "knuckle%d" % i, _sphere(), glove, Vector3(d[0] * sx, 0.008, d[1] + 0.003), Vector3.ZERO, Vector3(2.0, 1.6, 2.0) * r)
 		_chain(f, lens, [r, r * 0.94, r * 0.88], glove, pad, joints)
 	var t := Node3D.new()
 	t.name = "thumb"
@@ -124,7 +125,7 @@ static func update(hand: Node3D, dt: float) -> void:
 ## Eklem sırasıyla (f0 a b, f1 a b, ..., thumb a b) hedef açılar.
 static func _targets(hand: Node3D, name: String) -> Array:
 	var p: Dictionary = POSES[name]
-	var sx: float = hand.get_meta("sx", 1.0)
+	var sx: float = hand.get_meta("sx")
 	var out := []
 	for i in 4:
 		var f: Array = p.f[i]

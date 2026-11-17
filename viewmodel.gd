@@ -10,8 +10,9 @@ const WA := preload("res://weapon_anims.gd")
 const Weapons := preload("res://weapons.gd")
 const LAYER := 2
 const FOV := 62.0
-const ARM_SCALE := 0.58 # kol ~0,55 m: tipik tutuşta hafif bükük
-const ARM_POS := Vector3(0, -1.28, 0.11) # omuzlar kameranın ~0,28 m altında, biraz arkasında
+const ARM_SCALE := 0.72 # oyuncu modeliyle aynı (player.MODEL_SCALE): kol ~0,68 m, yay tutuşuna da yeter
+const SHOULDER_WIDEN := 0.15 # model biriminde, her omuz dışa
+const SHOULDERS := Vector3(0, -0.3, 0.0) # iki omuz ortası, kamera uzayında: göz hizasının altında, ekran dışında
 const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.16, -0.2, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
 
 var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
@@ -84,16 +85,22 @@ func _arms(path: String) -> void:
 		a.free() # dinlenme pozunda kalsın
 	m.scale = Vector3.ONE * ARM_SCALE
 	m.rotation.y = PI # modelin önü +Z
-	m.position = ARM_POS
 	add_child(m)
 	var sk: Skeleton3D = m.find_children("*", "Skeleton3D", true, false)[0]
+	var mid := (sk.get_bone_global_rest(sk.find_bone("UpperArm.L")).origin + sk.get_bone_global_rest(sk.find_bone("UpperArm.R")).origin) * 0.5
+	m.position += SHOULDERS - to_local(sk.global_transform * mid) # modeller arası iskelet farkı (ör. casual_bald öne kaymış)
 	for b in ["Head", "Neck", "UpperLeg.L", "UpperLeg.R", "Foot.L", "Foot.R", "Fist.L", "Fist.R"]:
 		var i := sk.find_bone(b)
 		if i >= 0:
 			sk.set_bone_pose_scale(i, Vector3.ONE * 0.001)
+	for s in ["L", "R"]: # omuzları açar: kollar ekrana ortadan değil alt köşelerden girsin
+		var i := sk.find_bone("Shoulder." + s)
+		var pb := sk.get_bone_global_rest(sk.get_bone_parent(i)).basis
+		sk.set_bone_pose_position(i, sk.get_bone_rest(i).origin + pb.inverse() * Vector3(SHOULDER_WIDEN * (1 if s == "L" else -1), 0, 0))
 	for mi: MeshInstance3D in m.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = 1 << (LAYER - 1)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.custom_aabb = AABB(Vector3(-3, -1, -3), Vector3(6, 5, 6)) # dinlenme kutusu kameranın arkasında kalıp kollar kırpılmasın
 		_no_shadow(mi)
 	var ik := TwoBoneIK3D.new()
 	sk.add_child(ik)
@@ -101,6 +108,7 @@ func _arms(path: String) -> void:
 	for k in 2:
 		var s: String = ["R", "L"][k]
 		var t := Marker3D.new() # manşetin içi: el kökünün biraz gerisi
+		t.name = "ArmTarget"
 		t.position = Vector3(0, 0, 0.04)
 		(hand_r if s == "R" else hand_l).add_child(t)
 		var pole := Marker3D.new() # dirsek aşağı-dışa
