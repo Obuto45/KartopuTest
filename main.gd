@@ -267,13 +267,27 @@ func _build_ui() -> void:
 		sb.set_border_width_all(3)
 		sb.set_corner_radius_all(6)
 		cell.add_theme_stylebox_override("panel", sb)
+		var icon := TextureRect.new() # bazuka ve kılıçta simge; ilk HUD karesinde doldurulur
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(icon)
 		var l := Label.new()
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		l.add_theme_font_size_override("font_size", 15)
 		cell.add_child(l)
+		var cdb := ProgressBar.new() # bekleme süresi: dolu = yeni kullanıldı, boşalınca hazır
+		cdb.show_percentage = false
+		cdb.max_value = 1.0
+		cdb.custom_minimum_size.y = 5
+		cdb.size_flags_vertical = Control.SIZE_SHRINK_END
+		cdb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cdb.add_theme_stylebox_override("background", StyleBoxEmpty.new())
+		cdb.add_theme_stylebox_override("fill", _sb(Color(1, 1, 1, 0.85), 2, 0))
+		cell.add_child(cdb)
 		bar.add_child(cell)
-		slots.append([sb, l])
+		slots.append([sb, l, icon, cdb, 0.0])
 	status_lbl = _full_label(20, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_BOTTOM)
 	status_lbl.offset_bottom = -150
 	hud.hide()
@@ -1100,9 +1114,21 @@ func _process(dt: float) -> void:
 		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
 		var texts := ["1\nBAZUKA", "2\nKALKAN\n" + sh, "3\nDUVAR\n" + _cd_text(me.wall_cd), "4\nKILIÇ",
 			"Q\n%s\n%s" % [me.ch.skill_name, _cd_text(me.skill_cd)]]
+		var left := [me.cd, me.shield_cd, me.wall_cd, me.sword_cd, me.skill_cd]
 		for i in 5:
-			slots[i][0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
-			slots[i][1].text = texts[i]
+			var s: Array = slots[i]
+			s[0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
+			if i == 0 or i == 3: # simgeli slot: yalnız tuş numarası, ad simgenin altında
+				if s[2].texture == null:
+					s[2].texture = weapon_icon("bazooka" if i == 0 else "sword")
+				s[1].text = "%d
+
+%s" % [i + 1, "BAZUKA" if i == 0 else "KILIÇ"]
+				s[1].vertical_alignment = VERTICAL_ALIGNMENT_TOP
+			else:
+				s[1].text = texts[i]
+			s[4] = maxf(s[4], left[i]) if left[i] > 0.0 else 0.0
+			s[3].value = left[i] / s[4] if s[4] > 0.0 else 0.0
 		slots[4][0].border_color = me.ch.color if me.skill_cd <= 0.0 else Color(0.5, 0.5, 0.5, 0.6) # Q hazırsa karakter renginde
 		var st := PackedStringArray()
 		for k in me.buffs:
