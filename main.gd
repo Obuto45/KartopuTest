@@ -829,18 +829,13 @@ func weapon_icon(id: String) -> Texture2D:
 	if _icons.has(id):
 		return _icons[id]
 	var W = load("res://weapons.gd")
-	var w: Dictionary = W.find(id)
-	var model: Node3D
-	if not w.get("prop", []).is_empty():
-		model = W.make_prop(w)
-	elif ResourceLoader.exists("res://models/%s.glb" % id):
-		model = load("res://models/%s.glb" % id).instantiate()
-		if id == "bazooka":
-			model.rotation.y = -PI / 2 # namlu -Z'ye
-		else:
-			model.rotation.x = -PI / 2
-	else:
+	if not ResourceLoader.exists("res://models/%s.glb" % id):
 		return null
+	var model: Node3D = W.make_prop({"id": id})
+	if id == "bazooka":
+		model.rotation.y = -PI / 2 # namlu -Z'ye
+	elif id == "sword":
+		model.rotation.x = -PI / 2
 	var vp := SubViewport.new()
 	vp.size = Vector2i(256, 160)
 	vp.transparent_bg = true

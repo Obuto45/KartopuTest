@@ -327,6 +327,11 @@ func _ready() -> void:
 	await _wait(1.2)
 	chk("yaylım roketleri yaratığa patlar", _names(td.hits).has("E1"), td.hits.size())
 
+	for w in Weapons.LIST: # tools/weapon_models.gd çıktısı içe aktarılmış olmalı
+		var m := Weapons.make_prop(w)
+		chk("%s modeli var" % w.id, not m.find_children("*", "MeshInstance3D", true, false).is_empty())
+		m.free()
+
 	Net.set_weapon(3)
 	chk("Net.set_weapon", Net.my_weapon == 3 and Net.weapons.get(1) == 1)
 	print("WEAPONS_TEST: %d/%d" % [good, total])
