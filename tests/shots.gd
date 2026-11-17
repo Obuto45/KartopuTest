@@ -108,7 +108,7 @@ func _fp_shots(me: Node) -> void:
 	var box := MeshInstance3D.new() # burnumuzun dibinde duvar: silah içine girmemeli
 	box.mesh = BoxMesh.new()
 	box.mesh.size = Vector3(3, 3, 0.2)
-	main_world(me).add_child(box)
+	me.get_tree().current_scene.add_child(box) # oyuncular düğümüne değil: orada her çocuk oyuncu sayılır
 	box.global_transform = me.look.global_transform.translated_local(Vector3(0, 0, -0.3))
 	await _wait(0.3)
 	await _shot("fp_wall")
@@ -117,10 +117,6 @@ func _fp_shots(me: Node) -> void:
 	me.inv[3] = {}
 	me.slot = 1
 	me.hp = me.max_hp
-
-
-func main_world(me: Node) -> Node:
-	return me.get_parent()
 
 
 ## Tower Defense ekranları: gerçek td.gd / player alanları varsa onlarla, yoksa sahtelerle.

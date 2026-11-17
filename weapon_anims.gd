@@ -206,17 +206,17 @@ static func _make(id: String) -> Dictionary:
 				"vis": [[0.0, "Rig/Weapon/tank", true], [0.4 * L, "Rig/Weapon/tank", false], [0.48 * L, "Rig/Weapon/tank", true]],
 				"poses": [[0.18 * L, "L", "grip"], [0.9 * L, "L", "support"]], "events": [[0.85 * L, "mag_in"], [L, "done"]]}
 		"bow":
-			var nock := Vector3(0, 0, 0.25)
+			var nock := Vector3(0, 0, 0.15) # el kameraya fazla yaklaşmasın
 			c["draw_string"] = {"len": 0.6, "tracks": {
-					"Rig/Weapon/string_top": [_k(0), _k(0.6, Z, Vector3(-0.49, 0, 0))],
-					"Rig/Weapon/string_bot": [_k(0), _k(0.6, Z, Vector3(0.49, 0, 0))],
+					"Rig/Weapon/string_top": [_k(0), _k(0.6, Z, Vector3(-0.31, 0, 0))],
+					"Rig/Weapon/string_bot": [_k(0), _k(0.6, Z, Vector3(0.31, 0, 0))],
 					"Rig/Weapon/arrow": [_k(0), _k(0.6, nock)],
 					"Rig/HandR": [_k(0), _k(0.6, nock)],
 					"Rig": [_k(0), _k(0.6, Vector3(-0.03, 0.01, 0), Vector3(0, 0, 0.12))]},
 				"poses": [[0.0, "R", "pinch"]]}
 			c["release"] = {"len": 0.3, "tracks": {
-					"Rig/Weapon/string_top": [_k(0, Z, Vector3(-0.49, 0, 0)), _k(0.04, Z, Vector3(0.06, 0, 0)), _k(0.1)],
-					"Rig/Weapon/string_bot": [_k(0, Z, Vector3(0.49, 0, 0)), _k(0.04, Z, Vector3(-0.06, 0, 0)), _k(0.1)],
+					"Rig/Weapon/string_top": [_k(0, Z, Vector3(-0.31, 0, 0)), _k(0.04, Z, Vector3(0.06, 0, 0)), _k(0.1)],
+					"Rig/Weapon/string_bot": [_k(0, Z, Vector3(0.31, 0, 0)), _k(0.04, Z, Vector3(-0.06, 0, 0)), _k(0.1)],
 					"Rig/HandR": [_k(0, nock), _k(0.08, nock + Vector3(0.04, 0.02, 0.04)), _k(0.3)],
 					"Rig": [_k(0, Vector3(-0.03, 0.01, 0), Vector3(0, 0, 0.12)), _k(0.06, Vector3(0, 0.01, 0.02), Vector3(0.05, 0, 0)), _k(0.3)]},
 				"vis": [[0.02, "Rig/Weapon/arrow", false]],
