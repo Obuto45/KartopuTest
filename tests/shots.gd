@@ -61,6 +61,68 @@ func _fake(src: String) -> Node:
 	return s.new()
 
 
+## Kendi gözünden silah animasyonları: her kare klibin anlamlı anında.
+func _fp_hold(me: Node, i: int, it: Dictionary) -> void:
+	me.inv[i] = it
+	me.slot = i + 1
+	me._sync_held()
+	await _wait(0.5) # çıkarma klibi
+	me.busy = ""
+
+
+func _fp_shots(me: Node) -> void:
+	await _fp_hold(me, 1, {"kind": "weapon", "id": "pistol", "count": 1, "lvl": 1, "ammo": 3})
+	me.start_reload()
+	await _wait(0.6)
+	await _shot("fp_reload")
+	await _wait(1.0)
+	await _fp_hold(me, 3, {"kind": "item", "id": "potion", "count": 2, "lvl": 1})
+	me.hp = 40
+	me._td_use(true)
+	await _wait(0.55)
+	await _shot("fp_potion")
+	await _wait(0.6)
+	await _fp_hold(me, 1, {"kind": "weapon", "id": "bow", "count": 1, "lvl": 1, "ammo": 1})
+	me._td_use(true)
+	await _wait(0.8)
+	await _shot("fp_bow")
+	me._release_throw()
+	await _wait(0.8)
+	await _fp_hold(me, 1, {"kind": "weapon", "id": "grenade", "count": 1, "lvl": 1, "ammo": 1})
+	me._td_use(true)
+	await _wait(0.35)
+	await _shot("fp_grenade")
+	me._release_throw()
+	await _wait(1.0)
+	await _fp_hold(me, 1, {"kind": "weapon", "id": "sniper", "count": 1, "lvl": 1, "ammo": 5})
+	Input.action_press("aim")
+	await _wait(0.4)
+	await _shot("fp_scope")
+	Input.action_release("aim")
+	await _fp_hold(me, 1, {"kind": "weapon", "id": "shotgun", "count": 1, "lvl": 1, "ammo": 2})
+	me.start_reload()
+	await _wait(0.5)
+	await _shot("fp_shotgun")
+	await _wait(2.0)
+	await _fp_hold(me, 1, {"kind": "weapon", "id": "smg", "count": 1, "lvl": 1, "ammo": 30})
+	var box := MeshInstance3D.new() # burnumuzun dibinde duvar: silah içine girmemeli
+	box.mesh = BoxMesh.new()
+	box.mesh.size = Vector3(3, 3, 0.2)
+	main_world(me).add_child(box)
+	box.global_transform = me.look.global_transform.translated_local(Vector3(0, 0, -0.3))
+	await _wait(0.3)
+	await _shot("fp_wall")
+	box.queue_free()
+	me.inv[1] = {}
+	me.inv[3] = {}
+	me.slot = 1
+	me.hp = me.max_hp
+
+
+func main_world(me: Node) -> Node:
+	return me.get_parent()
+
+
 ## Tower Defense ekranları: gerçek td.gd / player alanları varsa onlarla, yoksa sahtelerle.
 func _td_shots(main: Node) -> void:
 	main._pick_mode("td")
@@ -78,6 +140,7 @@ func _td_shots(main: Node) -> void:
 	var real_td := get_tree().get_first_node_in_group("td")
 	if real_td:
 		await _shot("td_real") # gerçek td.gd ile ilk mola
+		await _fp_shots(main.players.get_node("1"))
 		real_td.remove_from_group("td")
 		real_td.queue_free()
 	var td := _fake(FAKE_TD) # sahnelenen durumlar için alanları elle sürülen sahte TD

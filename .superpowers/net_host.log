@@ -1,0 +1,14 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+Setting breakpad minidump AppID = 480
+SteamInternal_SetMinidumpSteamID:  Caching Steam ID:  76561198863056715 [API loaded no]
+HOST [OK] iki oyuncu, TD kuruldu  
+HOST [OK] iki oy -> dalga başladı  oylar {  }
+HOST [OK] istemcinin silahı eşitlendi (tabanca)  [{ "kind": "weapon", "id": "pistol", "count": 1, "lvl": 1, "ammo": 12 }, {  }, {  }, {  }, {  }]
+HOST [OK] istemci yaratığa hasar verdi  
+HOST [OK] istemcinin doldurması host'ta oynuyor  reload
+HOST [OK] istemci duvar aldı: para düştü  para 175
+HOST [OK] istemci yapıyı kurdu  
+HOST [OK] takım seviye atladı  seviye 2
+HOST [OK] istemcinin seviyesi ve kart seçimi geri geldi  sv 2 ups {  }
+TD_NET HOST: 9/9

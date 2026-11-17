@@ -79,6 +79,8 @@ func equip(new_id: String) -> void:
 	visible = id != ""
 	if id == "":
 		ap.stop()
+		if ap.has_animation_library(""):
+			ap.remove_animation_library("") # silahsız: eski klipler "Rig/Weapon" arayıp uyarmasın
 		return
 	var mid := WA.model_id(id)
 	weapon = Weapons.make_prop({"id": mid}) if mid != "" else (_potion() if id == "item:potion" else Node3D.new())

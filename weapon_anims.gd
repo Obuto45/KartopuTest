@@ -167,7 +167,7 @@ static func _make(id: String) -> Dictionary:
 			c["dry"] = _dry({})
 			var tilt := [Vector3(0, 0.03, 0), Vector3(0.1, 0, -0.5)]
 			var port := Vector3(0, -0.04, 0.32) # pompadan fişek yuvasına sol el farkı
-			var pocket := Vector3(-0.05, -0.22, 0.42)
+			var pocket := Vector3(-0.05, -0.3, 0.26) # aşağı iner, kameraya yaklaşmaz
 			c["reload_start"] = {"len": 0.25, "tracks": {"Rig": [_k(0), _k(0.25, tilt[0], tilt[1])],
 				"HandL": [_k(0), _k(0.25, pocket)]}, "poses": [[0.1, "L", "pinch"]], "events": [[0.25, "done"]]}
 			c["shell"] = {"len": 0.45, "tracks": {
@@ -267,7 +267,7 @@ static func _make(id: String) -> Dictionary:
 					"HandL": [_k(0), _k(0.1, push, Vector3(0.3, 0, 0)), _k(0.25)]},
 				"poses": [[0.0, "R", "open"], [0.0, "L", "open"]], "events": [[0.25, "done"]]}
 		"item:potion":
-			var mouth := Vector3(-0.12, 0.13, 0.2)
+			var mouth := Vector3(-0.1, 0.08, 0.12)
 			var tip := Vector3(0.87, 0, -0.2) # 50° eğik
 			c["drink"] = {"len": 1.0, "tracks": {
 					"Rig": [_k(0), _k(0.3, mouth, tip * 0.6), _k(0.45, mouth, tip), _k(0.7, mouth, tip),
