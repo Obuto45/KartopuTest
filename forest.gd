@@ -3,6 +3,7 @@ extends Node3D
 ## Çarpışan her şey sabit tohumla (rng) ve aynı sırayla yerleşir -> herkeste aynı harita.
 ## Yalnızca görüntü olan her şey ayrı üreteçten (_vis) gelir: rng sırasına dokunmaz.
 
+const ChickenScript := preload("res://chicken.gd")
 const HALF := 30.0 # oyun alanı 60 x 60 m
 const MASK_HALF := 50.0 # zemin maskesinin kapladığı yarı kenar (m)
 const MASK_N := 128
@@ -121,6 +122,7 @@ func _ready() -> void:
 		hills.append([Transform3D(Basis(Vector3.UP, _vis.randf() * TAU).scaled(Vector3(75, _vis.randf_range(22, 40), 75)),
 			Vector3(cos(a) * d, -6, sin(a) * d)), Color(0.1, 0.2, 0.12)])
 	_multimesh(_blob_mesh(14, 6, 0.25, 1.2), hills, leaf_mat, false)
+	_chickens()
 
 
 func _environment() -> void:
@@ -484,6 +486,20 @@ func _ambient() -> void:
 		p.visibility_aabb = AABB(Vector3(-HALF - 3, -10, -HALF - 3), Vector3(HALF * 2 + 6, 16, HALF * 2 + 6))
 		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(p)
+
+
+## Süs tavukları: birkaç tavuk, her birinin peşinde bir iki civciv (chicken.gd, yalnızca görüntü).
+func _chickens() -> void:
+	for i in 9:
+		var home := _rand_ground(_vis) * 0.9
+		if Vector2(home.x, home.z).length() < 7.0:
+			continue
+		for j in 1 + (_vis.randi() % 3 if i < 4 else 0): # ilk dördü civcivli
+			var c: Node3D = ChickenScript.new()
+			c.chick = j > 0
+			c.rng.seed = _vis.randi()
+			c.position = home + Vector3(_vis.randf_range(-1, 1), 0, _vis.randf_range(-1, 1)) * float(j)
+			add_child(c)
 
 
 ## items: [[Transform3D, Color], ...] -> tek çizimde binlerce örnek.

@@ -327,6 +327,9 @@ func _load_model() -> void:
 	model_fx.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	model_fx.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	model_fx.albedo_color = Color(1, 0.1, 0.1, 0)
+	var outline := ShaderMaterial.new() # koyu dış çizgi: karakter ormandan ayrışsın
+	outline.shader = preload("res://shaders/outline.gdshader")
+	model_fx.next_pass = outline
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		mi.material_overlay = model_fx
 	anim = model.find_children("*", "AnimationPlayer", true, false)[0]
