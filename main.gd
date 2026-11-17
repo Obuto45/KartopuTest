@@ -6,6 +6,9 @@ const ForestScript := preload("res://forest.gd")
 const ExplosionScript := preload("res://explosion.gd")
 const Chars := preload("res://characters.gd")
 const TdUi := preload("res://td_ui.gd")
+const Profile := preload("res://profile.gd")
+const Balance := preload("res://balance.gd")
+const UPGRADES := {"tower_hp": "Kule Zırhı", "start_money": "Başlangıç Altını", "reroll": "Yeniden Çekme", "banish": "Eleme"}
 const HP_W := 316.0 # can barının iç genişliği (px)
 const STATUS := {"stun": "SERSEMLEDİN", "blind": "KÖR OLDUN", "silence": "SUSTURULDUN", "confuse": "YÖNLER TERS",
 	"slow": "YAVAŞLADIN", "vuln": "İŞARETLENDİN", "burn": "YANIYORSUN", "haste": "HIZLI", "power": "GÜÇLÜ ROKET",
@@ -36,6 +39,16 @@ var weapon_wrap: ColorRect
 var weapon_grid: GridContainer
 var weapon_list: Array = TdUi.consts("res://weapons.gd").get("LIST", []) # weapons.gd yoksa boş
 var weapon_sel := 0 # Net.my_weapon yoksa yerel seçim
+var dev := OS.is_debug_build() or "--dev" in OS.get_cmdline_user_args() # Yerel Host/Katıl düğmeleri
+var diff_id := "normal" # TD zorluğu (host seçer, istemciler set_opts ile görür)
+var endless := false
+var diff_opt: OptionButton
+var diff_hint: Label
+var endless_chk: CheckBox
+var td_box: VBoxContainer # yalnız TD lobisinde: zorluk + sonsuz mod
+var find_box: VBoxContainer
+var growth_box: VBoxContainer
+var _pf_names := {} # Profile'ın var olan statik fonksiyonları (iskelet/gerçek farkı)
 var info: Label
 var members: Label
 var start_btn: Button
@@ -415,6 +428,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	_txt(mv, "4 kişilik bazuka kaosu", 18, 0.75)
 	mv.add_child(_gap(36))
 	_big(mv, "OYNA", _show_page.bind("modes"))
+	_big(mv, "GELİŞİM", _open_growth)
 	char_btn = _big(mv, "", _open_chars)
 	_update_char_btn()
 	_big(mv, "AYARLAR", _open_settings)
@@ -426,7 +440,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	# Mod seçimi: iki büyük kart
 	var modes := _page("modes")
 	var mc := VBoxContainer.new()
-	mc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mc.alignment = BoxContainer.ALIGNMENT_CENTER
 	mc.add_theme_constant_override("separation", 26)
 	modes.add_child(mc)
@@ -441,6 +455,15 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
 		"Rapunzel'in kulesini savun. 10 dalga yaratık, seviye atladıkça kart seç, molada mağazadan duvar, tuzak ve taret al.",
 		"▶  KULEYİ SAVUN", _pick_mode.bind("td"))
+	var quick := HBoxContainer.new()
+	quick.alignment = BoxContainer.ALIGNMENT_CENTER
+	quick.add_theme_constant_override("separation", 20)
+	mc.add_child(quick)
+	var solo_b := _btn(quick, "⚡  TEK BAŞINA OYNA  (Steam gerekmez)", _solo_td)
+	solo_b.custom_minimum_size = Vector2(520, 60)
+	solo_b.add_theme_font_size_override("font_size", 22)
+	var find_b := _btn(quick, "🔍  Açık Lobi Bul", _open_find)
+	find_b.custom_minimum_size = Vector2(300, 60)
 	var back := _btn(mc, "◀  Geri", _show_page.bind("main"))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	back.custom_minimum_size.x = 220
@@ -455,21 +478,46 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 9)
 	panel.add_child(v)
-	_btn(v, "Steam Lobisi Kur", Net.host_steam)
+	var hrow := HBoxContainer.new()
+	hrow.add_theme_constant_override("separation", 9)
+	v.add_child(hrow)
+	_btn(hrow, "Steam Lobisi Kur", Net.host_steam).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var pub := CheckBox.new()
+	pub.text = "Herkese açık"
+	pub.toggled.connect(func(on: bool): Net.public_lobby = on)
+	hrow.add_child(pub)
 	_btn(v, "Arkadaşlar (davet et / lobisine katıl)", _show_friends)
 	var scroll := ScrollContainer.new()
 	friends_box = VBoxContainer.new()
 	friends_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(friends_box)
 	v.add_child(scroll)
-	_btn(v, "Karakter Değiştir", _open_chars)
-	weapon_btn = _btn(v, "", _open_weapons)
+	var crow := HBoxContainer.new()
+	crow.add_theme_constant_override("separation", 9)
+	v.add_child(crow)
+	_btn(crow, "Karakter Değiştir", _open_chars).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	weapon_btn = _btn(crow, "", _open_weapons)
+	weapon_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	td_box = VBoxContainer.new()
+	td_box.add_theme_constant_override("separation", 4)
+	v.add_child(td_box)
+	diff_opt = OptionButton.new()
+	for k in Balance.DIFFS:
+		diff_opt.add_item(Balance.DIFFS[k].name)
+	diff_opt.item_selected.connect(_pick_diff)
+	td_box.add_child(diff_opt)
+	diff_hint = _lbl(td_box, "", 14)
+	endless_chk = CheckBox.new()
+	endless_chk.text = "Sonsuz Mod"
+	endless_chk.toggled.connect(func(on: bool): endless = on; _sync_opts())
+	td_box.add_child(endless_chk)
 	start_btn = _btn(v, "▶  Oyunu Başlat (host)", _on_start)
 	start_btn.custom_minimum_size.y = 48
 	members = _lbl(v, "", 16)
 	_btn(v, "Lobiden Çık", Net.leave)
 	var test := HBoxContainer.new()
 	test.add_theme_constant_override("separation", 9)
+	test.visible = dev
 	v.add_child(test)
 	var tl := _lbl(test, "Tek PC testi:", 14)
 	tl.modulate = Color(1, 1, 1, 0.6)
@@ -478,6 +526,34 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lv.add_child(_gap(6))
 	_btn(lv, "◀  Geri", _show_page.bind("modes"))
+
+	# Açık lobi bul
+	var fv := _column(_page("find"))
+	_logo(fv, "LOBİ BUL", 64)
+	_txt(fv, "Herkese açık, senin sürümünde lobiler.", 17, 0.75)
+	var fs := ScrollContainer.new()
+	fs.custom_minimum_size.y = 300
+	fs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	fv.add_child(fs)
+	find_box = VBoxContainer.new()
+	find_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fs.add_child(find_box)
+	_btn(fv, "↻  Yenile", _open_find)
+	_btn(fv, "◀  Geri", _show_page.bind("modes"))
+	Net.lobbies_found.connect(_on_lobbies)
+
+	# Gelişim: Altın Saç, kalıcı yükseltmeler, açılımlar
+	var gv := _column(_page("growth"))
+	_logo(gv, "GELİŞİM", 64)
+	var gs := ScrollContainer.new()
+	gs.custom_minimum_size.y = 430
+	gs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	gv.add_child(gs)
+	growth_box = VBoxContainer.new()
+	growth_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	growth_box.add_theme_constant_override("separation", 6)
+	gs.add_child(growth_box)
+	_btn(gv, "◀  Geri", _show_page.bind("main"))
 
 	# Her sayfada görünenler: alt bilgi satırı, sürüm, gelen davetler
 	info = _txt(ui, "", 15, 0.8)
@@ -543,7 +619,9 @@ func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String
 	_logo(v, title, 46, c)
 	var t := _txt(v, tag, 18, 0.8)
 	t.add_theme_color_override("font_color", c.lightened(0.4))
-	_txt(v, desc, 17, 0.9).size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var dl := _txt(v, desc, 17, 0.9)
+	dl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dl.custom_minimum_size.x = 340 # sıfır genişlikte sarma, kutuyu dev yüksekliğe şişirmesin
 	var b := _btn(v, btn, cb if cb.is_valid() else func(): pass)
 	b.custom_minimum_size.y = 54
 	b.add_theme_font_size_override("font_size", 20)
@@ -577,6 +655,8 @@ func set_mode(m: String) -> void:
 	lobby_sub.text = MODES[mode][1]
 	start_btn.text = MODES[mode][2]
 	weapon_btn.visible = mode == "td"
+	td_box.visible = mode == "td"
+	_update_diff_ui()
 	_update_weapon_btn()
 	_refresh()
 
@@ -594,6 +674,8 @@ func _show_page(n: String) -> void:
 	tw.tween_property(shade, "modulate:a", 0.25 if n == "intro" else (0.75 if n == "modes" else 1.0), 0.6)
 	tw.tween_property(self, "cam_k", 0.0 if n == "intro" else 1.0, 1.4)
 	var first := p.get_child(0) as Control # içerik soldan kayarak gelsin
+	if n == "modes": # sarmalı etiketler kutuyu şişirip ekran dışına itebiliyor: tam ekrana geri çek
+		first.set_anchors_and_offsets_preset.call_deferred(Control.PRESET_FULL_RECT)
 	tw.tween_property(first, "position:x", first.position.x, 0.4).from(first.position.x - 50)
 	for b: Button in p.find_children("*", "Button", true, false): # klavye / gamepad ile gezilebilsin
 		if b.visible and not b.disabled and b.focus_mode != Control.FOCUS_NONE:
@@ -892,6 +974,7 @@ func _my_weapon() -> int:
 
 ## Kartlar her açılışta yeniden kurulur: 10 kart, seçili olan vurgulu.
 func _open_weapons() -> void:
+	_fix_weapon()
 	for c in weapon_grid.get_children():
 		c.queue_free()
 	var rar: Dictionary = TdUi.consts("res://weapons.gd").get("RARITY", {})
@@ -916,7 +999,12 @@ func _open_weapons() -> void:
 		for st in ["normal", "pressed", "focus"]:
 			b.add_theme_stylebox_override(st, sb)
 		b.add_theme_stylebox_override("hover", sh)
-		b.pressed.connect(_pick_weapon.bind(i))
+		var locked := not _unlocked("weapon:" + str(w.get("id", "")))
+		if locked:
+			b.disabled = true
+			b.modulate = Color(0.5, 0.5, 0.55)
+		else:
+			b.pressed.connect(_pick_weapon.bind(i))
 		weapon_grid.add_child(b)
 		var m := MarginContainer.new()
 		m.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -939,6 +1027,9 @@ func _open_weapons() -> void:
 		d.modulate.a = 0.85
 		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		d.clip_text = true
+		if locked:
+			var pr = _pf("unlock_progress", ["weapon:" + str(w.get("id", ""))], null)
+			d.text = "🔒 KİLİTLİ" + ("\nİlerleme: %d/%d" % [pr[0], pr[1]] if pr is Array and pr.size() == 2 else "\nKazanarak aç.")
 		for st in bars:
 			var row := HBoxContainer.new()
 			cv.add_child(row)
@@ -974,6 +1065,141 @@ func _pick_weapon(i: int) -> void:
 	_update_weapon_btn()
 	_refresh()
 	weapon_wrap.hide()
+
+
+# ---------- Profil, zorluk, lobi bul, gelişim ----------
+
+## Profile'ın gerçek API'si birleşince çalışsın, iskeletle çökmesin: fonksiyon yoksa varsayılan döner.
+func _pf(fn: String, args := [], def = null) -> Variant:
+	if _pf_names.is_empty():
+		var pg: GDScript = Profile
+		for m in pg.get_script_method_list():
+			_pf_names[m.name] = true
+	var pg: GDScript = Profile
+	return pg.callv(fn, args) if _pf_names.has(fn) else def
+
+
+func _unlocked(id: String) -> bool:
+	return bool(_pf("is_unlocked", [id], true))
+
+
+func _diff_keys() -> Array:
+	return Balance.DIFFS.keys()
+
+
+## "🔒 Normal'i kazan": Balance.DIFFS[...].unlock = "win_<önceki>".
+func _diff_lock_text(k: String) -> String:
+	var u: String = Balance.DIFFS[k].get("unlock", "")
+	return "🔒 %s'i kazan" % Balance.DIFFS[u.trim_prefix("win_")].name if u.begins_with("win_") and Balance.DIFFS.has(u.trim_prefix("win_")) else "🔒 Kilitli"
+
+
+func _update_diff_ui() -> void:
+	var keys := _diff_keys()
+	for i in keys.size():
+		var ok := _unlocked("diff:" + keys[i])
+		diff_opt.set_item_disabled(i, not ok)
+		diff_opt.set_item_text(i, Balance.DIFFS[keys[i]].name + ("" if ok else "  " + _diff_lock_text(keys[i])))
+	diff_opt.select(maxi(keys.find(diff_id), 0))
+	var host := not Net.online() or multiplayer.is_server()
+	diff_opt.disabled = not host
+	endless_chk.disabled = not host or not _unlocked("mode:endless")
+	endless_chk.set_pressed_no_signal(endless)
+	endless_chk.text = "Sonsuz Mod" if _unlocked("mode:endless") else "Sonsuz Mod  🔒 Kilitli"
+	diff_hint.text = "" if host else "Zorluğu host seçer."
+	diff_hint.visible = diff_hint.text != ""
+
+
+func _pick_diff(i: int) -> void:
+	diff_id = _diff_keys()[i]
+	_sync_opts()
+
+
+func _sync_opts() -> void:
+	_refresh()
+
+
+@rpc("authority", "call_remote", "reliable")
+func set_opts(d: String, e: bool) -> void:
+	diff_id = d if Balance.DIFFS.has(d) else "normal"
+	endless = e
+	_update_diff_ui()
+
+
+func _solo_td() -> void:
+	if Net.online():
+		Net.leave()
+	set_mode("td")
+	_on_start()
+
+
+func _open_find() -> void:
+	_show_page("find")
+	for c in find_box.get_children():
+		c.queue_free()
+	if not Net.steam_ok:
+		_lbl(find_box, "Lobi bulmak için Steam açık olmalı. Steam'siz oynamak için TEK BAŞINA OYNA'yı kullan.", 17)
+		return
+	_lbl(find_box, "Aranıyor…", 17)
+	Net.find_lobbies()
+
+
+func _on_lobbies(list: Array) -> void:
+	for c in find_box.get_children():
+		c.queue_free()
+	if list.is_empty():
+		_lbl(find_box, "Açık lobi yok — sen kur!", 18)
+	for l in list:
+		var d: String = Balance.DIFFS.get(l.diff, {}).get("name", "-")
+		var m: String = MODES.get(l.mode, ["?"])[0]
+		_btn(find_box, "▶ %s  •  %s  •  %s  •  %d/4" % [l.name, m, d, l.n], Net.join_lobby.bind(l.id))
+
+
+func _open_growth() -> void:
+	_show_page("growth")
+	for c in growth_box.get_children():
+		c.queue_free()
+	var gold = _pf("gold", [], null)
+	if gold == null:
+		_lbl(growth_box, "Yakında", 22)
+		return
+	_lbl(growth_box, "Altın Saç: %d" % int(gold), 24).add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	for id in UPGRADES:
+		var lvl := int(_pf("upgrade_level", [id], 0))
+		var mx := int(_pf("upgrade_max", [id], 5))
+		var cost := int(_pf("upgrade_cost", [id], [60, 120, 200, 300, 450][clampi(lvl, 0, 4)] if lvl < mx else -1))
+		var b := _btn(growth_box, "%s  %d/%d  —  %s" % [UPGRADES[id], lvl, mx, "AZAMİ" if cost < 0 else "Satın Al (%d)" % cost], func():
+			if _pf("buy_upgrade", [id], false):
+				Sfx.play2d(Sfx.hurt, -6.0)
+			_open_growth())
+		b.disabled = cost < 0 or cost > int(_pf("gold", [], 0)) or not _pf_names.has("buy_upgrade")
+	_lbl(growth_box, "Açılımlar", 20)
+	var rows := []
+	for w in weapon_list:
+		rows.append(["weapon:" + str(w.get("id", "")), str(w.get("name", "?"))])
+	for k in _diff_keys():
+		if Balance.DIFFS[k].get("unlock", "") != "":
+			rows.append(["diff:" + k, "Zorluk: " + Balance.DIFFS[k].name])
+	rows.append(["mode:endless", "Sonsuz Mod"])
+	for r in rows:
+		_lbl(growth_box, _unlock_line(r[0], r[1]), 15)
+
+
+## "✔ Ad" ya da "🔒 Ad  (ilerleme 3/10)".
+func _unlock_line(id: String, name: String) -> String:
+	if _unlocked(id):
+		return "✔ " + name
+	var pr = _pf("unlock_progress", [id], null)
+	return "🔒 " + name + ("  (%d/%d)" % [pr[0], pr[1]] if pr is Array and pr.size() == 2 else "")
+
+
+## Seçili silah kilitliyse varsayılan tabancaya düş.
+func _fix_weapon() -> void:
+	var i := _my_weapon()
+	if i >= 0 and i < weapon_list.size() and not _unlocked("weapon:" + str(weapon_list[i].get("id", ""))):
+		for j in weapon_list.size():
+			if weapon_list[j].get("id", "") == "pistol":
+				_pick_weapon(j)
+				return
 
 
 func _weapon_name(i: int) -> String:
@@ -1129,11 +1355,16 @@ func _refresh() -> void:
 	members.text = "Lobidekiler:\n" + "\n".join(lines) if Net.online() else ""
 	start_btn.disabled = not (Net.online() and multiplayer.is_server())
 	if not Net.online():
-		start_btn.text = "Önce lobi kur ya da Yerel Host"
+		start_btn.disabled = mode != "td"
+		start_btn.text = "▶  Tek Başına Başla" if mode == "td" else "Önce lobi kur (Steam)"
 	elif not multiplayer.is_server():
 		start_btn.text = "Host'un başlatması bekleniyor…"
 	else:
 		start_btn.text = MODES.get(mode, MODES.arena)[2]
+	if Net.online() and multiplayer.is_server():
+		set_opts.rpc(diff_id, endless)
+		Net.set_meta_data(mode, diff_id)
+	_update_diff_ui()
 	if Net.online() and world == null and page in ["intro", "main", "modes"]:
 		_show_page("lobby")
 
@@ -1216,11 +1447,14 @@ func _unhandled_input(e: InputEvent) -> void:
 # ---------- Oyun akışı ----------
 
 func _on_start() -> void:
+	if not Net.online():
+		Net.solo() # Steam'siz tek kişilik: OfflineMultiplayerPeer zaten sunucu, call_local rpc çalışır
 	var ids := [1]
 	ids.append_array(Array(multiplayer.get_peers()))
 	ids.sort()
 	if mode == "td":
-		start_td.rpc(ids)
+		_fix_weapon()
+		start_td.rpc(ids, {"difficulty": diff_id, "endless": endless and _unlocked("mode:endless")})
 	else:
 		start_game.rpc(ids)
 
