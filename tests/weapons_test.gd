@@ -312,7 +312,10 @@ func _ready() -> void:
 	me._td_use(true)
 	var kept: bool = not me.inv[4].is_empty() # can doluyken iksir harcanmaz
 	me.hp = 40
+	me._sync_held()
+	me.busy = ""
 	me._td_use(true)
+	await _wait(1.1) # içme klibi: can yudumda gelir
 	chk("can iksiri: 50 can, tek kullanım", kept and me.hp == 90 and me.inv[4].is_empty(), me.hp)
 	me.add_item({"kind": "item", "id": "bomb"})
 	td.hits.clear()
@@ -401,12 +404,13 @@ func _ready() -> void:
 	me.slot = 4
 	me._sync_held()
 	me.busy = ""
+	me.max_hp = int(me.stats.hp) # _reset statları sıfırlar; can tavanı eşleşsin
 	me.hp = 20
 	me._td_use(true)
 	await _wait(0.2)
 	chk("iksir: hemen iyileştirmez, içiyor", me.hp == 20 and me.busy == "drink", [me.hp, me.busy])
 	await _wait(0.5)
-	chk("yudumda +50 ve bir şişe eksilir", me.hp == mini(70, me.max_hp) and me.inv[3].count == 1, [me.hp, me.inv[3]])
+	chk("yudumda +50 ve bir şişe eksilir", me.hp == mini(70, me.max_hp) and me.inv[3].count == 1, [me.hp, me.max_hp, me.inv[3]])
 	await _wait(0.5)
 	chk("içme bitti", me.busy == "", me.busy)
 	me.inv[3] = {"kind": "build", "id": "wall", "count": 2, "lvl": 1}
