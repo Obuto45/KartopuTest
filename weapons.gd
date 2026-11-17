@@ -38,6 +38,7 @@ const STATS := [
 ]
 const STAT_TIERS := [["common", 1], ["rare", 2], ["epic", 3]] # stat kartı: nadirlik -> kaç adım
 const POINTS_PER_LEVEL := 1
+const EVO_WEIGHT := 40.0 # evrim kartı ağırlığı (Efsanevi taban 4: hazırsa neredeyse her çekimde çıkar)
 const OWN_BOOST := 2.5 # sahip olunan silahın yükseltmeleri bu kat sık çıkar (MegaBonk)
 const BURN_T := 3.0 # silah yanığı süresi (sn)
 const CHAIN_R := 9.0 # sekme: bu mesafedeki sıradaki yaratığa
@@ -110,11 +111,36 @@ const UPS := {
 		{"id": "cluster", "name": "Salkım", "desc": "+1 bomba", "max": 2, "rarity": "epic", "add": {"n": 1, "spread": 0.12}},
 		{"id": "napalm", "name": "Napalm", "desc": "Yakar: +4 hasar/sn", "max": 3, "rarity": "rare", "add": {"fire": 4.0}}],
 }
-## Karaktere özel yükseltmeler (Q yeteneği ve pasifler). need: yetenekte bu anahtar varsa sunulur. Kart: "char:<id>".
-## Silah evrimleri: silah id -> {"name", "desc", "needs": {up_id: seviye}, "stat": [stat_id, eşik], ...etki alanları}.
-## Koşul tutunca havuza "evo" türünde Efsanevi kart girer (pool / apply_card imzaları değişmez).
-const EVOS := {}
+## Silah evrimleri: silah id -> {"name", "desc", "needs": {yükseltme id: en az seviye}, "stat": [stat id, eşik],
+## "add"/"mul" (UPS gibi), "color", "fx": etki alanları}. Koşul tutunca havuza "evo" türünde Efsanevi kart girer
+## (pool / apply_card imzaları değişmez); seçilince ups["evo:<silah>"] = 1 ve envanter öğesine "evo": true yazılır.
+## fx: mini [adet, hasar oranı, yarıçap] patlama sonrası halka; crit_chain kritik vuruşa ek sekme;
+## ignite yanık yayılma yarıçapı (m); death_blast [yarıçap, hasar oranı] yanarken ölen yaratık patlar.
+## Seviye eşikleri bilerek max'ın altında (2): dalga 6-9'da erişilebilir kalsın (XP eğrisi: ~9-10 seviye).
+const EVOS := {
+	"bazooka": {"name": "Kıyamet Bazukası", "desc": "Her patlama 3 mini patlama bırakır (%40 hasar, 1,5 m).",
+		"needs": {"blast": 2, "reload": 2}, "stat": ["shot_power", 1.3], "fx": {"mini": [3, 0.4, 1.5]}},
+	"pistol": {"name": "Altıpatlar Lordu", "desc": "Kritik vuruş zincire 2 sekme ekler.",
+		"needs": {"rico": 2, "hair": 2}, "stat": ["crit", 0.17], "color": Color(1.0, 0.35, 0.3), "fx": {"crit_chain": 2}},
+	"shotgun": {"name": "Kıyım Pompalısı", "desc": "+4 saçma, saçmalar bir yaratık daha deler.",
+		"needs": {"pellets": 2, "slug": 2}, "stat": ["attack", 1.24], "color": Color(1.0, 0.6, 0.2), "add": {"n": 4, "pierce": 1}},
+	"smg": {"name": "Zincir Makinelisi", "desc": "Mermiler seker; yanığı da taşır.",
+		"needs": {"mag": 2, "burn": 2}, "stat": ["attack", 1.24], "color": Color(1.0, 0.5, 0.15), "add": {"bounce": 1}},
+	"sniper": {"name": "Ölüm Işını", "desc": "+4 delme ve 2 zincir sekme.",
+		"needs": {"ap": 2, "cal": 2}, "stat": ["shot_power", 1.4], "color": Color(0.9, 0.3, 1.0), "add": {"pierce": 4, "bounce": 2}},
+	"bow": {"name": "Avcı Yayı", "desc": "Zehirli / yanan yaratık ölünce 4 m patlar.",
+		"needs": {"poison": 2, "pierce": 2}, "stat": ["shot_speed", 1.3], "fx": {"death_blast": [4.0, 0.8]}},
+	"boomerang": {"name": "Kasırga Bumerangı", "desc": "+1 bumerang ve +2 sekme.",
+		"needs": {"bounce": 2, "twin": 1}, "stat": ["attack", 1.16], "add": {"n": 1, "bounce": 2}},
+	"flame": {"name": "Ejderha Nefesi", "desc": "Yanık 3 m'de yayılır.",
+		"needs": {"heat": 2, "fuel": 2}, "stat": ["shot_power", 1.2], "fx": {"ignite": 3.0}},
+	"sword": {"name": "Titan Kılıcı", "desc": "Menzil +1,8 m, +14 hasar, daha sert savurur.",
+		"needs": {"edge": 2, "reach": 2}, "stat": ["speed", 1.15], "add": {"range": 1.8, "dmg": 14, "knock": 4.0}},
+	"grenade": {"name": "Napalm Fırtınası", "desc": "Patlama +1,5 m ve +6 yanık hasarı/sn.",
+		"needs": {"napalm": 2, "blast": 2}, "stat": ["shot_power", 1.3], "add": {"blast": 1.5, "fire": 6.0}},
+}
 
+## Karaktere özel yükseltmeler (Q yeteneği ve pasifler). need: yetenekte bu anahtar varsa sunulur. Kart: "char:<id>".
 const CHAR_UPS := [
 	{"id": "cd", "name": "Çabuk Toparlanma", "desc": "%s bekleme süresi −%%15", "max": 4, "rarity": "rare"},
 	{"id": "power", "name": "Ustalık", "desc": "%s etkisi +%%25 (hasar, iyileşme)", "max": 4, "rarity": "rare"},
@@ -141,7 +167,7 @@ static func find(id: String) -> Dictionary:
 ## Envanter öğesinin HUD'da görünecek adı.
 static func item_name(it: Dictionary) -> String:
 	match it.get("kind", ""):
-		"weapon": return find(it.id).get("name", it.id)
+		"weapon": return EVOS[it.id].name if it.get("evo", false) and EVOS.has(it.id) else find(it.id).get("name", it.id)
 		"equip": return EQUIPS.get(it.id, {}).get("name", it.id)
 		"item": return ITEMS.get(it.id, {}).get("name", it.id)
 		"build": return str(it.id)
@@ -159,9 +185,20 @@ static func tuned(id: String, ups: Dictionary) -> Dictionary:
 			w[k] += u.add[k] * l
 		for k in u.get("mul", {}):
 			w[k] *= pow(u.mul[k], l)
+	if evolved(id, ups):
+		var ev: Dictionary = EVOS[id]
+		for k in ev.get("add", {}):
+			w[k] += ev.add[k]
+		w.merge(ev.get("fx", {}), true)
+		w["color"] = ev.get("color", w.color)
+		w["evo"] = ev.name
 	if w.fire > 0.0:
 		w["burn"] = [w.fire, BURN_T] # yetenek motoruyla aynı etki anahtarı
 	return w
+
+
+static func evolved(id: String, ups: Dictionary) -> bool:
+	return EVOS.has(id) and ups.get("evo:" + id, 0) > 0
 
 
 ## Şarjör kapasitesi (0 = şarjörsüz: kılıç, bumerang).
@@ -277,7 +314,20 @@ static func pool(p: Object) -> Array:
 			var l: int = p.ups.get("%s:%s" % [id, u.id], 0)
 			if l < u.max:
 				out.append(_card("up:%s:%s" % [id, u.id], "%s: %s" % [find(id).name, u.name], "%s  (sv. %d/%d)" % [u.desc, l + 1, u.max], u.rarity, "weapon_up"))
+		if can_evolve(id, p):
+			out.append(_card("evo:" + id, "EVRİM: " + EVOS[id].name, EVOS[id].desc, "legendary", "evo"))
 	return out
+
+
+## Silah evrime hazır mı: iki yükseltme eşikte, stat eşikte, henüz evrilmemiş.
+static func can_evolve(id: String, p: Object) -> bool:
+	if not EVOS.has(id) or evolved(id, p.ups):
+		return false
+	var ev: Dictionary = EVOS[id]
+	for u in ev.needs:
+		if p.ups.get("%s:%s" % [id, u], 0) < ev.needs[u]:
+			return false
+	return p.stats[ev.stat[0]] >= ev.stat[1] - 0.0001
 
 
 ## Nadirlik ağırlığıyla n farklı kart çeker; aynı statın iki kademesi birlikte çıkmaz.
@@ -302,6 +352,8 @@ static func roll_cards(p: Object, n := 3) -> Array:
 
 
 static func _weight(c: Dictionary) -> float:
+	if c.type == "evo":
+		return EVO_WEIGHT
 	return RARITY[c.rarity].weight * (OWN_BOOST if c.type == "weapon_up" else 1.0)
 
 
@@ -320,6 +372,11 @@ static func apply_card(p: Object, c: Dictionary) -> void:
 			p.ups[c.id] = p.ups.get(c.id, 0) + 1
 		"weapon":
 			p.add_item({"kind": "equip" if a[0] == "equip" else "weapon", "id": a[1]})
+		"evo":
+			p.ups[c.id] = 1
+			for it in p.inv:
+				if it.get("id", "") == a[1]:
+					it["evo"] = true
 		"weapon_up":
 			var k := a[1] + ":" + a[2]
 			p.ups[k] = p.ups.get(k, 0) + 1
