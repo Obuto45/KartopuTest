@@ -363,7 +363,8 @@ func _process(dt: float) -> void:
 	tower_fill.color = c.lerp(Color.WHITE, 0.4 * pulse) if low else c
 	tower_title.add_theme_color_override("font_color", RED.lerp(Color.WHITE, 0.5 * pulse) if low else Color(1.0, 0.9, 0.7))
 	tower_txt.text = "%d / %d" % [thp, tmax]
-	wave_lbl.text = "DALGA %d / %d" % [clampi(wave, 1, wave_count), wave_count]
+	# td.wave son başlayan dalgadır: molada sıradaki gösterilir.
+	wave_lbl.text = "DALGA %d / %d" % [clampi(wave + int(st == "break"), 1, wave_count), wave_count]
 	left_lbl.text = "Kalan yaratık: %d" % _g(td, "enemies_left", 0) if st == "fight" else "Öldürülen: %d" % _g(td, "kills", 0)
 	money_lbl.text = "₺ %d" % money
 	break_lbl.visible = st == "break"
@@ -386,7 +387,7 @@ func _process(dt: float) -> void:
 	var alive: bool = _g(player, "hp", 1) > 0
 	dead_lbl.visible = not alive and not ended
 	if dead_lbl.visible:
-		dead_lbl.text = "ÖLDÜN\nYeniden doğuş: %d sn" % maxi(ceili(respawn_time - _g(player, "dead_t", 0.0)), 0)
+		dead_lbl.text = "ÖLDÜN\nYeniden doğuş: %d sn" % maxi(ceili(_g(player, "respawn_t", respawn_time - _g(player, "dead_t", 0.0))), 0)
 
 	# Kartlar: liste değişince yeniden kurulur.
 	var cards: Array = _g(player, "cards", [])
@@ -514,14 +515,20 @@ func _update_inv() -> void:
 
 # ---------- Hazır listesi ve stat paneli ----------
 
+## td.gd oyları ready_votes + is_ready() ile tutuyor; sözleşmedeki ready sözlüğü de kabul edilir.
+func _is_ready(id: int) -> bool:
+	if td and td.has_method("is_ready"):
+		return td.is_ready(id)
+	return _g(td, "ready", {}).get(id, false)
+
+
 func _refresh_ready(st: String) -> void:
 	if st != "break":
 		return
-	var rd: Dictionary = _g(td, "ready", {})
 	var names := PackedStringArray()
 	for id in Net.names:
-		names.append(("✔ " if rd.get(id, false) else "○ ") + Net.display_name(id))
-	var mine: bool = rd.get(multiplayer.get_unique_id(), false)
+		names.append(("✔ " if _is_ready(id) else "○ ") + Net.display_name(id))
+	var mine := _is_ready(multiplayer.get_unique_id())
 	ready_lbl.text = ("Hazırsın" if mine else "G: Hazır") + "      " + "    ".join(names)
 
 
@@ -701,11 +708,10 @@ func _buy(it: Dictionary, b: Button) -> void:
 			tw.tween_property(b, "position:x", x + dx, 0.04)
 	elif not room:
 		_shop_say("Envanter dolu: 4. ve 5. slotta yer yok. Önce elindeki yapıyı yerleştir.", RED)
-	elif td and td.has_method("buy"):
-		td.buy(str(it.get("id", "")))
+	elif td and td.has_method("buy") and td.buy(str(it.get("id", ""))) != false:
 		_shop_say("%s alındı." % it.get("name", ""), Color(0.5, 1.0, 0.6))
 	else:
-		_shop_say("Mağaza şu an kullanılamıyor.", RED)
+		_shop_say("Şu an alınamıyor.", RED)
 
 
 func _shop_say(text: String, c: Color) -> void:

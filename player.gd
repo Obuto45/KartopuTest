@@ -1493,6 +1493,10 @@ func td_affect(e: Node, eff: Dictionary, from: Vector3) -> void:
 		_host("effect_enemy", [str(e.name), fx])
 	elif multiplayer.is_server() and e.has_method("apply_effect"):
 		e.apply_effect(fx)
+	elif multiplayer.is_server() and e.get("slow_t") != null and (fx.has("slow") or fx.has("stun")):
+		# shortcut: kanca yokken yalnızca host oyuncusu, enemy.gd'nin yavaşlatma alanlarını doğrudan yazar (sersemletme = hız 0)
+		e.slow_k = 0.0 if fx.has("stun") else fx.slow[0]
+		e.slow_t = fx.get("stun", 0.0) if fx.has("stun") else fx.slow[1]
 
 
 ## Kritik burada atılır (x2); sonucu host'a bildirir.

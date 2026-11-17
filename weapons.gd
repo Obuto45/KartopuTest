@@ -392,8 +392,8 @@ static func enemy_fx(e: Dictionary, from: Vector3, at: Vector3, caster: Vector3)
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.05 else Vector3.ZERO
 	var v := away * e.get("knock", 0.0) - away * e.get("pull", 0.0)
-	if e.has("knock") or e.has("up"):
-		v.y += e.get("up", 3.0) if e.has("knock") else e.up
+	if e.get("knock", 0.0) > 0.0 or e.has("up"):
+		v.y += e.get("up", 3.0)
 	if e.has("yank"):
 		var to := caster - at
 		v = to.normalized() * minf(to.length() * 2.2, e.yank) + Vector3.UP * 5.0

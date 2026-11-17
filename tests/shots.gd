@@ -21,7 +21,7 @@ func _dummy(main: Node, id: int, chr: int, pos: Vector3) -> CharacterBody3D:
 # A/B'nin parçaları eksikse arayüzü besleyen sahte düğümler: yalnız sözleşmedeki alanlar.
 const FAKE_TD := """extends Node
 signal changed
-var wave := 1
+var wave := 0
 var state := "break"
 var time_left := 18.0
 var money := 135
@@ -34,7 +34,7 @@ var enemies_left := 0
 var kills := 27
 var ready := {1: true}
 func _ready(): add_to_group("td")
-func buy(_id): pass
+func buy(_id): return true
 func ready_up(): pass
 """
 const FAKE_PLAYER := """extends Node

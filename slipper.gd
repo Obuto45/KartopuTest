@@ -94,7 +94,10 @@ func _td_process(dt: float) -> void:
 		dir = dir.lerp(to.normalized(), minf(turn * (3.0 if ret else 1.0) * dt, 1.0)).normalized()
 		reach -= to.length()
 	global_position += dir * speed * dt
-	body.rotate_x(-dt * 18.0) if h.look == "ball" else body.rotate_y(dt * 18.0)
+	if h.look == "ball":
+		body.rotate_x(-dt * 18.0)
+	else:
+		body.rotate_y(dt * 18.0)
 	if reach < 0.0 or (not ret and target == null):
 		return
 	if ret:
