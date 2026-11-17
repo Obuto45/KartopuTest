@@ -5,7 +5,7 @@ extends RefCounted
 
 const BLEND_RATE := 30.0 # 1 - exp(-30 * 0.08) ≈ %91: hedefe ~0.08 sn'de yaklaşır
 
-## Parmaklar (işaret, orta, yüzük, serçe): [x, eklem z, boğum boyları, yarıçap]. h içinde, sağ el.
+## Parmaklar (işaret, orta, yüzük, serçe): [x, eklem z, boğum boyları, yarıçap]. h içinde; x, sx ile aynalanır.
 const FINGERS := [
 	[0.0275, -0.088, [0.037, 0.023, 0.019], 0.0093],
 	[0.0090, -0.092, [0.040, 0.025, 0.020], 0.0097],
@@ -18,19 +18,20 @@ const THUMB_R := [0.0125, 0.0105, 0.0097]
 
 ## "f": parmak başına [kök, orta, uç] rotation.x (eksi = bük); "s": yelpaze açıklığı (rotation.y);
 ## "t": başparmak [taban eğim x, taban sapma y, taban yuvarlanma z, orta, uç] (y/z sol elde aynalanır).
+## grip/bottle/pinch/cork .superpowers/sdd/hands_fit.gd ile uyduruldu (silindir sarma, uç teması, çarpışmasızlık).
 const POSES := {
 	"open": {"f": [[-0.06, -0.10, -0.06], [-0.05, -0.10, -0.06], [-0.06, -0.12, -0.07], [-0.08, -0.14, -0.08]],
 		"s": 0.07, "t": [-0.25, -0.60, -1.00, -0.05, -0.10]},
-	"grip": {"f": [[-1.10, -1.30, -0.65], [-1.25, -1.40, -0.70], [-1.30, -1.40, -0.70], [-1.35, -1.35, -0.70]],
-		"s": 0.0, "t": [-0.75, 0.25, -1.20, -0.45, -0.35]},
+	"grip": {"f": [[-1.21, -0.76, -0.78], [-1.20, -0.88, -0.70], [-1.12, -0.80, -0.65], [-1.56, -1.21, -0.92]],
+		"s": 0.0, "t": [-1.06, -0.57, -2.00, -0.28, -0.68]},
 	"support": {"f": [[-0.45, -0.50, -0.30], [-0.50, -0.55, -0.35], [-0.55, -0.60, -0.35], [-0.60, -0.65, -0.40]],
 		"s": 0.03, "t": [-0.45, -0.25, -1.15, -0.20, -0.15]},
-	"pinch": {"f": [[-0.65, -0.85, -0.55], [-1.00, -1.20, -0.70], [-1.15, -1.30, -0.70], [-1.25, -1.30, -0.70]],
-		"s": 0.0, "t": [-0.60, -0.05, -1.25, -0.35, -0.30]},
-	"bottle": {"f": [[-0.75, -0.85, -0.55], [-0.80, -0.90, -0.55], [-0.85, -0.90, -0.55], [-0.90, -0.90, -0.55]],
-		"s": 0.0, "t": [-0.60, 0.00, -1.20, -0.25, -0.20]},
-	"cork": {"f": [[-0.55, -0.70, -0.45], [-0.60, -0.60, -0.40], [-0.70, -0.65, -0.40], [-0.80, -0.70, -0.40]],
-		"s": 0.02, "t": [-0.50, -0.15, -1.20, -0.20, -0.25]},
+	"pinch": {"f": [[-0.85, -0.85, -0.55], [-1.00, -1.20, -0.70], [-1.15, -1.30, -0.70], [-1.25, -1.30, -0.70]],
+		"s": 0.0, "t": [-0.60, -0.25, -1.24, -0.35, -0.50]},
+	"bottle": {"f": [[-0.95, -0.56, -0.47], [-1.03, -0.65, -0.53], [-0.98, -0.56, -0.48], [-0.82, -0.26, -0.27]],
+		"s": 0.0, "t": [-1.04, -0.10, -0.36, 0.30, 0.20]},
+	"cork": {"f": [[-0.55, -0.55, -0.37], [-0.60, -0.60, -0.40], [-0.70, -0.65, -0.40], [-0.80, -0.70, -0.40]],
+		"s": 0.02, "t": [-0.49, -0.13, -1.20, -0.10, -0.20]},
 }
 
 static var _meshes := {} # aynı boyutlu ağlar bütün eller arasında paylaşılır
@@ -52,17 +53,17 @@ static func make(color: Color, left: bool) -> Node3D:
 	_mi(h, "palm", _sphere(), glove, Vector3(0, 0.001, -0.047), Vector3.ZERO, Vector3(0.080, 0.032, 0.098))
 	_mi(h, "palm_pad", _sphere(), pad, Vector3(0, -0.005, -0.050), Vector3.ZERO, Vector3(0.068, 0.026, 0.080))
 	_mi(h, "knuckle_bar", _capsule(0.0135, 0.074), glove, Vector3(0, 0.002, -0.081), Vector3(0, 0, PI / 2))
-	_mi(h, "heel", _capsule(0.016, 0.078), glove, Vector3(-0.002 * sx, -0.001, -0.017), Vector3(0, 0, PI / 2), Vector3(1, 0.85, 1))
+	_mi(h, "heel", _capsule(0.016, 0.078), glove, Vector3(-0.002 * sx, -0.003, -0.017), Vector3(0, 0, PI / 2), Vector3(0.8, 1, 1))
 	_mi(h, "edge", _capsule(0.0135, 0.075), glove, Vector3(-0.028 * sx, -0.002, -0.048), Vector3(PI / 2, 0, 0), Vector3(0.9, 1, 1))
 	_mi(h, "thenar", _sphere(), glove, Vector3(0.020 * sx, -0.011, -0.034), Vector3(0, 0.45 * sx, 0), Vector3(0.034, 0.026, 0.056))
 	# Bilek bağlantısı ve ~8 cm manşet (kol içine girer, aradaki boşluğu örter)
-	_mi(h, "wrist_joint", _capsule(0.025, 0.05), glove, Vector3(0, 0, -0.004), Vector3(PI / 2, 0, 0), Vector3(1.15, 1, 0.8))
+	_mi(h, "wrist_joint", _capsule(0.025, 0.05), glove, Vector3(0, -0.001, -0.004), Vector3(PI / 2, 0, 0), Vector3(1.2, 1, 0.7))
 	var wrist := Node3D.new()
 	wrist.name = "wrist"
 	wrist.position = Vector3(0, 0, 0.044)
 	wrist.scale = Vector3(1, 0.8, 1)
 	h.add_child(wrist)
-	_mi(wrist, "cuff", _cyl(0.034, 0.041, 0.08), cuff, Vector3.ZERO, Vector3(-PI / 2, 0, 0))
+	_mi(wrist, "cuff", _cyl(0.035, 0.039, 0.08), cuff, Vector3.ZERO, Vector3(-PI / 2, 0, 0))
 	_mi(wrist, "rim", _torus(0.037, 0.045), cuff, Vector3(0, 0, 0.038), Vector3(PI / 2, 0, 0))
 	_mi(wrist, "strap", _cyl(0.0365, 0.0375, 0.016), pad, Vector3(0, 0, -0.016), Vector3(-PI / 2, 0, 0))
 	var joints: Array[Node3D] = []
