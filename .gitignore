@@ -16,3 +16,4 @@ build/
 
 # Referans depolar (yerel, git dışı)
 _referans/
+.swarm/
