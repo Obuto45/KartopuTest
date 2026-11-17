@@ -523,9 +523,24 @@ func _update_inv() -> void:
 		c.name.add_theme_font_size_override("font_size", 12 if tex else 15)
 		# Bekleme: silahlar ortak cd'yi (yalnız seçili slotta), kalkan ve duvar kendi süresini gösterir.
 		var left: float = _g(player, "shield_cd", 0.0) if d.get("id", "") == "shield" else _g(player, "wall_cd", 0.0) if d.get("id", "") == "wall" 			else _g(player, "cd", 0.0) if d.get("kind", "") == "weapon" and sel == i + 1 else 0.0
+		if sel == i + 1 and _g(player, "reloading", false): # doldurma ilerlemesi
+			left = _g(player, "reload_t", 0.0)
 		c.cd_max = maxf(c.cd_max, left) if left > 0.0 else 0.0
 		c.cd.value = left / c.cd_max if c.cd_max > 0.0 else 0.0
 		c.count.text = "x%d" % d.count if int(d.get("count", 1)) > 1 else ""
+		c.count.modulate = Color.WHITE
+		var mag := 0
+		if d.get("kind", "") == "weapon":
+			for w in weapons:
+				if w.get("id") == d.id:
+					mag = w.get("mag", 0)
+		if mag > 0: # şarjör: "12 / ∞" (alevde yakıt yüzdesi); azalınca turuncu, boşken kırmızı yanıp söner
+			var am: int = d.get("ammo", mag)
+			c.count.text = "%%%d" % roundi(am * 100.0 / mag) if d.id == "flame" else "%d / ∞" % am
+			if am <= 0:
+				c.count.modulate = Color(1.0, 0.25, 0.2, 0.55 + 0.45 * sin(Time.get_ticks_msec() * 0.012))
+			elif am <= mag / 4:
+				c.count.modulate = Color(1.0, 0.6, 0.15)
 		c.pips.text = "●".repeat(clampi(int(d.get("lvl", 0)), 0, 8))
 		c.sb.border_color = it.color
 		c.sb.bg_color = Color(0.95, 0.5, 0.1, 0.42) if sel == i + 1 else Color(0, 0, 0, 0.5)

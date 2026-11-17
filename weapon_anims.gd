@@ -165,7 +165,7 @@ static func _make(id: String) -> Dictionary:
 			var port := Vector3(0, -0.04, 0.32) # pompadan fişek yuvasına sol el farkı
 			var pocket := Vector3(-0.05, -0.22, 0.42)
 			c["reload_start"] = {"len": 0.25, "tracks": {"Rig": [_k(0), _k(0.25, tilt[0], tilt[1])],
-				"HandL": [_k(0), _k(0.25, pocket)]}, "poses": [[0.1, "L", "pinch"]]}
+				"HandL": [_k(0), _k(0.25, pocket)]}, "poses": [[0.1, "L", "pinch"]], "events": [[0.25, "done"]]}
 			c["shell"] = {"len": 0.45, "tracks": {
 					"Rig": [_k(0, tilt[0], tilt[1])],
 					"HandL": [_k(0, pocket), _k(0.25, port + Vector3(0, -0.03, 0)), _k(0.35, port + Vector3(0, -0.01, -0.06)), _k(0.45, pocket)],

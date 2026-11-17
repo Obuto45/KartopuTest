@@ -10,6 +10,7 @@ const Chars := preload("res://characters.gd")
 const HomingScript := preload("res://slipper.gd")
 const ZoneScript := preload("res://zone.gd")
 const Weapons := preload("res://weapons.gd")
+const WeaponAnims := preload("res://weapon_anims.gd")
 const BUILD_DIST := 3.0 # TD: yapı önizlemesi önümüzde bu mesafede
 const SIT_TIME := 2.0 # sit_shield pasifi: bu kadar durunca kalkan alır
 const SPEED := 7.0
@@ -154,6 +155,12 @@ var respawn_t := 0.0
 var burns := {} # yaratık adı -> [yaratık, hasar/sn, kalan sn]
 var hand: Node3D # koddan üretilen silah modellerinin tutucusu
 var vm: Node3D # kendi gözünden eller + silah (yalnız yerel oyuncuda; viewmodel.gd)
+var held_id := "" # çıkarılmış silah; _held() değişince _switched
+var busy := "" # ateşi kilitleyen animasyon: draw, reload, drink, prime, charge ("" = serbest)
+var reloading := false
+var reload_t := 0.0 # doldurmanın kalan süresi (HUD çubuğu)
+var anim_gen := 0 # vm'siz oyuncuda zamanlanmış klip olaylarını geçersiz kılar
+var flame_t := 0.0 # alev pilotu büyük kalsın
 var hand_p := Vector3.ZERO
 var props := {} # silah id -> model
 var hold: Node3D # elde görünen silah: sağ kol ona uzanır
@@ -240,6 +247,7 @@ func _ready() -> void:
 		vm = preload("res://viewmodel.gd").new()
 		add_child(vm)
 		vm.setup(ch.color)
+		vm.event.connect(_on_vm_event)
 		# Kendi gözünden: silahlar küçük ve uzakta, ekranın sağ altında dursun.
 		gun.scale = Vector3.ONE * 0.45
 		gun.position = Vector3(0.27, -0.26, -0.7)
@@ -541,6 +549,7 @@ func _local(dt: float) -> void:
 	if td == null and can_act and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
 		cd = THROW_CD * ch.get("fire_cd", 1.0) * bv("rapid")
 		_shoot(int(bv("multi")), 0.07, false)
+		_anim("fire")
 
 	move_and_slide()
 	if global_position.y < -20.0:
@@ -991,8 +1000,7 @@ func _animate(dt: float) -> void:
 		sword.visible = false
 		for k in props:
 			props[k].visible = false
-		if held != vm.current():
-			vm.equip(held)
+	_sync_held()
 	shield_mesh.visible = shield_on and not hidden
 	flash = max(flash - dt, 0.0)
 	if flash > 0.0:
@@ -1104,6 +1112,10 @@ func _feel(dt: float, mine: bool, spd: float, air: bool, hidden: bool) -> void:
 	if vm:
 		vm.sway_offset = off
 		vm.sway_tilt = tilt
+		flame_t = maxf(flame_t - dt, 0.0)
+		var pilot := vm.weapon.find_child("pilot", true, false) as Node3D if vm.weapon and held_id == "flame" else null
+		if pilot: # ateşlerken pilot alevi büyür, bırakınca söner
+			pilot.scale = pilot.scale.lerp(Vector3.ONE * (1.8 if flame_t > 0.0 else 1.0), minf(1.0, dt * 12.0))
 	sword.position = sword_p + off * 0.6 + Vector3(0, 0, -sin((1.0 - swing_t / SWING_T) * PI) * 0.12)
 
 
@@ -1289,6 +1301,9 @@ func _host(m: String, args: Array) -> void:
 
 
 func _td_local(dt: float, can_act: bool, alive: bool) -> void:
+	reload_t = maxf(reload_t - dt, 0.0)
+	if can_act and InputMap.has_action("reload") and Input.is_action_just_pressed("reload"):
+		start_reload()
 	if can_act and Input.is_action_pressed("throw"):
 		_td_use(Input.is_action_just_pressed("throw"))
 	_td_ghost(alive)
@@ -1303,10 +1318,27 @@ func _td_use(just: bool) -> void:
 	var it: Dictionary = inv[slot - 1]
 	match it.get("kind", ""):
 		"weapon":
+			_sync_held()
+			var w := Weapons.tuned(it.id, ups)
+			var mag := Weapons.mag_of(w)
+			if reloading and w.get("per_shell", false) and int(it.get("ammo", 0)) > 0:
+				reloading = false # pompalı: ateş doldurmayı keser, takılan fişekler kalır
+				busy = ""
+				reload_t = 0.0
+			if busy != "":
+				return
+			if mag > 0 and int(it.get("ammo", mag)) <= 0:
+				start_reload() # yedek sınırsız: boşken tetik doldurur
+				return
 			if cd <= 0.0:
-				var w := Weapons.tuned(it.id, ups)
 				cd = w.rate / st("attack") * ch.get("fire_cd", 1.0) * bv("rapid")
+				if mag > 0:
+					it["ammo"] = int(it.get("ammo", mag)) - 1
+				if it.id == "flame":
+					flame_t = 0.2
 				_td_shoot(it.id, w)
+				if WeaponAnims.has(it.id, "fire"):
+					_anim("fire", maxf(1.0, WeaponAnims.clips(it.id).fire.len / cd))
 		"equip":
 			if just and it.id == "shield":
 				_try_shield()
@@ -1327,6 +1359,102 @@ func _td_use(just: bool) -> void:
 			else:
 				_td_shoot(it.id, Weapons.tuned(it.id, ups))
 			_take(slot - 1)
+
+
+## Şarjörü doldurur (R ya da boş tetik). Yalnız TD'de; dolu ya da şarjörsüzse bir şey yapmaz.
+## Süre Weapons.reload_time; klip o süreye sığacak hızda oynar, mermi "mag_in" olayında dolar.
+func start_reload() -> void:
+	_sync_held()
+	if td == null or held_id == "" or (busy != "" and busy != "draw"):
+		return
+	var w := Weapons.tuned(held_id, ups)
+	var mag := Weapons.mag_of(w)
+	var ammo: int = inv[slot - 1].get("ammo", mag)
+	if mag == 0 or ammo >= mag:
+		return
+	reloading = true
+	busy = "reload"
+	var a := st("attack")
+	if w.get("per_shell", false): # pompalı: başla, fişek fişek, bitir
+		reload_t = Weapons.reload_time(w, a, false) * (mag - ammo) + 0.6 / a
+		_anim("reload_start", a)
+		return
+	var empty := ammo <= 0 and WeaponAnims.has(held_id, "reload_empty")
+	var clip := "reload_empty" if empty else "reload"
+	reload_t = Weapons.reload_time(w, a, empty)
+	_anim(clip, WeaponAnims.clips(held_id)[clip].len / reload_t)
+
+
+## Klip olayları (vm'den ya da vm yoksa zamanlayıcıdan): oyun mantığı hep buradan geçer.
+func _on_vm_event(n: String) -> void:
+	match n:
+		"mag_in":
+			if reloading:
+				inv[slot - 1]["ammo"] = Weapons.mag_of(Weapons.tuned(held_id, ups))
+				reloading = false
+		"shell":
+			if reloading:
+				var mag := Weapons.mag_of(Weapons.tuned(held_id, ups))
+				inv[slot - 1]["ammo"] = mini(int(inv[slot - 1].get("ammo", 0)) + 1, mag)
+				if inv[slot - 1].ammo >= mag:
+					reloading = false
+					_anim("reload_end", st("attack"))
+				else:
+					_anim("shell", st("attack"))
+		"done":
+			if reloading and busy == "reload": # pompalı: başlangıç bitti, fişeklere geç
+				_anim("shell", st("attack"))
+			else:
+				busy = ""
+				reload_t = 0.0
+		"ready":
+			busy = ""
+
+
+## Elde tutulan silah değişti: süren doldurma iptal (şarjör dolmaz), çıkarma klibi baştan.
+func _switched(id: String) -> void:
+	held_id = id
+	reloading = false
+	reload_t = 0.0
+	busy = "draw" if id != "" else ""
+	anim_gen += 1
+	if vm:
+		vm.equip(id)
+	elif id != "":
+		_anim_timers(id, "draw", 1.0)
+
+
+func _sync_held() -> void:
+	var h := _held() if hp > 0 else ""
+	if h != held_id:
+		_switched(h)
+
+
+## Klip oynatır: kendi gözümüzde viewmodel, yoksa olaylar zamanlayıcıyla gelir. Diğer makineler parça klibini oynatır.
+func _anim(clip: String, speed := 1.0) -> void:
+	anim_gen += 1
+	if is_multiplayer_authority():
+		td_anim.rpc(clip)
+	if vm:
+		vm.play(clip, speed)
+	else:
+		_anim_timers(held_id, clip, speed)
+
+
+func _anim_timers(id: String, clip: String, speed: float) -> void:
+	if not WeaponAnims.has(id, clip):
+		return
+	var g := anim_gen
+	for e in WeaponAnims.clips(id)[clip].get("events", []):
+		get_tree().create_timer(e[0] / speed).timeout.connect(func():
+			if g == anim_gen:
+				_on_vm_event(e[1]))
+
+
+## Diğer makinelerde elde tutulan modelin parça klibi (Görev 10 doldurur).
+@rpc("authority", "call_remote", "unreliable_ordered")
+func td_anim(_clip: String) -> void:
+	pass
 
 
 func _take(i: int) -> void:

@@ -106,13 +106,13 @@ func _ready() -> void:
 func _setup_input() -> void:
 	var keys := {"fwd": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "jump": KEY_SPACE,
 		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "skill": KEY_Q,
-		"slot5": KEY_5, "stats": KEY_TAB, "shop": KEY_B, "ready": KEY_G, "interact": KEY_E} # son satır TD için
+		"slot5": KEY_5, "stats": KEY_TAB, "shop": KEY_B, "ready": KEY_G, "interact": KEY_E, "reload": KEY_R} # son satır TD için
 	for a in keys:
 		InputMap.add_action(a)
 		var ev := InputEventKey.new()
 		ev.physical_keycode = keys[a]
 		InputMap.action_add_event(a, ev)
-	var mouse := {"throw": MOUSE_BUTTON_LEFT}
+	var mouse := {"throw": MOUSE_BUTTON_LEFT, "aim": MOUSE_BUTTON_RIGHT}
 	for a in mouse:
 		InputMap.add_action(a)
 		var ev := InputEventMouseButton.new()

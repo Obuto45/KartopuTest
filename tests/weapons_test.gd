@@ -65,6 +65,8 @@ func _fire(id: String, t: float) -> Array:
 	me.inv[0] = {"kind": "weapon", "id": id, "count": 1, "lvl": 1}
 	me.slot = 1
 	me.cd = 0.0
+	me._sync_held()
+	me.busy = "" # yardımcı anında ateşler: çıkarma (draw) beklenmez
 	me.burns.clear()
 	td.hits.clear()
 	me._td_use(true)
@@ -169,6 +171,45 @@ func _ready() -> void:
 	chk("mermi hızı x2 -> ok 84 m/sn", arrow.size() == 1 and absf(arrow[0].spd - 84.0) < 1.0, arrow.size())
 	me.ups = {"shotgun:pellets": 2, "bazooka:blast": 1}
 	chk("silah yükseltmesi veriye işler", Weapons.tuned("shotgun", me.ups).n == 11 and is_equal_approx(Weapons.tuned("bazooka", me.ups).blast, 3.1))
+	_reset()
+	await _fire("pistol", 0.1)
+	chk("atış şarjörden düşer", me.inv[0].ammo == 11, me.inv[0])
+	me.inv[0].ammo = 0
+	me.cd = 0.0
+	td.hits.clear()
+	me._td_use(true)
+	chk("boş şarjör ateşlemez, doldurma başlar", td.hits.is_empty() and me.reloading)
+	await _wait(1.7)
+	chk("1.6 sn sonra dolu", me.inv[0].ammo == 12 and not me.reloading, me.inv[0])
+	me.inv[0].ammo = 3
+	me.start_reload()
+	await _wait(0.5)
+	me._set_slot(2)
+	await _wait(0.1)
+	me._set_slot(1)
+	await _wait(1.5)
+	chk("doldururken silah değişirse dolmaz", me.inv[0].ammo == 3, me.inv[0])
+	me.inv[0] = {"kind": "weapon", "id": "shotgun", "count": 1, "lvl": 1, "ammo": 2}
+	me.start_reload()
+	await _wait(1.0)
+	me.cd = 0.0
+	me._td_use(true)
+	chk("pompalı: fişek fişek dolar, ateş kesmez", me.inv[0].ammo >= 2 and not me.reloading, me.inv[0])
+	me.stats.attack = 2.0
+	me.inv[0] = {"kind": "weapon", "id": "smg", "count": 1, "lvl": 1, "ammo": 0}
+	me.start_reload()
+	await _wait(0.95)
+	chk("saldırı x2: makineli 0.9 sn'de dolar", me.inv[0].ammo == 30, me.inv[0])
+	me.stats.attack = 1.0
+	var dry := 0
+	me.inv[0].ammo = 0
+	for i in 10:
+		me.cd = 0.0
+		me._td_use(i == 0)
+		dry += int(me.busy == "reload")
+	chk("boşken basılı tutmak tek doldurma başlatır", me.reloading and dry == 10)
+	me.reloading = false
+	me.busy = ""
 	_reset()
 	await _wait(1.0)
 
