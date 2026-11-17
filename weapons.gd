@@ -111,6 +111,10 @@ const UPS := {
 		{"id": "napalm", "name": "Napalm", "desc": "Yakar: +4 hasar/sn", "max": 3, "rarity": "rare", "add": {"fire": 4.0}}],
 }
 ## Karaktere özel yükseltmeler (Q yeteneği ve pasifler). need: yetenekte bu anahtar varsa sunulur. Kart: "char:<id>".
+## Silah evrimleri: silah id -> {"name", "desc", "needs": {up_id: seviye}, "stat": [stat_id, eşik], ...etki alanları}.
+## Koşul tutunca havuza "evo" türünde Efsanevi kart girer (pool / apply_card imzaları değişmez).
+const EVOS := {}
+
 const CHAR_UPS := [
 	{"id": "cd", "name": "Çabuk Toparlanma", "desc": "%s bekleme süresi −%%15", "max": 4, "rarity": "rare"},
 	{"id": "power", "name": "Ustalık", "desc": "%s etkisi +%%25 (hasar, iyileşme)", "max": 4, "rarity": "rare"},

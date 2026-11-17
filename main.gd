@@ -1245,7 +1245,8 @@ func start_game(ids: Array) -> void:
 
 ## Tower Defense maçı: ortası açık harita, oyuncular kule dibinde; dalgaları td.gd yürütür.
 @rpc("authority", "call_local", "reliable")
-func start_td(ids: Array) -> void:
+## opts: {"difficulty": "easy"|"normal"|"hard"|"nightmare", "endless": bool}; eski çağrılar için boş olabilir.
+func start_td(ids: Array, opts := {}) -> void:
 	_clear_world()
 	_set_menu_bg(false)
 	_build_world(TD_CLEAR)
@@ -1258,6 +1259,7 @@ func start_td(ids: Array) -> void:
 	if ResourceLoader.exists("res://td.gd"):
 		var t: Node = load("res://td.gd").new()
 		t.name = "TD"
+		t.opts.merge(opts, true)
 		world.add_child(t)
 	td_ui = TdUi.new()
 	td_ui.main = self

@@ -75,6 +75,16 @@ const SHOP := [
 ]
 
 
+## Zorluk: hp/dmg yaratık çarpanları, money para çarpanı, reward kalıcı ödül (Altın Saç) çarpanı,
+## mods Kabus'ta dalga başına ek modifikatör, unlock bunu açan zafer (profile.gd).
+const DIFFS := {
+	"easy": {"name": "Kolay", "hp": 0.75, "dmg": 0.8, "money": 1.15, "reward": 0.5, "mods": 0, "unlock": ""},
+	"normal": {"name": "Normal", "hp": 1.0, "dmg": 1.0, "money": 1.0, "reward": 1.0, "mods": 0, "unlock": ""},
+	"hard": {"name": "Zor", "hp": 1.35, "dmg": 1.25, "money": 0.9, "reward": 1.5, "mods": 0, "unlock": "win_normal"},
+	"nightmare": {"name": "Kabus", "hp": 1.8, "dmg": 1.5, "money": 0.85, "reward": 2.5, "mods": 1, "unlock": "win_hard"},
+}
+
+
 ## Oyuncu sayısı çarpanı: sayı x(1 + 0,55 x fazla oyuncu), can x(1 + 0,15 x fazla oyuncu).
 ## 4 oyuncu: 2,65 x 1,45 = 3,84 kat toplam can, 4 kat ateş gücüne karşı -> kişi başı yük solo ile aynı düzeyde,
 ## ama yaratık sayısı arttığı için kule daha çok yönden sıkışır (kolaylaşmaz). Ödüller sayıyla birlikte büyür.
@@ -84,7 +94,8 @@ static func crowd(players: int) -> float:
 
 ## n: 1..WAVE_COUNT. Can dalga başına +%10 (dalga 10: x1,9), hasar +%6 (x1,54): oyuncunun kart ve statlarla
 ## büyümesinin biraz altında; zorluk asıl olarak tür karışımı ve sayıdan gelir.
-static func wave(n: int, players: int) -> Dictionary:
+## diff: DIFFS anahtarı; mods: roll_mods sonucu (sonuç sözlüğüne "mods" olarak geçer).
+static func wave(n: int, players: int, diff := "normal", mods: Array = []) -> Dictionary:
 	n = clampi(n, 1, WAVE_COUNT)
 	var p := clampi(players, 1, 4)
 	var w: Dictionary = WAVES[n - 1]
@@ -94,12 +105,17 @@ static func wave(n: int, players: int) -> Dictionary:
 			groups.append({"type": type, "count": ceili(w[type] * crowd(p))})
 	return {"groups": groups, "hp_mult": (1.0 + 0.1 * (n - 1)) * (1.0 + 0.15 * (p - 1)),
 		"dmg_mult": (1.0 + 0.06 * (n - 1)) * (1.0 + 0.05 * (p - 1)), "boss": w.get("boss", ""),
-		"boss_hp": 1.0 + 0.5 * (p - 1)} # boss tek gelir: sayı çarpanı yerine canı büyür (4 oyuncu: x2,5 x1,45)
+		"boss_hp": 1.0 + 0.5 * (p - 1), "mods": mods} # boss tek gelir: sayı çarpanı yerine canı büyür (4 oyuncu: x2,5 x1,45)
 
 
 ## O seviyeden sonrakine gereken havuz XP'si: 25, 40, 55... (doğrusal). Tek oyuncu 10 dalgada ~1500 XP
 ## toplar -> ~13 seviye (dalga başına 1–2 kart). Havuz ortak olduğu için eşik oyuncu sayısıyla aynı
 ## oranda büyür (crowd): kaç kişi olursa olsun herkes aynı sayıda seviye atlar.
+## Dalga n'nin modifikatörleri; aynı tohum aynı listeyi verir (host seçer, _state ile yayılır).
+static func roll_mods(n: int, diff: String, seed: int) -> Array:
+	return []
+
+
 static func xp_for(level: int, players := 1) -> int:
 	return roundi((25 + 15 * (maxi(level, 1) - 1)) * crowd(players))
 

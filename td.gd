@@ -10,6 +10,7 @@ signal changed
 signal wave_started(wave: int)
 signal leveled(level: int)
 signal run_ended(won: bool)
+signal summary_ready(d: Dictionary) # maç sonu: {"won", "wave", "difficulty", "endless", "players": {peer: pstats}, "mvp": peer}
 
 const Balance := preload("res://balance.gd")
 const EnemyScript := preload("res://enemy.gd")
@@ -33,6 +34,12 @@ var tower_max := 0
 var enemies_left := 0
 var kills := 0
 var ready_votes := {} # peer -> true
+var opts := {"difficulty": "normal", "endless": false} # main.start_td verir (_ready'den önce)
+var difficulty := "normal" # Balance.DIFFS anahtarı
+var mods: Array = [] # bu dalganın / sıradaki dalganın modifikatörleri (Balance.roll_mods), molada ilan edilir
+var boss_eid := 0 # yaşayan boss'un yaratık no'su; 0 = yok (arayüz boss barı)
+var endless := false # 10. dalgadan sonra devam
+var pstats := {} # host: peer -> {"dmg": int, "kills": int, "crits": int, "builds": int, "deaths": int}
 
 var tower: Node3D
 var enemies: Node3D
@@ -72,6 +79,8 @@ func _ready() -> void:
 	for n in [tower, enemies, builds]:
 		world.add_child(n)
 	# Başlangıç değerleri her makinede aynı: arayüz ilk _state gelmeden de doğru göstersin.
+	difficulty = str(opts.get("difficulty", "normal"))
+	endless = bool(opts.get("endless", false))
 	_n = _count_players()
 	tower_max = Balance.TOWER_HP
 	tower_hp = tower_max
@@ -153,7 +162,9 @@ func _physics_process(dt: float) -> void:
 		_dirty = false
 		_state_t = STATE_DT
 		enemies_left = _to_spawn + elist.size()
-		_state.rpc([wave, state, time_left, money, level, xp, xp_next, tower_hp, enemies_left, kills, ready_votes])
+		# Dizi yalnız SONA eklenerek büyür (eski indeksler sabit): 11 difficulty, 12 mods, 13 boss_eid, 14 endless
+		_state.rpc([wave, state, time_left, money, level, xp, xp_next, tower_hp, enemies_left, kills, ready_votes,
+			difficulty, mods, boss_eid, endless])
 
 
 # ---------- Durum yayını (her makinede) ----------
@@ -162,6 +173,8 @@ func _physics_process(dt: float) -> void:
 func _state(a: Array) -> void:
 	wave = a[0]; state = a[1]; time_left = a[2]; money = a[3]; level = a[4]; xp = a[5]; xp_next = a[6]
 	tower_hp = a[7]; enemies_left = a[8]; kills = a[9]; ready_votes = a[10]
+	if a.size() > 14:
+		difficulty = a[11]; mods = a[12]; boss_eid = a[13]; endless = a[14]
 	if tower_hp != _seen_hp:
 		tower.set_hp(float(tower_hp) / tower_max, tower_hp < _seen_hp)
 		_seen_hp = tower_hp
@@ -178,6 +191,19 @@ func _state(a: Array) -> void:
 		_seen_level = level
 		leveled.emit(level)
 	changed.emit()
+
+
+# ---------- Maç sonu özeti ve düşen eşyalar (sözleşme; içleri özellik ajanlarınca doldurulur) ----------
+
+## Host maç bitince çağırır; her makinede summary_ready yayınlanır.
+@rpc("authority", "call_local", "reliable")
+func _summary(d: Dictionary) -> void:
+	summary_ready.emit(d)
+
+
+## Host: yaratık ölünce yere eşya bırakır (item_id: "potion" | "bomb" | "chest").
+func drop(pos: Vector3, item_id: String) -> void:
+	pass
 
 
 # ---------- Dalga (host) ----------
