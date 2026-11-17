@@ -3,35 +3,37 @@
 ## Parmak i: f<i> (kök eklem) → a (orta eklem) → b (uç eklem). Başparmak: thumb (taban) → a → b.
 extends RefCounted
 
+const SCALE := 0.85 # el boyu (iç "h" düğümü); weapon_anims el sabitleri bununla çarpılır
 const BLEND_RATE := 30.0 # 1 - exp(-30 * 0.08) ≈ %91: hedefe ~0.08 sn'de yaklaşır
 
 ## Parmaklar (işaret, orta, yüzük, serçe): [x, eklem z, boğum boyları, yarıçap]. h içinde; x, sx ile aynalanır.
 const FINGERS := [
-	[0.0275, -0.088, [0.037, 0.023, 0.019], 0.0093],
-	[0.0090, -0.092, [0.040, 0.025, 0.020], 0.0097],
-	[-0.0095, -0.089, [0.037, 0.024, 0.019], 0.0091],
-	[-0.0270, -0.080, [0.029, 0.019, 0.017], 0.0081],
+	[0.0275, -0.088, [0.037, 0.023, 0.019], 0.0070],
+	[0.0090, -0.092, [0.040, 0.025, 0.020], 0.0073],
+	[-0.0095, -0.089, [0.037, 0.024, 0.019], 0.0068],
+	[-0.0270, -0.080, [0.029, 0.019, 0.017], 0.0061],
 ]
 const THUMB_POS := Vector3(0.024, -0.009, -0.020)
 const THUMB_LEN := [0.040, 0.030, 0.026]
-const THUMB_R := [0.0125, 0.0105, 0.0097]
+const THUMB_R := [0.0094, 0.0079, 0.0073]
 
 ## "f": parmak başına [kök, orta, uç] rotation.x (eksi = bük); "s": yelpaze açıklığı (rotation.y);
 ## "t": başparmak [taban eğim x, taban sapma y, taban yuvarlanma z, orta, uç] (y/z sol elde aynalanır).
-## grip/pinch/cork .superpowers/sdd/hands_fit.gd, bottle hands_fit2.gd (iksir gövdesi r≈0.045, merkez (-0.062, 0, -0.07)) ile uyduruldu (silindir sarma, uç teması, çarpışmasızlık).
+## pinch .superpowers/sdd/hands_fit.gd; grip (kabza r≈0.021), bottle (iksir gövdesi r≈0.045), cork (uçlar tıpanın iki yanında,
+## aralık 0.036) ölçekli el için hands_fit3.gd ile uyduruldu (silindir/küre sarma, uç teması, çarpışmasızlık).
 const POSES := {
 	"open": {"f": [[-0.06, -0.10, -0.06], [-0.05, -0.10, -0.06], [-0.06, -0.12, -0.07], [-0.08, -0.14, -0.08]],
 		"s": 0.07, "t": [-0.25, -0.60, -1.00, -0.05, -0.10]},
-	"grip": {"f": [[-1.21, -0.76, -0.78], [-1.20, -0.88, -0.70], [-1.12, -0.80, -0.65], [-1.56, -1.21, -0.92]],
-		"s": 0.0, "t": [-1.06, -0.57, -2.00, -0.28, -0.68]},
+	"grip": {"f": [[-1.22, -0.38, -0.16], [-1.1, -0.56, -0.46], [-1.05, -0.48, -0.4], [-1.6, -1.31, -0.82]],
+		"s": 0.0, "t": [-1.06, -0.56, -2.0, -0.31, -0.7]},
 	"support": {"f": [[-0.45, -0.50, -0.30], [-0.50, -0.55, -0.35], [-0.55, -0.60, -0.35], [-0.60, -0.65, -0.40]],
 		"s": 0.03, "t": [-0.45, -0.25, -1.15, -0.20, -0.15]},
 	"pinch": {"f": [[-0.85, -0.85, -0.55], [-1.00, -1.20, -0.70], [-1.15, -1.30, -0.70], [-1.25, -1.30, -0.70]],
 		"s": 0.0, "t": [-0.60, -0.25, -1.24, -0.35, -0.50]},
-	"bottle": {"f": [[-1.22, -0.20, -0.45], [-1.02, -0.25, -0.25], [-0.99, -0.19, -0.22], [-1.11, 0.0, 0.0]],
-		"s": 0.0, "t": [-1.41, -0.90, -2.00, -0.22, -0.72]},
-	"cork": {"f": [[-0.55, -0.55, -0.37], [-0.60, -0.60, -0.40], [-0.70, -0.65, -0.40], [-0.80, -0.70, -0.40]],
-		"s": 0.02, "t": [-0.49, -0.13, -1.20, -0.10, -0.20]},
+	"bottle": {"f": [[-1.13, 0.0, 0.0], [-1.04, -0.05, -0.12], [-1.03, 0.0, -0.06], [-1.02, 0.0, 0.0]],
+		"s": 0.0, "t": [-0.39, 0.09, -1.68, -0.04, -0.21]},
+	"cork": {"f": [[-0.42, -0.55, -0.36], [-1.3, -1.4, -0.9], [-1.3, -1.4, -0.9], [-1.3, -1.4, -0.9]],
+		"s": 0.02, "t": [-0.52, -0.13, -1.19, -0.1, -0.2]},
 }
 
 static var _meshes := {} # aynı boyutlu ağlar bütün eller arasında paylaşılır
@@ -43,9 +45,11 @@ static func make(color: Color, left: bool) -> Node3D:
 	var h := Node3D.new()
 	h.name = "h"
 	h.rotation.z = PI / 2 if left else -PI / 2
+	h.scale = Vector3.ONE * SCALE
 	root.add_child(h)
 	# Başparmak/işaret h'de +X*sx → kökte +Y (iki elde de üstte): sağ el gerçekten sağ, sol el onun aynası.
 	var sx := 1.0 if left else -1.0
+	color = color.lerp(Color(0.5, 0.5, 0.5), 0.2).darkened(0.08) # oyuncak gibi doygun durmasın
 	var glove := _mat(color, 0.7)
 	var pad := _mat(color.darkened(0.18), 0.85) # avuç ve parmak ucu deri yaması
 	var cuff := _mat(color.darkened(0.5), 0.75)
@@ -56,16 +60,16 @@ static func make(color: Color, left: bool) -> Node3D:
 	_mi(h, "heel", _capsule(0.016, 0.078), glove, Vector3(-0.002 * sx, -0.003, -0.017), Vector3(0, 0, PI / 2), Vector3(0.8, 1, 1))
 	_mi(h, "edge", _capsule(0.0135, 0.075), glove, Vector3(-0.028 * sx, -0.002, -0.048), Vector3(PI / 2, 0, 0), Vector3(0.9, 1, 1))
 	_mi(h, "thenar", _sphere(), glove, Vector3(0.020 * sx, -0.011, -0.034), Vector3(0, 0.45 * sx, 0), Vector3(0.034, 0.026, 0.056))
-	# Bilek bağlantısı ve ~6 cm ince manşet (kol içine girer, aradaki boşluğu örter)
+	# Bilek bağlantısı ve ~4,5 cm kısa manşet (kol içine girer, aradaki boşluğu örter)
 	_mi(h, "wrist_joint", _capsule(0.025, 0.05), glove, Vector3(0, -0.001, -0.004), Vector3(PI / 2, 0, 0), Vector3(1.2, 1, 0.7))
 	var wrist := Node3D.new()
 	wrist.name = "wrist"
-	wrist.position = Vector3(0, 0, 0.036)
+	wrist.position = Vector3(0, 0, 0.03)
 	wrist.scale = Vector3(1, 0.8, 1)
 	h.add_child(wrist)
-	_mi(wrist, "cuff", _cyl(0.029, 0.031, 0.06), cuff, Vector3.ZERO, Vector3(-PI / 2, 0, 0))
-	_mi(wrist, "rim", _torus(0.029, 0.034), cuff, Vector3(0, 0, 0.028), Vector3(PI / 2, 0, 0))
-	_mi(wrist, "strap", _cyl(0.0302, 0.0306, 0.012), pad, Vector3(0, 0, -0.012), Vector3(-PI / 2, 0, 0))
+	_mi(wrist, "cuff", _cyl(0.029, 0.031, 0.045), cuff, Vector3.ZERO, Vector3(-PI / 2, 0, 0))
+	_mi(wrist, "rim", _torus(0.029, 0.034), cuff, Vector3(0, 0, 0.021), Vector3(PI / 2, 0, 0))
+	_mi(wrist, "strap", _cyl(0.0302, 0.0306, 0.012), pad, Vector3(0, 0, -0.008), Vector3(-PI / 2, 0, 0))
 	var joints: Array[Node3D] = []
 	for i in 4:
 		var d: Array = FINGERS[i]

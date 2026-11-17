@@ -8,6 +8,7 @@
 extends RefCounted
 
 const Z := Vector3.ZERO
+const HS := preload("res://hands.gd").SCALE # el ölçeği: el çerçevesindeki noktalar bununla küçülür
 const ONE_HAND := ["sword", "boomerang", "item:potion"]
 const BARE := ["build"] # elde model yok: iki el ekranın altında
 const UNDER := ["smg", "sniper", "shotgun", "bazooka", "flame"] # sol el namlu altında, avuç yukarı
@@ -19,7 +20,7 @@ const HOLD_R := {
 	"item:bomb": [Vector3(0, -0.008, -0.15), Z],
 	"sword": [Vector3(0, 0, 0.1), Vector3(-PI / 2, 0, 0)], # başparmak namluya (−Z), avuç sola, sap avuçta
 	"boomerang": [Vector3(0.2, 0, -0.145), Vector3(0, -0.86, PI / 2)], # avuç aşağı, kanat ucunu üstten kavrar
-	"item:potion": [Z, Z], # "bottle" gövde ortasında
+	"item:potion": [Z, Vector3(0, 0, -0.6)], # "bottle" gövde ortasında; avuç yukarı-sola: şişe parmaklara oturur
 }
 const BUILD_R := [Vector3(0.06, 0.06, 0.0), Vector3(0, 0, 1.2)] # yapı: boş el, ekranın sağ altında, avuç aşağı-içe
 ## Ateşli silah kabzaları (silah uzayında, .superpowers/sdd/grip_probe.gd ile ışınla ölçüldü):
@@ -32,11 +33,11 @@ const GRIPS := {
 	"bazooka": [-0.01, -0.12, 0.02, -0.14],
 	"flame": [0.005, -0.08, 0.02, -0.11],
 }
-const GRIP_C := Vector3(-0.037, 0, -0.08) # "grip" pozunun sardığı silindirin ekseni (sağ el kökünde)
-const BOTTLE_C := Vector3(-0.062, 0, -0.07) # "bottle" pozunun sardığı küre/şişe merkezi
-const PINCH_R := Vector3(-0.064, 0.02, -0.094) # sağ el "pinch" ucu
-const PINCH := Vector3(0.064, 0.02, -0.094) # sol el "pinch" ucu (işaret-başparmak arası)
-const CORK := Vector3(0.056, 0.027, -0.117) # sol el "cork" ucu
+const GRIP_C := Vector3(-0.0385, 0, -0.068) # "grip" pozunun sardığı silindirin ekseni (sağ el kökünde)
+const BOTTLE_C := Vector3(-0.0625, 0, -0.0595) # "bottle" pozunun sardığı küre/şişe merkezi
+const PINCH_R := Vector3(-0.064, 0.02, -0.094) * HS # sağ el "pinch" ucu
+const PINCH := Vector3(0.064, 0.02, -0.094) * HS # sol el "pinch" ucu (işaret-başparmak arası)
+const CORK := Vector3(0.044, 0.023, -0.1006) # sol el "cork" uçlarının ortası (aralarındaki doğru ~ -Z boyunca)
 
 static var _clips := {}
 static var _rest := {}
@@ -77,8 +78,6 @@ static func rest(id: String) -> Dictionary:
 		m.free()
 	if id == "item:potion":
 		r["Rig/Weapon/cork"] = [Vector3(0, 0.085, 0), Z] # potion.gd tıpası
-	if id == "bow": # yay sağ-aşağıda: sol kol ekranın ortasını kapatmasın
-		r["Rig"] = [Vector3(0.12, -0.15, 0.08), Vector3(0, 0, 0.12)]
 	if id in BARE:
 		r["HandL"] = [Vector3(-0.24, 0.06, 0.0), Vector3(0, 0, -1.2)] # sağın aynası
 	elif id in ONE_HAND:
@@ -90,13 +89,13 @@ static func rest(id: String) -> Dictionary:
 		r["HandL"] = _hold(gl, rot, Vector3(-GRIP_C.x, 0, GRIP_C.z))
 	elif id in UNDER: # avuç yukarı (z 90°), parmaklar sağ-ileri (y -1): önü alttan sarar
 		var rot := Vector3(0, -1.0, PI / 2)
-		r["HandL"] = [gl + Vector3(0, -0.027, 0) - Basis.from_euler(rot) * Vector3(0.017, 0, -0.047), rot]
+		r["HandL"] = [gl + Vector3(0, -0.027, 0) - Basis.from_euler(rot) * Vector3(0.017, 0, -0.047) * HS, rot]
 	elif id == "bow": # yay gövdesini yumrukla tutar ("grip", sağ elin aynası)
 		r["HandL"] = [gl + Vector3(GRIP_C.x, 0, -GRIP_C.z), Z]
 	elif id in ["grenade", "item:bomb"]: # çimdik ucu halkada
 		r["HandL"] = [gl - PINCH, Z]
 	else: # tabanca: sol avuç kabzanın solunda (sağ parmakların üstünde), parmaklar önden sarar
-		r["HandL"] = [r["Rig/HandR"][0] + Vector3(-0.094, 0.012, -0.008), Vector3(-0.25, -0.2, 0)]
+		r["HandL"] = [r["Rig/HandR"][0] + Vector3(-0.094, 0.012, -0.008) * HS, Vector3(-0.25, -0.2, 0)]
 	if r["Rig"] != [Z, Z]: # sol el Rig'in dışında (Base'de): kaydırılmış silahla birlikte taşınır
 		var rb := Basis.from_euler(r["Rig"][1])
 		r["HandL"] = [r["Rig"][0] + rb * r["HandL"][0], (rb * Basis.from_euler(r["HandL"][1])).get_euler()]
@@ -107,7 +106,7 @@ static func rest(id: String) -> Dictionary:
 ## Kabza ölçüsünden sağ el bileği: "grip" silindiri kabzanın ön yüzüne yaslanır, avuç sağ yüzde.
 static func _wrap(g: Array) -> Array:
 	var rot := Vector3(g[3], 0, 0)
-	var a := Vector3(minf(g[2] - 0.02, 0.003), g[1], g[0] + 0.008) # kalın kabzada parmak uçları sol yüzü bulsun
+	var a := Vector3(minf(g[2] - 0.021, 0.003), g[1], g[0] + 0.008) # kalın kabzada parmak uçları sol yüzü bulsun
 	return _hold(a, rot, GRIP_C)
 
 
@@ -280,7 +279,7 @@ static func _make(id: String) -> Dictionary:
 				"vis": [[0.0, "Rig/Weapon/tank", true], [0.4 * L, "Rig/Weapon/tank", false], [0.48 * L, "Rig/Weapon/tank", true]],
 				"poses": [[0.18 * L, "L", "grip"], [0.9 * L, "L", hold]], "events": [[0.85 * L, "mag_in"], [L, "done"]]}
 		"bow":
-			var nock := Vector3(0, 0, 0.15) # el kameraya fazla yaklaşmasın
+			var nock := Vector3(0, 0, 0.11) # el kameraya fazla yaklaşmasın
 			c["draw_string"] = {"len": 0.6, "tracks": {
 					"Rig/Weapon/string_top": [_k(0), _k(0.6, Z, Vector3(-0.31, 0, 0))],
 					"Rig/Weapon/string_bot": [_k(0), _k(0.6, Z, Vector3(0.31, 0, 0))],
@@ -345,50 +344,52 @@ static func _make(id: String) -> Dictionary:
 	return c
 
 
-## İksir içme (~1.7 sn): kaldır (hafif önden çökme) → sol el tıpayı çeker (pop ~0.5, şişe sarsılır) → tıpa elde
-## aşağı-dışa → şişe ağza, ~70° eğik → üç yudum darbesi (sıvı adım adım azalır, "gulp" ortadaki yudumda) → boş
-## şişe aşağı, ekran dışı, gizlenir → "done". Tıpa (şişenin çocuğu) çekildikten sonra sol elin çimdik ucunu izler:
-## her anahtarda el ucunun konumu şişe uzayına çevrilir (aynı anahtar zamanları: ikisi birlikte yumuşar).
+## İksir içme (~1.7 sn): kaldır (hafif önden çökme) → sol el avuç aşağı tıpayı işaret-başparmak uçları arasında
+## kavrar, çevirir, çeker (pop ~0.5, şişe sarsılır) → tıpa elde aşağı-dışa → şişe alt-ortada ağza, ~60° eğik, boyun
+## kameraya → üç yudum (sıvı adım adım azalır, "gulp" ortadaki yudumda) → boş şişe aşağı, gizlenir → "done".
+## Tıpa çekildikten sonra el tıpaya bağlı: önce tıpanın yolu (base uzayında) yazılır, el ondan türetilir, tıpa izi
+## o anki şişe dönüşümüne göre şişe uzayına çevrilir (aynı anahtar zamanları: ikisi birlikte yumuşar).
 static func _drink() -> Dictionary:
 	var L := 1.7
 	var rs := rest("item:potion")
 	var gl: Vector3 = rs["HandL"][0]
 	var cork0: Vector3 = rs["Rig/Weapon/cork"][0]
-	var chest := [Vector3(-0.12, 0.1, 0.03), Vector3(0, 0, 0.15)] # göğüs hizası, ağız sol ele dönük
-	# Ağızda: gövde görüşün ortasında, boyun ~70° eğik ve hafif sola yatık kameraya (ekranın üst-ortasına) uzanır.
-	var mouth := [Vector3(-0.15, 0.14, 0.14), Vector3(1.2, 0, 0.35)] # iksir view'una göre
-	var sip := [mouth[0] + Vector3(0, 0.01, 0.012), mouth[1] + Vector3(0.16, 0, 0)] # yudum: biraz daha eğ, ağza it
+	var chest := [Vector3(-0.12, 0.07, 0.03), Vector3(0, 0, 0.15)] # göğüs hizası, ağız sol ele dönük
+	# Ağızda: gövde ekranın alt-ortasında, boyun ~60° eğik yukarı-kameraya (iksir view'una göre fark).
+	var mouth := [Vector3(-0.15, 0.03, 0.1), Vector3(1.05, 0, 0.12)]
+	var sip := [mouth[0] + Vector3(0, 0.008, 0.012), mouth[1] + Vector3(0.12, 0, 0)] # yudum: biraz daha eğ, ağza it
 	var rig := [_k(0), _k(0.12, Vector3(0.01, -0.02, 0.01), Vector3(-0.06, 0, -0.03)), _k(0.3, chest[0], chest[1]),
 		_k(0.48, chest[0], chest[1]), _k(0.5, chest[0] + Vector3(0.004, -0.01, 0), chest[1] + Vector3(0.07, 0, 0.06)),
 		_k(0.56, chest[0] + Vector3(0, 0.004, 0), chest[1] + Vector3(-0.02, 0, -0.02)), _k(0.62, chest[0], chest[1]),
-		_k(0.74, mouth[0] + Vector3(0, -0.01, -0.02), mouth[1] * 0.85), _k(0.8, mouth[0], mouth[1])]
+		_k(0.74, mouth[0] + Vector3(0, -0.02, -0.02), mouth[1] * 0.85), _k(0.8, mouth[0], mouth[1])]
 	for t0 in [0.84, 1.01, 1.18]: # üç yudum
 		rig.append_array([_k(t0 + 0.05, sip[0], sip[1]), _k(t0 + 0.12, mouth[0], mouth[1])])
 	rig.append_array([_k(1.36, mouth[0] + Vector3(0.05, -0.06, -0.03), Vector3(0.4, 0, 0)),
 		_k(1.52, Vector3(0.06, -0.16, 0.04), Vector3(-0.35, 0, -0.2)), _k(L, Vector3(0.12, -0.36, 0.08), Vector3(-0.7, 0, -0.35))])
-	# Sol el: tıpayı çimdiklediği an (0.42) çimdik ucu tıpada.
-	var lrot := Vector3(0.25, -0.55, 0.0)
 	var rig_at := func(k: Array) -> Transform3D: return Transform3D(Basis.from_euler(k[2]), k[1])
-	var grab: Vector3 = rig_at.call(_k(0, chest[0], chest[1])) * cork0 - Basis.from_euler(lrot) * CORK - gl
-	var hl := [_k(0), _k(0.2, Vector3(0.03, 0.12, -0.05)), _k(0.32, grab + Vector3(-0.05, -0.05, 0.03), lrot * 0.7), _k(0.42, grab, lrot)]
-	# [t, el farkı, dönüş farkı]: 0.46 parmaklar tıpayı çevirir, 0.5 pop (yukarı-dışa), sonra aşağı-dışa ekran dışına
-	var after := [[0.46, Vector3(0, 0.004, 0), Vector3(0, 0, 0.04)], [0.5, Vector3(-0.012, 0.03, 0.0), Vector3(0.05, 0, 0.08)],
-		[0.56, Vector3(-0.05, 0.06, 0.01), Vector3(0.1, 0, 0.1)], [0.62, Vector3(-0.09, 0.02, 0.02), Vector3(0.0, 0, 0.1)],
-		[0.74, Vector3(-0.17, -0.12, 0.05), Vector3(-0.2, 0, 0.05)], [0.92, Vector3(-0.2, -0.32, 0.06), Vector3(-0.4, 0, 0.0)]]
-	var ck := [_k(0), _k(0.42)]
-	var rig_keys := {}
-	for k in rig:
-		rig_keys[k[0]] = k
-	for e in after:
-		hl.append(_k(e[0], grab + e[1], lrot + e[2]))
-		var hb := Basis.from_euler(lrot + e[2])
-		var tip: Vector3 = gl + grab + e[1] + hb * CORK # dinlenme + fark: el ucu (base uzayında)
-		var rk: Array = rig_keys.get(e[0], _k(e[0], chest[0], chest[1]))
-		if not rig_keys.has(e[0]): # bu anda şişe anahtarı yoksa en yakın önceki anahtar (0.62 sonrası yaklaşık)
-			for k in rig:
-				if k[0] <= e[0]:
-					rk = k
-		ck.append(_k(e[0], rig_at.call(rk).affine_inverse() * tip - cork0, Vector3(0, 0.9 if e[0] > 0.45 else 0.0, 0) + e[2]))
+	# Tıpa ekseni (Y) avucun içine bakar (-X); uçlar arasındaki doğru (~ -Z) tıpanın yanlarını sıkıştırır.
+	var held := Transform3D(Basis(Vector3.BACK, PI / 2), CORK).affine_inverse() # tıpa -> sol el kökü
+	var neck: Transform3D = rig_at.call(_k(0, chest[0], chest[1])) * Transform3D(Basis(Vector3.UP, -PI / 2), cork0) # avuç aşağı, parmaklar sağa
+	var hand_at := func(c: Transform3D) -> Array: # tıpa dönüşümünden el izi farkı (dinlenme dönüşü sıfır)
+		var h := c * held
+		return [h.origin - gl, h.basis.get_euler()]
+	var g: Array = hand_at.call(neck)
+	var hl := [_k(0), _k(0.2, Vector3(0.03, 0.12, -0.05)), _k(0.32, g[0] + Vector3(-0.05, -0.04, 0.03), g[1]), _k(0.42, g[0], g[1])]
+	# [t, tıpa boyunca kayma, tıpanın kendi dönüşü, dünya kayması]: 0.48 çevir, 0.5 pop, sonra yukarı-sola, aşağı-dışa
+	var path := [[0.48, 0.0, Vector3(0, 0.45, 0), Z], [0.5, 0.035, Vector3(0, 0.55, 0), Z],
+		[0.56, 0.06, Vector3(0, 0.6, 0.15), Vector3(-0.03, 0.03, 0.0)], [0.62, 0.06, Vector3(0, 0.6, 0.35), Vector3(-0.08, 0.01, 0.02)],
+		[0.74, 0.06, Vector3(-0.3, 0.6, 0.5), Vector3(-0.17, -0.13, 0.05)], [0.92, 0.06, Vector3(-0.5, 0.6, 0.5), Vector3(-0.2, -0.33, 0.06)]]
+	var ck := [_k(0), _k(0.42, Z, Vector3(0, -PI / 2, 0))]
+	for e in path:
+		var c := Transform3D(Basis(), e[3]) * neck * Transform3D(Basis.from_euler(e[2]), Vector3(0, e[1], 0))
+		var hk: Array = hand_at.call(c)
+		hl.append(_k(e[0], hk[0], hk[1]))
+		var rk: Array = rig[0]
+		for k in rig: # bu andaki (ya da hemen önceki) şişe anahtarı
+			if k[0] <= e[0] + 0.001:
+				rk = k
+		var b: Transform3D = rig_at.call(rk).affine_inverse() * c
+		ck.append(_k(e[0], b.origin - cork0, b.basis.get_euler()))
 	hl.append(_k(L))
 	var fill := [[0.0, "Rig/Weapon:fill", 1.0], [0.84, "Rig/Weapon:fill", 1.0]]
 	var lv := 1.0

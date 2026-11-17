@@ -11,10 +11,10 @@ const WA := preload("res://weapon_anims.gd")
 const Weapons := preload("res://weapons.gd")
 const LAYER := 2
 const FOV := 62.0
-const ARM_SCALE := 0.72 # oyuncu modeliyle aynı (player.MODEL_SCALE): kol ~0,68 m, yay tutuşuna da yeter
-const SHOULDER_WIDEN := 0.15 # model biriminde, her omuz dışa
-const SHOULDERS := Vector3(0, -0.3, 0.0) # iki omuz ortası, kamera uzayında: göz hizasının altında, ekran dışında
-const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.15, -0.17, -0.34), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
+const ARM_SCALE := 0.8 # oyuncu modelinden (0.72) biraz büyük: kol ~0,75 m, uzun namlunun ön tutamağına yetişir
+const SHOULDER_WIDEN := 0.05 # model biriminde, her omuz dışa
+const SHOULDERS := Vector3(0, -0.4, -0.02) # iki omuz ortası, kamera uzayında: göz hizasının epey altında, ekran dışında
+const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.13, -0.1, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
 
 var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
 var sway_tilt := Vector3.ZERO
@@ -94,6 +94,8 @@ func _arms(path: String) -> void:
 		var i := sk.find_bone(b)
 		if i >= 0:
 			sk.set_bone_pose_scale(i, Vector3.ONE * 0.001)
+	for s in ["L", "R"]: # ön kol inceltilir (kemik ekseni Y; çocuğu Fist zaten büzük, kesme olmaz)
+		sk.set_bone_pose_scale(sk.find_bone("LowerArm." + s), Vector3(0.55, 1.0, 0.55))
 	for s in ["L", "R"]: # omuzları açar: kollar ekrana ortadan değil alt köşelerden girsin
 		var i := sk.find_bone("Shoulder." + s)
 		var pb := sk.get_bone_global_rest(sk.get_bone_parent(i)).basis
