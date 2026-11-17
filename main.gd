@@ -832,10 +832,8 @@ func weapon_icon(id: String) -> Texture2D:
 	if not ResourceLoader.exists("res://models/%s.glb" % id):
 		return null
 	var model: Node3D = W.make_prop({"id": id})
-	if id == "bazooka":
-		model.rotation.y = -PI / 2 # namlu -Z'ye
-	elif id == "sword":
-		model.rotation.x = -PI / 2
+	if id == "sword":
+		model.rotation.z = PI / 2 # yassı yüzü kameraya
 	var vp := SubViewport.new()
 	vp.size = Vector2i(256, 160)
 	vp.transparent_bg = true

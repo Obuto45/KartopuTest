@@ -222,9 +222,9 @@ func _ready() -> void:
 	_load_model()
 
 	# Bazuka ve kılıç kafa pivotuna bağlı (bakışla birlikte döner); sağ kol onlara uzanır.
-	gun = _prop("res://models/bazooka.glb", 0.95, Vector3(0, -PI / 2, 0), Vector3(0.5, 0.5, 0.5))
+	gun = _prop("res://models/bazooka.glb", 0.95, Vector3.ZERO, Vector3(0.5, 0.5, 0.5))
 	gun.position = Vector3(0.3, -0.33, -0.5)
-	sword = _prop("res://models/sword.glb", 1.05, Vector3(-PI / 2, 0, 0), Vector3(0.5, 0.1, 0.5)) # kabzadan tut
+	sword = _prop("res://models/sword.glb", 1.05, Vector3.ZERO, Vector3(0.5, 0.5, 0.87)) # kabzadan tut
 	sword.position = Vector3(0.34, -0.36, -0.4)
 	sword.rotation = Vector3(0.9, 0.2, 0) # dinlenme: ucu yukarıda, hafif içe dönük
 	sword.visible = false
