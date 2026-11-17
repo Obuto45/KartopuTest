@@ -122,6 +122,7 @@ func _ready() -> void:
 	await _wait(0.4)
 
 	chk("TD başlangıcı: yalnız seçilen silah slot 1'de", me.inv[0].get("id") == "pistol" and me.inv[1].is_empty() and me.inv[2].is_empty() and me.stats.size() == 9, me.inv)
+	chk("TD başlangıç silahı dolu şarjörlü", me.inv[0].get("ammo") == 12, me.inv[0])
 	chk("veri: 10 silah, 9 stat, her silaha >= 3 yükseltme", Weapons.LIST.size() == 10 and Weapons.STATS.size() == 9
 		and Weapons.LIST.all(func(w): return Weapons.UPS[w.id].size() >= 3))
 
@@ -247,6 +248,7 @@ func _ready() -> void:
 		r == [true, false, true, true, false, true, true, true, false, false, false]
 		and me.inv[0].id == "bow" and me.inv[1].id == "wall" and me.inv[1].kind == "equip" and me.inv[2].id == "smg"
 		and me.inv[3].kind == "build" and me.inv[3].count == 2 and me.inv[4].id == "potion", [r, me.inv])
+	chk("eklenen silahlar dolu şarjörlü", me.inv[0].get("ammo") == 1 and me.inv[2].get("ammo") == 30 and not me.inv[3].has("ammo"), me.inv)
 	chk("sahibi olmayan kopya yalnızca yer bildirir", mate.add_item({"kind": "item", "id": "bomb"}) and mate.inv[3].is_empty())
 
 	# --- yapı yerleştirme ve eşyalar
@@ -331,6 +333,14 @@ func _ready() -> void:
 		var m := Weapons.make_prop(w)
 		chk("%s modeli var" % w.id, not m.find_children("*", "MeshInstance3D", true, false).is_empty())
 		m.free()
+
+	var p := Weapons.tuned("pistol", {})
+	chk("tabanca şarjörü 12", Weapons.mag_of(p) == 12)
+	chk("tabanca doldurma 1.3 / boş 1.6", is_equal_approx(Weapons.reload_time(p, 1.0, false), 1.3) and is_equal_approx(Weapons.reload_time(p, 1.0, true), 1.6))
+	chk("saldırı hızı x2 doldurmayı yarılar", is_equal_approx(Weapons.reload_time(p, 2.0, false), 0.65))
+	chk("bazuka hızlı dolum 2 seviye", is_equal_approx(Weapons.tuned("bazooka", {"bazooka:reload": 2}).reload, 2.0 * 0.85 * 0.85))
+	chk("kılıç ve bumerang şarjörsüz", Weapons.mag_of(Weapons.tuned("sword", {})) == 0 and Weapons.mag_of(Weapons.tuned("boomerang", {})) == 0)
+	chk("yeni silahın şarjörü dolu", Weapons.full_ammo("smg") == 30 and Weapons.full_ammo("sword") == 0)
 
 	Net.set_weapon(3)
 	chk("Net.set_weapon", Net.my_weapon == 3 and Net.weapons.get(1) == 1)

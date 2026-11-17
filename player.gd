@@ -1227,7 +1227,8 @@ func respawn() -> void:
 func _td_init() -> void:
 	if stats.is_empty():
 		stats = Weapons.base_stats(ch)
-		inv[0] = {"kind": "weapon", "id": Weapons.get_weapon(Net.weapons.get(get_multiplayer_authority(), 0)).id, "count": 1, "lvl": 1}
+		var wid: String = Weapons.get_weapon(Net.weapons.get(get_multiplayer_authority(), 0)).id
+		inv[0] = {"kind": "weapon", "id": wid, "count": 1, "lvl": 1, "ammo": Weapons.full_ammo(wid)}
 	slot = 1
 	hand = Node3D.new()
 	look.add_child(hand)
@@ -1557,6 +1558,8 @@ func add_item(d: Dictionary) -> bool:
 	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() <= 1:
 		if inv[i].is_empty():
 			inv[i] = {"kind": d.kind, "id": d.id, "count": d.get("count", 1), "lvl": 1}
+			if d.kind == "weapon":
+				inv[i]["ammo"] = Weapons.full_ammo(d.id)
 		else:
 			inv[i].count += d.get("count", 1)
 		_td_changed()

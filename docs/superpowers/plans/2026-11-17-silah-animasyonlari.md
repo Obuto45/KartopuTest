@@ -54,7 +54,7 @@
 
 ---
 
-### Görev 1: Şarjör verisi ve saf mantık
+### Task 1: Şarjör verisi ve saf mantık
 
 **Dosyalar:**
 - Değiştir: `weapons.gd` (LIST alanları, UPS bazuka `reload`, yeni statik fonksiyonlar)
@@ -84,7 +84,7 @@ chk("yeni silahın şarjörü dolu", Weapons.full_ammo("smg") == 30 and Weapons.
 - [ ] **Adım 4: Çalıştır, hepsi OK.**
 - [ ] **Adım 5: Commit** — `feat: silah şarjör verisi ve doldurma süresi`
 
-### Görev 2: Üretici — adlı parçalar ve işaret noktaları
+### Task 2: Üretici — adlı parçalar ve işaret noktaları
 
 **Dosyalar:**
 - Değiştir: `tools/weapon_models.gd`, `models/*.glb` (yeniden üretilir)
@@ -129,7 +129,7 @@ for w in Weapons.LIST:
 - [ ] **Adım 4: Üret, içe aktar, testi çalıştır; OK.** Ek olarak önizleme betiğiyle (geçici) bakış: görünüş öncekiyle aynı olmalı.
 - [ ] **Adım 5: Commit** — `feat: silah modelleri hareketli parçalara bölündü`
 
-### Görev 3: Eller
+### Task 3: Eller
 
 **Dosyalar:**
 - Oluştur: `hands.gd`
@@ -160,7 +160,7 @@ hR.free()
 - [ ] **Adım 4: OK.**
 - [ ] **Adım 5: Commit** — `feat: koddan low-poly eller`
 
-### Görev 4: Animasyon klipleri
+### Task 4: Animasyon klipleri
 
 **Dosyalar:**
 - Oluştur: `weapon_anims.gd`
@@ -243,7 +243,7 @@ chk("parts_only: yalnız parça izleri", range(po.get_track_count()).all(func(t)
 - [ ] **Adım 4: OK.**
 - [ ] **Adım 5: Commit** — `feat: silah animasyon klipleri`
 
-### Görev 5: Görüş modeli (viewmodel) ve oyuncuya bağlama
+### Task 5: Görüş modeli (viewmodel) ve oyuncuya bağlama
 
 **Dosyalar:**
 - Oluştur: `viewmodel.gd`
@@ -288,7 +288,7 @@ vm.queue_free()
 - [ ] **Adım 4: Testleri ve `tests/shots.tscn`'i çalıştır.** `forest.png` ve `hud.png`'de el ve silah gerçek büyüklükte, sağ altta; duvar dibinde silah duvara girmiyor.
 - [ ] **Adım 5: Commit** — `feat: kendi gözünden eller ve silah (viewmodel)`
 
-### Görev 6: Şarjör, doldurma ve ateş akışı
+### Task 6: Şarjör, doldurma ve ateş akışı
 
 **Dosyalar:**
 - Değiştir: `player.gd` (`_td_use`, `_td_shoot`, `_local`, yeni yöntemler), `main.gd:107-120` (`reload`, `aim` eylemleri), `td_ui.gd:512-530` (slot sayacı)
@@ -352,7 +352,7 @@ chk("boşken basılı tutmak tek doldurma başlatır", me.reloading and dry == 1
 - [ ] **Adım 4: OK; mevcut 59 test de OK.**
 - [ ] **Adım 5: Commit** — `feat: şarjör ve doldurma (R), HUD sayacı`
 
-### Görev 7: El bombası ve bomba eşyası — pim, bekletme, fırlatma
+### Task 7: El bombası ve bomba eşyası — pim, bekletme, fırlatma
 
 **Dosyalar:**
 - Değiştir: `player.gd` (`_td_use` "weapon" grenade + "item" bomb, `_local` bırakma algısı, ölüm), `rocket.gd` (sigorta)
@@ -402,7 +402,7 @@ chk("pimliyken ölünce bomba yere düşüp patlar", me.fuse_left == 0.0 and get
 - [ ] **Adım 4: OK.**
 - [ ] **Adım 5: Commit** — `feat: el bombası pim çek, beklet, at`
 
-### Görev 8: Yay, keskin nişancı, bumerang, kılıç
+### Task 8: Yay, keskin nişancı, bumerang, kılıç
 
 **Dosyalar:**
 - Değiştir: `player.gd`, `slipper.gd` (dönüşte `thrower.caught()`), `main.gd` (dürbün çerçevesi, Arena HUD), `td_ui.gd` (germe göstergesi)
@@ -472,7 +472,7 @@ chk("kılıç 3'lü seri, üçüncü daha güçlü", dm[2] > dm[0] and me.combo 
 - [ ] **Adım 4: OK.**
 - [ ] **Adım 5: Commit** — `feat: yay germe, dürbün, bumerang yakalama, kılıç serisi`
 
-### Görev 9: Eşyalar — iksir içme ve yapı yerleştirme
+### Task 9: Eşyalar — iksir içme ve yapı yerleştirme
 
 **Dosyalar:**
 - Değiştir: `player.gd` (`_td_use` "item" potion, "build")
@@ -505,7 +505,7 @@ chk("içme bitti", me.busy == "")
 - [ ] **Adım 4: OK.**
 - [ ] **Adım 5: Commit** — `feat: iksir içme ve yerleştirme animasyonu`
 
-### Görev 10: Diğer oyuncuların gördüğü — parça klipleri ve sol kol
+### Task 10: Diğer oyuncuların gördüğü — parça klipleri ve sol kol
 
 **Dosyalar:**
 - Değiştir: `player.gd` (`td_anim`, `_pose` sol kol, prop'lara `AnimationPlayer`), `tests/td_net.gd`
@@ -534,7 +534,7 @@ chk("doldurma hasar yollamadı", td_host.hits.is_empty())
 - [ ] **Adım 4: `td_net` ve `shots` çalıştır.** `side.png`'de bir karakter sol eliyle silahı destekliyor.
 - [ ] **Adım 5: Commit** — `feat: diğer oyunculara silah animasyonları ve sol kol`
 
-### Görev 11: Görsel doğrulama ve son kontrol
+### Task 11: Görsel doğrulama ve son kontrol
 
 **Dosyalar:**
 - Değiştir: `tests/shots.gd` (yeni kareler)
