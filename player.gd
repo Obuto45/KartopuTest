@@ -9,6 +9,8 @@ const WallScript := preload("res://wall.gd")
 const Chars := preload("res://characters.gd")
 const HomingScript := preload("res://slipper.gd")
 const ZoneScript := preload("res://zone.gd")
+const Weapons := preload("res://weapons.gd")
+const BUILD_DIST := 3.0 # TD: yapı önizlemesi önümüzde bu mesafede
 const SIT_TIME := 2.0 # sit_shield pasifi: bu kadar durunca kalkan alır
 const SPEED := 7.0
 const ACCEL := 60.0 # yerde hızlanma (m/s²)
@@ -139,6 +141,22 @@ var shake_k := 0.0 # kamera sarsıntısı
 var gun_p := Vector3.ZERO # silahların dinlenme konumu
 var sword_p := Vector3.ZERO
 var dust: CPUParticles3D # koşarken ayak tozu
+# Tower Defense: yalnızca "td" grubunda düğüm varken dolar; arenada hepsi boş kalır (st() 1 döner).
+var td: Node
+var stats := {} # stat id -> değer (weapons.gd STATS)
+var stat_points := 0
+var level := 1
+var inv: Array = [{}, {}, {}, {}, {}] # 1–3 silah/ekipman, 4–5 yapı/eşya
+var ups := {} # yükseltme seviyeleri: "<silah>:<id>" ve "char:<id>"
+var cards: Array = [] # seçim bekleyen kartlar
+var pending := 0 # kartı seçilmemiş seviye sayısı
+var respawn_t := 0.0
+var burns := {} # yaratık adı -> [yaratık, hasar/sn, kalan sn]
+var hand: Node3D # koddan üretilen silah modellerinin tutucusu
+var hand_p := Vector3.ZERO
+var props := {} # silah id -> model
+var hold: Node3D # elde görünen silah: sağ kol ona uzanır
+var ghost: MeshInstance3D # yapı önizlemesi
 var puff: CPUParticles3D # zıplama / iniş bulutu
 
 
@@ -171,6 +189,11 @@ func bt(k: String) -> float:
 
 func _world() -> Node:
 	return get_parent().get_parent()
+
+
+## Stat değeri; arenada (stats boş) etkisiz varsayılan.
+func st(k: String, d := 1.0) -> float:
+	return stats.get(k, d)
 
 
 func _ready() -> void:
@@ -348,8 +371,8 @@ func _pose(s: Skeleton3D) -> void:
 		var h := s.get_bone_global_pose(b_head)
 		h.basis = Basis(Vector3.UP, -twist) * Basis(Vector3.RIGHT, -look.rotation.x * 0.6) * h.basis # gövde yana dönse de kafa bakışta
 		s.set_bone_global_pose(b_head, h)
-	if (slot == 1 or slot == 4) and b_arm >= 0 and b_fore >= 0:
-		var grip: Vector3 = s.global_transform.affine_inverse() * (sword if slot == 4 else gun).global_position
+	if hold and b_arm >= 0 and b_fore >= 0:
+		var grip: Vector3 = s.global_transform.affine_inverse() * hold.global_position
 		_aim_bone(s, b_arm, (grip - s.get_bone_global_pose(b_arm).origin).normalized() + Vector3.DOWN * 0.45)
 		_aim_bone(s, b_fore, grip - s.get_bone_global_pose(b_fore).origin)
 
@@ -361,7 +384,7 @@ func _aim_bone(s: Skeleton3D, i: int, dir: Vector3) -> void:
 
 
 func _speed() -> float:
-	return SPEED * ch.get("speed", 1.0) * bv("haste") * bv("slow")
+	return SPEED * ch.get("speed", 1.0) * bv("haste") * bv("slow") * st("speed")
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -424,6 +447,10 @@ func _spectate(dt: float) -> void:
 
 
 func _physics_process(dt: float) -> void:
+	if td == null: # TD düğümü oyunculardan sonra eklenir
+		td = get_tree().get_first_node_in_group("td")
+		if td:
+			_td_init()
 	if is_multiplayer_authority():
 		_local(dt)
 	else:
@@ -457,18 +484,21 @@ func _local(dt: float) -> void:
 		dir = (transform.basis * Vector3(iv.x, 0, iv.y)).normalized()
 		if Input.is_action_just_pressed("jump"):
 			if on_floor:
-				velocity.y = JUMP * ch.get("jump", 1.0)
+				velocity.y = JUMP * ch.get("jump", 1.0) * st("jump")
 			elif air_jumps > 0: # çift zıplama
 				air_jumps -= 1
-				velocity.y = AIR_JUMP * ch.get("jump", 1.0)
+				velocity.y = AIR_JUMP * ch.get("jump", 1.0) * st("jump")
 		if Input.is_action_just_pressed("dash") and dash_cd <= 0.0: # yerde ve havada
 			var d := dir if dir != Vector3.ZERO else -transform.basis.z
 			velocity = d * DASH_SPEED
 			dash_t = DASH_TIME
 			dash_cd = DASH_CD
 			Sfx.play2d(Sfx.whoosh, -2.0)
-		for s in [1, 2, 3, 4]:
-			if Input.is_action_just_pressed("slot%d" % s):
+		for s in [1, 2, 3, 4, 5] if td else [1, 2, 3, 4]:
+			if td:
+				if InputMap.has_action("slot%d" % s) and Input.is_action_just_pressed("slot%d" % s):
+					slot = s
+			elif Input.is_action_just_pressed("slot%d" % s):
 				_set_slot(s)
 				if s == 2:
 					_try_shield()
@@ -488,7 +518,9 @@ func _local(dt: float) -> void:
 		velocity.x = hv.x
 		velocity.z = hv.y
 
-	if can_act and Input.is_action_just_pressed("throw"):
+	if td:
+		_td_local(dt, can_act, alive)
+	elif can_act and Input.is_action_just_pressed("throw"):
 		if slot == 2:
 			_try_shield()
 		elif slot == 3 and wall_cd <= 0.0:
@@ -497,7 +529,7 @@ func _local(dt: float) -> void:
 		elif slot == 4 and sword_cd <= 0.0:
 			sword_cd = SWORD_CD
 			swing.rpc(global_position, -transform.basis.z)
-	if can_act and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
+	if td == null and can_act and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
 		cd = THROW_CD * ch.get("fire_cd", 1.0) * bv("rapid")
 		_shoot(int(bv("multi")), 0.07, false)
 
@@ -513,12 +545,19 @@ func _tick(dt: float, on_floor: bool) -> void:
 	tick_t += dt
 	if tick_t >= 1.0:
 		tick_t -= 1.0
-		regen_acc += ch.get("regen", 0.0) + bv("regen", 0.0)
+		regen_acc += ch.get("regen", 0.0) + bv("regen", 0.0) + ups.get("char:regen", 0)
 		if regen_acc >= 1.0:
 			gain(int(regen_acc))
 			regen_acc -= int(regen_acc)
 		if bt("burn") > 0.0:
 			take_hit(int(bv("burn")), true)
+		for k in burns.keys(): # TD: yaktığımız yaratıklar
+			var b: Array = burns[k]
+			b[2] -= 1.0
+			if not is_instance_valid(b[0]) or b[0].hp <= 0 or b[2] < 0.0:
+				burns.erase(k)
+			else:
+				td_dmg(b[0], b[1], false)
 	if ch.get("sit_shield", false):
 		still_t = still_t + dt if Vector2(velocity.x, velocity.z).length() < 0.5 else minf(still_t, 0.0)
 		if still_t >= SIT_TIME and not shield_on:
@@ -616,8 +655,9 @@ func _aim_point(max_d: float) -> Vector3:
 ## Karar yerel makinede verilir, etkiyi use_skill herkese yayar.
 func _use_skill() -> void:
 	var target_id := 0
+	var best: Node3D = null
 	if sk.has("range"):
-		var best := _nearest(sk.range)
+		best = Weapons.nearest(get_tree(), global_position, sk.range) if td else _nearest(sk.range)
 		if best == null:
 			return # hedef yok: bekleme süresi harcanmasın
 		target_id = best.get_multiplayer_authority()
@@ -628,24 +668,40 @@ func _use_skill() -> void:
 	var aim := global_position
 	if sk.has("area") and sk.area.get("at", "") == "aim":
 		aim = _aim_point(sk.area.range)
-	skill_cd = ch.cd
-	use_skill.rpc(global_position, aim, -transform.basis.z, target_id)
+	skill_cd = ch.cd * pow(0.85, ups.get("char:cd", 0))
+	if td: # hedef yaratık: adıyla gider
+		td_skill.rpc(global_position, aim, -transform.basis.z, str(best.name) if best else "")
+	else:
+		use_skill.rpc(global_position, aim, -transform.basis.z, target_id)
 
 
 @rpc("authority", "call_local", "reliable")
 func use_skill(pos: Vector3, aim: Vector3, fwd: Vector3, target_id: int) -> void:
+	_skill(pos, aim, fwd, get_parent().get_node_or_null(str(target_id)) if target_id != 0 else null)
+
+
+@rpc("authority", "call_local", "reliable")
+func td_skill(pos: Vector3, aim: Vector3, fwd: Vector3, enemy: String) -> void:
+	var t: Node3D = null
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if str(e.name) == enemy:
+			t = e
+	_skill(pos, aim, fwd, t)
+
+
+func _skill(pos: Vector3, aim: Vector3, fwd: Vector3, target: Node3D) -> void:
 	say(ch.quote)
 	Sfx.play3d(Sfx.whoosh, pos + Vector3.UP, 2.0)
 	var s: Dictionary = sk.get("self", {})
 	for k in TIMED:
 		if s.has(k):
 			buffs[k] = s[k].duplicate()
+			buffs[k][1] *= 1.0 + 0.3 * ups.get("char:dur", 0)
 	for k in ["invis", "float"]:
 		if s.has(k):
 			buffs[k] = [1.0, s[k]]
 	if not s.is_empty():
 		_ring_fx(pos + Vector3.UP * 0.2, Color(ch.color, 0.85), 1.6, 0.4)
-	var target: Node3D = get_parent().get_node_or_null(str(target_id)) if target_id != 0 else null
 	if is_multiplayer_authority():
 		_self_skill(s, fwd, target)
 	if target and sk.has("swap") and target.is_multiplayer_authority(): # kurban benim yerime gelir
@@ -655,6 +711,11 @@ func use_skill(pos: Vector3, aim: Vector3, fwd: Vector3, target_id: int) -> void
 		var h: Node3D = HomingScript.new()
 		h.thrower = self
 		h.h = sk.homing
+		if td: # yaratığı kovalar; yükseltmeler hasara ve sekmeye eklenir
+			h.td = true
+			h.h = sk.homing.duplicate()
+			h.h["dmg"] = h.h.get("dmg", 0) * _sk_k()
+			h.h["bounces"] = h.h.get("bounces", 0) + ups.get("char:bounces", 0)
 		h.target = target
 		h.dir = (-look.global_basis.z + Vector3.UP * 0.4).normalized() # önce havaya kalkar
 		h.position = look.global_position + h.dir * 0.6
@@ -666,7 +727,7 @@ func use_skill(pos: Vector3, aim: Vector3, fwd: Vector3, target_id: int) -> void
 ## Yeteneğin atanı etkileyen kısmı; yalnızca atanın kendi makinesinde çalışır.
 func _self_skill(s: Dictionary, fwd: Vector3, target: Node3D) -> void:
 	var flat := Vector3(fwd.x, 0, fwd.z).normalized()
-	var heal: int = s.get("heal", 0) + int((max_hp - hp) * s.get("heal_missing", 0.0))
+	var heal: int = roundi((s.get("heal", 0) + int((max_hp - hp) * s.get("heal_missing", 0.0))) * _sk_k())
 	if heal > 0:
 		gain(heal)
 	if s.has("regen"):
@@ -709,6 +770,14 @@ func skill_area(pos: Vector3, dir: Vector3) -> void:
 
 ## Alan etkisi: anlıksa hemen uygular; gecikmeli / kalıcı / kapansa zone.gd devralır.
 func _area(a: Dictionary, at: Vector3, dir: Vector3) -> void:
+	if td: # yükseltmeler alanı ve hasarı büyütür
+		a = a.duplicate()
+		a.r *= 1.0 + 0.2 * ups.get("char:radius", 0)
+		for k in ["dmg", "drain"]:
+			if a.has(k):
+				a[k] = roundi(a[k] * _sk_k())
+		if a.erase("mine"): # shortcut: zone.gd kapanı yalnızca oyuncular tetikler; TD'de 1 sn gecikmeli patlama olur
+			a["delay"] = 1.0
 	if a.has("delay") or a.has("linger") or a.has("mine"):
 		var z: Node3D = ZoneScript.new()
 		z.caster = self
@@ -727,6 +796,14 @@ func _area(a: Dictionary, at: Vector3, dir: Vector3) -> void:
 
 ## Bu makinedeki oyuncu (atan değilse) etki alanındaysa etkiyi ona uygular.
 func hit_local(a: Dictionary, at: Vector3, dir: Vector3) -> void:
+	if td: # dost ateşi yok: etki yaratıklara, atanın makinesinde
+		if is_multiplayer_authority():
+			for e in Weapons.alive(get_tree()):
+				var et: Vector3 = e.global_position - at
+				et.y = 0.0
+				if Weapons.dist(e, at) <= a.r and not (a.has("cone") and et.length() > 0.3 and dir.dot(et.normalized()) < a.cone):
+					td_affect(e, a, at)
+		return
 	var me := _local_player()
 	if me == null or me == self or me.hp <= 0:
 		return
@@ -888,8 +965,18 @@ func _animate(dt: float) -> void:
 	vis.visible = not hidden
 	size_k = lerpf(size_k, bv("size"), 0.15)
 	vis.scale = Vector3.ONE * size_k
-	gun.visible = hp > 0 and slot == 1
-	sword.visible = hp > 0 and slot == 4
+	var held := _held() if hp > 0 else ""
+	gun.visible = held == "bazooka"
+	sword.visible = held == "sword"
+	hold = gun if gun.visible else sword if sword.visible else null
+	if td: # diğer silahlar: koddan model, ilk gerektiğinde üretilir
+		for k in props:
+			props[k].visible = k == held
+		if held != "" and hold == null:
+			if not props.has(held):
+				props[held] = Weapons.make_prop(Weapons.find(held))
+				hand.add_child(props[held])
+			hold = props[held]
 	shield_mesh.visible = shield_on and not hidden
 	flash = max(flash - dt, 0.0)
 	if flash > 0.0:
@@ -995,6 +1082,9 @@ func _feel(dt: float, mine: bool, spd: float, air: bool, hidden: bool) -> void:
 			spec_cam.v_offset = n.x * 0.08
 	gun.position = gun_p + off
 	gun.rotation = tilt
+	if hand:
+		hand.position = hand_p + off
+		hand.rotation = tilt
 	sword.position = sword_p + off * 0.6 + Vector3(0, 0, -sin((1.0 - swing_t / SWING_T) * PI) * 0.12)
 
 
@@ -1014,6 +1104,9 @@ func fire_rocket(origin: Vector3, dir: Vector3, n: int, big: bool) -> void:
 	r.shooter = self
 	r.dir = dir
 	r.big = big
+	if td: # yetenek roketi: yaratıklara çarpar
+		r.w = Weapons.arena_rocket(big)
+		r.w.dmg *= _pow(r.w)
 	r.position = origin
 	_world().add_child(r)
 	Sfx.play3d(Sfx.fire, origin, -2.0)
@@ -1071,15 +1164,19 @@ func apply_blast(pos: Vector3, radius: float, dmg := DAMAGE) -> void:
 
 ## Hasar kurbanın kendi makinesinde uygulanır. sure: sıyrılma şansı yok (yanma).
 func take_hit(dmg := DAMAGE, sure := false) -> void:
-	if not sure and randf() < ch.get("dodge", 0.0):
+	if not sure and randf() < ch.get("dodge", 0.0) + 0.04 * ups.get("char:dodge", 0):
 		say.rpc("Iska!")
 		return
-	dmg = roundi(dmg * bv("armor") * bv("vuln"))
+	dmg = roundi(dmg * bv("armor") * bv("vuln") * (1.0 - st("armor", 0.0)))
 	if dmg <= 0:
 		return # hasar almıyor (Demir Kafa)
 	set_hp.rpc(hp - dmg)
 	if hp <= 0:
-		get_node("/root/Main").report_death.rpc_id(1, get_multiplayer_authority())
+		if td: # TD'de tur bitmez: süre dolunca kule dibinde doğar
+			var bal: Script = load("res://balance.gd") if ResourceLoader.exists("res://balance.gd") else null
+			respawn_t = bal.get_script_constant_map().get("RESPAWN_TIME", 8.0) if bal else 8.0
+		else:
+			get_node("/root/Main").report_death.rpc_id(1, get_multiplayer_authority())
 
 
 @rpc("authority", "call_local", "reliable")
@@ -1102,6 +1199,7 @@ func respawn() -> void:
 	buffs.clear()
 	land_wait = -1.0
 	still_t = 0.0
+	burns.clear()
 	shield_on = false
 	shield_cd = 0.0
 	dash_cd = 0.0
@@ -1114,3 +1212,371 @@ func respawn() -> void:
 	spec_target = null
 	if cam:
 		cam.current = true # izlemeden kendi gözüne dön
+
+
+# ---------- Tower Defense: envanter, silahlar, statlar, kartlar (veri ve saf mantık weapons.gd'de) ----------
+
+func _td_init() -> void:
+	if stats.is_empty():
+		stats = Weapons.base_stats(ch)
+		inv[0] = {"kind": "weapon", "id": Weapons.get_weapon(Net.weapons.get(get_multiplayer_authority(), 0)).id, "count": 1, "lvl": 1}
+	slot = 1
+	hand = Node3D.new()
+	look.add_child(hand)
+	var mine := is_multiplayer_authority()
+	hand.position = Vector3(0.27, -0.24, -0.62) if mine else Vector3(0.3, -0.3, -0.45)
+	hand.scale = Vector3.ONE * (0.6 if mine else 1.0)
+	hand_p = hand.position
+
+
+## Elde görünen silahın id'si ("" = yok). Arenada slot 1 bazuka, 4 kılıç.
+func _held() -> String:
+	if td == null:
+		return "bazooka" if slot == 1 else "sword" if slot == 4 else ""
+	var it: Dictionary = inv[clampi(slot, 1, 5) - 1]
+	return it.id if it.get("kind", "") == "weapon" else ""
+
+
+func _sk_k() -> float:
+	return 1.0 + 0.25 * ups.get("char:power", 0)
+
+
+## Silah hasar çarpanı: mermi gücü statı + karakterin güç yeteneği ve hasar pasifi (arena tabanına oranla).
+func _pow(w: Dictionary) -> float:
+	var k: float = st("shot_power") * bv("power", Weapons.ARENA_DMG) / Weapons.ARENA_DMG
+	return k * (float(ch.get("sword_dmg", SWORD_DMG)) / SWORD_DMG if w.kind == "melee" else float(ch.get("rocket_dmg", DAMAGE)) / DAMAGE)
+
+
+## Mermilerin içinden geçtiği gövdeler: oyuncular (dost ateşi yok) ve yaratıklar (isabeti geometriyle buluruz).
+func td_rids() -> Array:
+	var out := _player_rids()
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is CollisionObject3D:
+			out.append(e.get_rid())
+	return out
+
+
+## Host'taki TD işlevini çağırır: host'sak doğrudan, değilsek rpc ile.
+func _host(m: String, args: Array) -> void:
+	if multiplayer.is_server():
+		td.callv(m, args)
+	else:
+		td.callv("rpc_id", [1, m] + args)
+
+
+func _td_local(dt: float, can_act: bool, alive: bool) -> void:
+	if can_act and Input.is_action_pressed("throw"):
+		_td_use(Input.is_action_just_pressed("throw"))
+	_td_ghost(alive)
+	if not alive:
+		respawn_t -= dt
+		if respawn_t <= 0.0:
+			td_respawn.rpc()
+
+
+## Seçili slottakini kullanır (sol tık). just: tuşa bu karede basıldı (tek seferlik işler).
+func _td_use(just: bool) -> void:
+	var it: Dictionary = inv[slot - 1]
+	match it.get("kind", ""):
+		"weapon":
+			if cd <= 0.0:
+				var w := Weapons.tuned(it.id, ups)
+				cd = w.rate / st("attack") * ch.get("fire_cd", 1.0) * bv("rapid")
+				_td_shoot(it.id, w)
+		"equip":
+			if just and it.id == "shield":
+				_try_shield()
+			elif just and it.id == "wall" and wall_cd <= 0.0:
+				wall_cd = ch.get("wall_cd", WALL_CD)
+				spawn_wall.rpc(_build_pos(), rotation.y, 0)
+		"build":
+			if just and td.can_place(it.id, _build_pos()):
+				td.place(it.id, _build_pos(), rotation.y)
+				_take(slot - 1)
+		"item":
+			var d: Dictionary = Weapons.ITEMS.get(it.id, {})
+			if not just or d.is_empty() or (d.has("heal") and hp >= max_hp):
+				return
+			if d.has("heal"):
+				gain(d.heal)
+				_ring_fx(global_position + Vector3.UP * 0.2, Color(d.color, 0.85), 1.4, 0.4)
+			else:
+				_td_shoot(it.id, Weapons.tuned(it.id, ups))
+			_take(slot - 1)
+
+
+func _take(i: int) -> void:
+	inv[i].count -= 1
+	if inv[i].count <= 0:
+		inv[i] = {}
+	_td_changed()
+
+
+func _build_pos() -> Vector3:
+	return _ground(global_position - transform.basis.z * BUILD_DIST)
+
+
+## Yapı slotu seçiliyken önümüzde yarı saydam önizleme: kurulabiliyorsa yeşil, değilse kırmızı.
+func _td_ghost(alive: bool) -> void:
+	var it: Dictionary = inv[slot - 1]
+	var on: bool = alive and it.get("kind", "") == "build"
+	if ghost == null:
+		if not on:
+			return
+		var bm := BoxMesh.new()
+		bm.size = Vector3(2.0, 1.6, 0.5)
+		ghost = _mesh(_world(), bm, Vector3.ZERO, Color.WHITE)
+		_bar_mat(ghost)
+	ghost.visible = on
+	if on:
+		var p := _build_pos()
+		ghost.global_position = p + Vector3.UP * 0.8
+		ghost.rotation.y = rotation.y
+		(ghost.material_override as StandardMaterial3D).albedo_color = Color(0.3, 1.0, 0.4, 0.45) if td.can_place(it.id, p) else Color(1.0, 0.25, 0.2, 0.45)
+
+
+func _muzzle() -> Vector3:
+	return look.global_position + look.global_basis * Vector3(0.25, -0.2, -0.8)
+
+
+## Nişangâhın gösterdiği nokta: duvar, zemin ya da yaratık (oyuncuların içinden geçer).
+func _td_aim(max_d: float) -> Vector3:
+	var from := look.global_position
+	var to := from - look.global_basis.z * max_d
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = _player_rids()
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	if r:
+		to = r.position
+	var hits := Weapons.ray(get_tree(), from, to)
+	return hits[0][2] if not hits.is_empty() else to
+
+
+## Atış kararı yerelde: yönleri (saçılma dahil) biz seçer, td_fire ile herkese yayarız.
+func _td_shoot(id: String, w: Dictionary) -> void:
+	var eye: bool = w.kind != "rocket" # anında isabet gözden çıkar: yakındaki hedefte namlu kayması olmasın
+	var origin := look.global_position if eye else _muzzle()
+	var to := _td_aim(200.0) - origin
+	var n: int = w.n + int(bv("multi")) - 1
+	var dirs := PackedVector3Array()
+	for i in n:
+		if w.kind == "homing":
+			dirs.append(to) # nişan noktası: hedefi her makine oradan seçer
+		elif w.kind == "shot":
+			dirs.append((to.normalized() + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 2.0 * w.spread).normalized())
+		else:
+			dirs.append(to.normalized().rotated(Vector3.UP, w.spread * (i - (n - 1) * 0.5)))
+	rocket_n += 1
+	td_fire.rpc(id, origin, dirs, rocket_n)
+
+
+## Her makinede görüntü ve mermi; yaratığa hasarı yalnızca atanın makinesi hesaplar.
+@rpc("authority", "call_local", "reliable")
+func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int) -> void:
+	var w := Weapons.tuned(id, ups)
+	var mine := is_multiplayer_authority()
+	w.dmg *= _pow(w)
+	kick = w.kick
+	shake(origin, w.kick * 0.2)
+	Sfx.play3d(Sfx.fire if w.kind in ["shot", "rocket"] else Sfx.whoosh, origin, -8.0 if w.rate < 0.2 else -2.0)
+	for i in dirs.size():
+		var d := dirs[i]
+		match w.kind:
+			"shot":
+				_td_shot(w, origin, d, mine)
+			"rocket":
+				var r: Node3D = RocketScript.new()
+				r.name = "T%d_%d_%d" % [get_multiplayer_authority(), n, i]
+				r.shooter = self
+				r.dir = d
+				r.w = w
+				r.position = origin
+				_world().add_child(r)
+			"homing":
+				var s: Node3D = HomingScript.new()
+				s.thrower = self
+				s.td = true
+				s.h = w.duplicate()
+				s.h.merge({"look": "boomerang", "speed": w.speed * st("shot_speed"), "turn": 5.0, "turn_gain": 4.0, "bounces": w.bounce + int(st("bounce", 0.0))}, true)
+				s.target = Weapons.nearest(get_tree(), origin + d, 6.0)
+				s.dir = (d.normalized().rotated(Vector3.UP, 0.6 * (i - (dirs.size() - 1) * 0.5)) + Vector3.UP * 0.25).normalized()
+				s.position = origin + s.dir * 0.6
+				_world().add_child(s)
+			"cone":
+				var p := ExplosionScript.parts(ExplosionScript.quad("glow", 0.6), 10, 0.35, w.range * 2.0, w.range * 2.8,
+					[Color(1.0, 0.8, 0.3, 0.7), Color(1.0, 0.35, 0.05, 0.5), Color(0.4, 0.1, 0.0, 0.0)], 0.4, 1.6)
+				p.direction = d
+				p.spread = rad_to_deg(acos(clampf(w.cone, -1.0, 1.0))) * 0.6
+				p.position = _muzzle()
+				p.finished.connect(p.queue_free)
+				_world().add_child(p)
+				p.emitting = true
+				if mine:
+					_td_arc(w, origin, d)
+			"melee":
+				swing_t = SWING_T
+				if mine:
+					_td_arc(w, origin, d)
+
+
+## Anında isabet: yol üstündeki yaratıkları (pierce + 1 tane) vurur, sonra yakındakilere seker.
+func _td_shot(w: Dictionary, from: Vector3, d: Vector3, mine: bool) -> void:
+	var to: Vector3 = from + d * w.range
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = td_rids()
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	if r:
+		to = r.position
+	var seen := []
+	for h in Weapons.ray(get_tree(), from, to).slice(0, w.pierce + 1):
+		seen.append(h[1])
+		if mine:
+			td_affect(h[1], w, from)
+		if seen.size() > w.pierce:
+			to = h[2] # son yaratıkta durdu
+	_beam_fx(_muzzle(), to, w.color)
+	if seen.is_empty():
+		return
+	for i in w.bounce + int(st("bounce", 0.0)):
+		var nx := Weapons.nearest(get_tree(), to, Weapons.CHAIN_R, seen)
+		if nx == null:
+			return
+		w = w.duplicate()
+		w.dmg *= Weapons.CHAIN_K
+		_beam_fx(to, Weapons.e_mid(nx), w.color)
+		if mine:
+			td_affect(nx, w, to)
+		seen.append(nx)
+		to = Weapons.e_mid(nx)
+
+
+## Önümüzdeki yay (alev, kılıç): menzil ve açı içindeki bütün yaratıklar.
+## shortcut: duvar arkasındakini de vurur; sorun olursa yaratığa ışın at.
+func _td_arc(w: Dictionary, from: Vector3, d: Vector3) -> void:
+	d.y = 0.0
+	for e in Weapons.alive(get_tree()):
+		var to: Vector3 = e.global_position - from
+		to.y = 0.0
+		if Weapons.dist(e, from) < w.range and (to.length() < 0.3 + Weapons.e_r(e) or d.normalized().dot(to.normalized()) >= w.cone):
+			td_affect(e, w, from)
+
+
+## Atanın roketi çarpınca yayınlar: patlama (alan hasarı) ya da küçük isabet izi; last ise roket silinir.
+@rpc("authority", "call_local", "reliable")
+func td_explode(rocket_name: String, pos: Vector3, blast: float, last: bool) -> void:
+	var r := _world().get_node_or_null(NodePath(rocket_name))
+	if blast > 0.0:
+		boom_fx(pos, blast / BLAST_RADIUS)
+		if r and is_multiplayer_authority():
+			for e in Weapons.alive(get_tree()):
+				if Weapons.dist(e, pos) < blast:
+					td_affect(e, r.w, pos)
+	else:
+		_ring_fx(pos, Color(1.0, 0.9, 0.6, 0.8), 0.35, 0.15)
+	if r and last:
+		r.queue_free()
+
+
+## Etkiyi yaratığa uygular (yalnızca atanın makinesinde çağrılır): hasar ve yanık burada hesaplanır,
+## yavaşlatma / sersemletme / itme yaratığın kancasına gider (td.effect_enemy ya da enemy.apply_effect varsa).
+func td_affect(e: Node, eff: Dictionary, from: Vector3) -> void:
+	if eff.get("dmg", 0) > 0:
+		td_dmg(e, eff.dmg)
+	if eff.has("burn"):
+		burns[e.name] = [e, eff.burn[0], eff.burn[1]]
+	if eff.has("drain"):
+		gain(eff.drain)
+	var fx := Weapons.enemy_fx(eff, from, e.global_position, global_position)
+	if fx.is_empty():
+		return
+	if td.has_method("effect_enemy"):
+		_host("effect_enemy", [str(e.name), fx])
+	elif multiplayer.is_server() and e.has_method("apply_effect"):
+		e.apply_effect(fx)
+
+
+## Kritik burada atılır (x2); sonucu host'a bildirir.
+func td_dmg(e: Node, dmg: float, can_crit := true) -> void:
+	var crit := can_crit and randf() < st("crit", 0.0)
+	_host("damage_enemy", [str(e.name), maxi(roundi(dmg * (2.0 if crit else 1.0)), 1), crit])
+
+
+## Yaratık hasarı (host çağırır); zırh statı take_hit içinde uygulanır, kalkan bir darbeyi emer.
+@rpc("any_peer", "call_local", "reliable")
+func td_hit(dmg: int) -> void:
+	if not is_multiplayer_authority() or hp <= 0:
+		return
+	if shield_on:
+		set_shield.rpc(false)
+	else:
+		take_hit(dmg)
+
+
+@rpc("authority", "call_local", "reliable")
+func td_respawn() -> void:
+	respawn()
+
+
+## Envantere öğe ekler: {"kind": "weapon"|"equip"|"build"|"item", "id", ["count"]}. Yer yoksa false.
+## Sahibi olmayan kopyada yalnızca "yer var mı" cevabını verir (host satın almadan önce sorabilir).
+@rpc("any_peer", "call_local", "reliable")
+func add_item(d: Dictionary) -> bool:
+	var i := Weapons.find_slot(inv, d) if td else -1
+	if i < 0:
+		return false
+	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() <= 1:
+		if inv[i].is_empty():
+			inv[i] = {"kind": d.kind, "id": d.id, "count": d.get("count", 1), "lvl": 1}
+		else:
+			inv[i].count += d.get("count", 1)
+		_td_changed()
+	return true
+
+
+## Takım seviye atlayınca host her oyuncuda çağırır: stat puanı + 3 kart (birikirse sırayla).
+@rpc("any_peer", "call_local", "reliable")
+func level_up() -> void:
+	if td == null or not is_multiplayer_authority() or multiplayer.get_remote_sender_id() > 1:
+		return
+	level += 1
+	stat_points += Weapons.POINTS_PER_LEVEL
+	pending += 1
+	if cards.is_empty():
+		cards = Weapons.roll_cards(self)
+	_td_changed()
+
+
+func choose_card(i: int) -> void:
+	if i < 0 or i >= cards.size():
+		return
+	Weapons.apply_card(self, cards[i])
+	pending -= 1
+	cards = Weapons.roll_cards(self) if pending > 0 else []
+	_td_changed()
+
+
+## Stat puanı harcar; yalnızca dalga arası molada.
+func spend_point(stat_id: String) -> bool:
+	if td == null or td.get("state") != "break" or stat_points <= 0 or not Weapons.stat_up(stats, stat_id):
+		return false
+	stat_points -= 1
+	_td_changed()
+	return true
+
+
+## Sahibinde stat / envanter / yükseltme değişti: diğer makinelere yay (silah modeli, can barı, mermi sayısı).
+func _td_changed() -> void:
+	var d := int(stats.hp) - max_hp
+	max_hp = int(stats.hp)
+	td_sync.rpc(inv, stats, ups, level)
+	if d != 0 and hp > 0:
+		set_hp.rpc(hp + d)
+
+
+@rpc("authority", "call_remote", "reliable")
+func td_sync(i: Array, s: Dictionary, u: Dictionary, l: int) -> void:
+	inv = i
+	stats = s
+	ups = u
+	level = l
+	max_hp = int(stats.hp)

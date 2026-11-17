@@ -183,6 +183,8 @@ func _physics_process(dt: float) -> void:
 				hit = h[2]
 				if w.blast > 0.0: # patlama yayını roketi de sildi
 					done = true
+					if not mine:
+						queue_free()
 					return
 				break
 			if pierce > 0:

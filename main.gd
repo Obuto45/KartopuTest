@@ -819,9 +819,9 @@ func _open_weapons() -> void:
 	for c in weapon_grid.get_children():
 		c.queue_free()
 	var rar: Dictionary = TdUi.consts("res://weapons.gd").get("RARITY", {})
-	var top := {} # çubuklar en iyi silaha göre dolar
-	for k in ["dmg", "rate", "speed"]:
-		top[k] = weapon_list.map(func(w): return float(w.get(k, 0.0))).max() if weapon_list.size() > 0 else 1.0
+	# Çubuklar en iyi silaha göre dolar. rate atış arası süre olduğu için tersi alınır.
+	var bars := [["Hasar", func(w): return float(w.get("dmg", 0)) * w.get("n", 1)],
+		["Atış hızı", func(w): return 1.0 / maxf(w.get("rate", 1.0), 0.05)], ["Menzil", func(w): return float(w.get("range", 60.0))]]
 	var wide := get_viewport().get_visible_rect().size.x >= 1560.0
 	weapon_grid.columns = 5 if wide else 4 # dar pencerede taşmasın
 	for i in weapon_list.size():
@@ -855,7 +855,7 @@ func _open_weapons() -> void:
 		d.modulate.a = 0.85
 		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		d.clip_text = true
-		for st in [["Hasar", "dmg"], ["Atış hızı", "rate"], ["Mermi hızı", "speed"]]:
+		for st in bars:
 			var row := HBoxContainer.new()
 			cv.add_child(row)
 			var n := _lbl(row, st[0], 13)
@@ -869,8 +869,8 @@ func _open_weapons() -> void:
 			pb.custom_minimum_size.y = 9
 			pb.add_theme_stylebox_override("background", _sb(Color(0, 0, 0, 0.55), 4, 0))
 			pb.add_theme_stylebox_override("fill", _sb(c, 4, 0))
-			pb.max_value = maxf(top[st[1]], 0.001)
-			pb.value = float(w.get(st[1], 0.0))
+			pb.max_value = weapon_list.map(st[1]).max()
+			pb.value = st[1].call(w)
 			row.add_child(pb)
 		for n in m.find_children("*", "Control", true, false) + [m]:
 			n.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1015,7 +1015,7 @@ func _refresh() -> void:
 	var lines := PackedStringArray()
 	var wsel = Net.get("weapons") # peer -> silah no (net.gd'de varsa)
 	for id in Net.names:
-		var line := ("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + Chars.get_char(Net.chars.get(id, 0)).name
+		var line: String = ("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + Chars.get_char(Net.chars.get(id, 0)).name
 		if mode == "td" and wsel is Dictionary and wsel.has(id):
 			line += "  •  " + _weapon_name(wsel[id])
 		lines.append(line)

@@ -15,8 +15,15 @@ var turn := 3.2 # sn başına dönüş; düşükse keskin dönüşle kaçılabil
 var bounces := 0 # isabetten sonra kaç kez daha seker
 var hit := [] # vurulanlar: aynı kişiye iki kez sekmez
 var body: Node3D
+# Tower Defense (td): hedef yaratıktır (yoksa yakındakini kendi bulur), isabeti atanın makinesi uygular;
+# sekmeler bitince bumerang atana döner.
+var td := false
+var ret := false
+var free_t := 0.35 # hedef yokken düz uçuş süresi
 
 const Fx := preload("res://explosion.gd")
+const Weapons := preload("res://weapons.gd")
+const SEEK_R := 14.0
 
 
 func _part(m: Mesh, c: Color, pos := Vector3.ZERO) -> MeshInstance3D:
@@ -65,7 +72,52 @@ func _ready() -> void:
 				mi.rotation.y = a
 
 
+func _td_process(dt: float) -> void:
+	life -= dt
+	if life <= 0.0 or not is_instance_valid(thrower):
+		queue_free()
+		return
+	if not ret and (not is_instance_valid(target) or target.hp <= 0):
+		target = Weapons.nearest(get_tree(), global_position, SEEK_R, hit)
+		free_t -= dt
+		if target == null and free_t <= 0.0:
+			if h.look != "boomerang":
+				queue_free()
+				return
+			ret = true
+	turn += h.get("turn_gain", 0.0) * dt
+	var reach := 0.8
+	if ret or target:
+		var aim: Vector3 = thrower.global_position + Vector3.UP if ret else Weapons.e_mid(target)
+		reach += 0.0 if ret else Weapons.e_r(target)
+		var to := aim - global_position
+		dir = dir.lerp(to.normalized(), minf(turn * (3.0 if ret else 1.0) * dt, 1.0)).normalized()
+		reach -= to.length()
+	global_position += dir * speed * dt
+	body.rotate_x(-dt * 18.0) if h.look == "ball" else body.rotate_y(dt * 18.0)
+	if reach < 0.0 or (not ret and target == null):
+		return
+	if ret:
+		queue_free()
+		return
+	Sfx.play3d(Sfx.hurt, global_position, -4.0)
+	if thrower.is_multiplayer_authority():
+		thrower.td_affect(target, h, global_position - dir)
+	hit.append(target)
+	target = null
+	life = 3.0
+	free_t = 0.0
+	bounces -= 1
+	if bounces < 0:
+		ret = true # (bumerang değilse yukarıdaki dal siler)
+		if h.look != "boomerang":
+			queue_free()
+
+
 func _physics_process(dt: float) -> void:
+	if td:
+		_td_process(dt)
+		return
 	life -= dt
 	if life <= 0.0 or not is_instance_valid(thrower) or not is_instance_valid(target) or target.hp <= 0:
 		queue_free()
