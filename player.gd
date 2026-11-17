@@ -1291,6 +1291,8 @@ func _held() -> String:
 	var it: Dictionary = inv[clampi(slot, 1, 5) - 1]
 	if it.get("kind", "") == "item" and it.id in ["potion", "bomb"]:
 		return "item:" + it.id # elde şişe / bomba (viewmodel)
+	if it.get("kind", "") == "build":
+		return "build" # boş eller: yerleştirirken öne itiş
 	return it.id if it.get("kind", "") == "weapon" else ""
 
 
@@ -1402,6 +1404,9 @@ func _td_use(just: bool) -> void:
 			if just and td.can_place(it.id, _build_pos()):
 				td.place(it.id, _build_pos(), rotation.y)
 				_take(slot - 1)
+				if busy == "":
+					busy = "place"
+					_anim("place")
 		"item":
 			var d: Dictionary = Weapons.ITEMS.get(it.id, {})
 			if it.id == "bomb": # el bombasıyla aynı: pim, beklet, at
@@ -1410,9 +1415,12 @@ func _td_use(just: bool) -> void:
 				return
 			if not just or d.is_empty() or (d.has("heal") and hp >= max_hp):
 				return
-			if d.has("heal"):
-				gain(d.heal)
-				_ring_fx(global_position + Vector3.UP * 0.2, Color(d.color, 0.85), 1.4, 0.4)
+			if d.has("heal"): # iç: can "gulp" olayında gelir
+				_sync_held()
+				if busy == "" or busy == "draw":
+					busy = "drink"
+					_anim("drink")
+				return
 			else:
 				_td_shoot(it.id, Weapons.tuned(it.id, ups))
 			_take(slot - 1)
@@ -1488,6 +1496,12 @@ func _on_vm_event(n: String) -> void:
 				_td_shoot("sword", Weapons.tuned("sword", ups), 0.0, k)
 		"chamber":
 			scope_block = false
+		"gulp":
+			if busy == "drink":
+				var d: Dictionary = Weapons.ITEMS.potion
+				gain(d.heal)
+				_ring_fx(global_position + Vector3.UP * 0.2, Color(d.color, 0.85), 1.4, 0.4)
+				_take(slot - 1)
 
 
 ## Elde tutulan silah değişti: süren doldurma iptal (şarjör dolmaz), çıkarma klibi baştan.

@@ -10,7 +10,7 @@ const WA := preload("res://weapon_anims.gd")
 const Weapons := preload("res://weapons.gd")
 const LAYER := 2
 const FOV := 62.0
-const ITEM_VIEW := {"item:potion": [Vector3(0.16, -0.2, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
+const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.16, -0.2, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
 
 var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
 var sway_tilt := Vector3.ZERO
@@ -81,7 +81,7 @@ func equip(new_id: String) -> void:
 		ap.stop()
 		return
 	var mid := WA.model_id(id)
-	weapon = Weapons.make_prop({"id": mid}) if mid != "" else _potion()
+	weapon = Weapons.make_prop({"id": mid}) if mid != "" else (_potion() if id == "item:potion" else Node3D.new())
 	weapon.name = "Weapon"
 	rig.add_child(weapon)
 	var w := Weapons.find(id)

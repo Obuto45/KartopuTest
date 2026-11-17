@@ -8,6 +8,7 @@ extends RefCounted
 
 const Z := Vector3.ZERO
 const ONE_HAND := ["sword", "boomerang", "item:potion"]
+const BARE := ["build"] # elde model yok: iki el ekranın altında
 const UNDER := ["smg", "sniper", "shotgun", "bazooka", "flame"] # sol el namlu altında, avuç yukarı
 const HAND_R := { # silah başlangıcına göre sağ el bileği [konum, dönüş]
 	"bow": [Vector3(0.03, 0.02, -0.06), Z],
@@ -16,6 +17,7 @@ const HAND_R := { # silah başlangıcına göre sağ el bileği [konum, dönüş
 	"sword": [Vector3(0.06, 0.0, 0.08), Vector3(0, PI / 2, 0)],
 	"boomerang": [Vector3(0.265, 0.0, -0.07), Z],
 	"item:potion": [Vector3(0.045, -0.02, 0.05), Z],
+	"build": [Vector3(0.05, -0.08, 0.0), Z],
 }
 const R_FIRE := [Vector3(0.035, -0.05, 0.065), Z] # ateşli silahlarda kabzayı saran el
 
@@ -36,7 +38,7 @@ static func clips(id: String) -> Dictionary:
 
 ## Modelin glb adı (iksirin modeli yok: viewmodel koddan şişe kurar).
 static func model_id(id: String) -> String:
-	return "grenade" if id == "item:bomb" else ("" if id == "item:potion" else id)
+	return "grenade" if id == "item:bomb" else ("" if id == "item:potion" or id in BARE else id)
 
 
 ## Yol -> [konum, Euler] dinlenme duruşu.
@@ -54,7 +56,9 @@ static func rest(id: String) -> Dictionary:
 			elif ch.name == "grip_l" and id not in ONE_HAND:
 				gl = ch.position
 		m.free()
-	if id in ONE_HAND:
+	if id in BARE:
+		r["HandL"] = [Vector3(-0.2, -0.08, 0.0), Z]
+	elif id in ONE_HAND:
 		r["HandL"] = [gl, Z]
 	elif id in UNDER:
 		r["HandL"] = [gl + Vector3(0, -0.03, 0.045), Vector3(0, 0, 1.2)]
@@ -123,7 +127,7 @@ static func _k(t: float, p := Z, r := Z) -> Array:
 
 
 static func _make(id: String) -> Dictionary:
-	var hold := "open" if id in ONE_HAND else ("pinch" if id in ["grenade", "item:bomb"] else ("grip" if id == "bow" else "support"))
+	var hold := "open" if id in ONE_HAND or id in BARE else ("pinch" if id in ["grenade", "item:bomb"] else ("grip" if id == "bow" else "support"))
 	var c := {}
 	var low := Vector3(0, -0.22, 0.05)
 	var down := Vector3(-0.7, 0, 0.25)
@@ -255,6 +259,13 @@ static func _make(id: String) -> Dictionary:
 			c["swing1"] = _swing(0.45, Vector3(0.1, 0.05, 0.05), Vector3(0.2, 1.1, 0.3), Vector3(-0.15, -0.02, -0.15), Vector3(-0.1, -1.2, -0.3))
 			c["swing2"] = _swing(0.45, Vector3(-0.15, 0.08, 0.02), Vector3(0.3, -1.0, -0.9), Vector3(0.12, -0.08, -0.15), Vector3(-0.3, 1.0, 0.5))
 			c["swing3"] = _swing(0.55, Vector3(0.0, 0.18, 0.08), Vector3(1.3, 0, 0), Vector3(0.0, -0.15, -0.2), Vector3(-1.0, 0, 0))
+		"build":
+			c["idle"].poses = [[0.0, "R", "open"], [0.0, "L", "open"]]
+			var push := Vector3(0, 0.04, -0.12)
+			c["place"] = {"len": 0.25, "tracks": {
+					"Rig": [_k(0), _k(0.1, push, Vector3(0.3, 0, 0)), _k(0.25)],
+					"HandL": [_k(0), _k(0.1, push, Vector3(0.3, 0, 0)), _k(0.25)]},
+				"poses": [[0.0, "R", "open"], [0.0, "L", "open"]], "events": [[0.25, "done"]]}
 		"item:potion":
 			var mouth := Vector3(-0.12, 0.13, 0.2)
 			var tip := Vector3(0.87, 0, -0.2) # 50° eğik

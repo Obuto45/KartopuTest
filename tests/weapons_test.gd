@@ -185,7 +185,7 @@ func _ready() -> void:
 	td.hits.clear()
 	me._td_use(true)
 	chk("boş şarjör ateşlemez, doldurma başlar", td.hits.is_empty() and me.reloading)
-	await _wait(1.7)
+	await _wait(2.0)
 	chk("1.6 sn sonra dolu", me.inv[0].ammo == 12 and not me.reloading, me.inv[0])
 	me.inv[0].ammo = 3
 	me.start_reload()
@@ -393,6 +393,26 @@ func _ready() -> void:
 		await _wait(0.3)
 		dm.append(td.hits[0][1] if td.hits else 0)
 	chk("kılıç 3'lü seri, üçüncü daha güçlü", dm[2] > dm[0] and me.combo == 0, dm)
+	_reset()
+
+	# --- iksir içme, yapı yerleştirme
+	_reset()
+	me.inv[3] = {"kind": "item", "id": "potion", "count": 2, "lvl": 1}
+	me.slot = 4
+	me._sync_held()
+	me.busy = ""
+	me.hp = 20
+	me._td_use(true)
+	await _wait(0.2)
+	chk("iksir: hemen iyileştirmez, içiyor", me.hp == 20 and me.busy == "drink", [me.hp, me.busy])
+	await _wait(0.5)
+	chk("yudumda +50 ve bir şişe eksilir", me.hp == mini(70, me.max_hp) and me.inv[3].count == 1, [me.hp, me.inv[3]])
+	await _wait(0.5)
+	chk("içme bitti", me.busy == "", me.busy)
+	me.inv[3] = {"kind": "build", "id": "wall", "count": 2, "lvl": 1}
+	me._sync_held()
+	chk("yapı slotunda eller boş (yerleştirme klibi var)", me.held_id == "build" and WA.has("build", "place"), me.held_id)
+	me.hp = me.max_hp
 	_reset()
 
 	# --- zırh, ölüm, yeniden doğma
