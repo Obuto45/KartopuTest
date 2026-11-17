@@ -5,19 +5,37 @@ const PlayerScript := preload("res://player.gd")
 const ForestScript := preload("res://forest.gd")
 const ExplosionScript := preload("res://explosion.gd")
 const Chars := preload("res://characters.gd")
+const TdUi := preload("res://td_ui.gd")
 const HP_W := 316.0 # can barının iç genişliği (px)
 const STATUS := {"stun": "SERSEMLEDİN", "blind": "KÖR OLDUN", "silence": "SUSTURULDUN", "confuse": "YÖNLER TERS",
 	"slow": "YAVAŞLADIN", "vuln": "İŞARETLENDİN", "burn": "YANIYORSUN", "haste": "HIZLI", "power": "GÜÇLÜ ROKET",
 	"rapid": "SERİ ATEŞ", "multi": "ÜÇLÜ ATIŞ", "armor": "ZIRH", "size": "BOY DEĞİŞTİ", "invis": "GÖRÜNMEZ",
 	"float": "SÜZÜLÜYOR", "regen": "İYİLEŞİYOR"}
 const SPAWNS := [Vector3(-14, 1, -14), Vector3(14, 1, 14), Vector3(-14, 1, 14), Vector3(14, 1, -14)]
+# TD: orta alan (kule ve çevresi) ağaçsız kalsın; oyuncular kulenin dibinde doğar.
+const TD_CLEAR := [Vector3(0, 0, 0), Vector3(6, 0, 0), Vector3(-6, 0, 0), Vector3(0, 0, 6), Vector3(0, 0, -6)]
+const TD_SPAWNS := [Vector3(5, 1, 0), Vector3(-5, 1, 0), Vector3(0, 1, 5), Vector3(0, 1, -5)]
+const MODES := {"arena": ["ARENA", "Lobi kur, arkadaşlarını davet et, savaşı başlat.", "▶  Oyunu Başlat (host)"],
+	"td": ["TOWER DEFENSE", "Rapunzel'in kulesini birlikte savunun. Tek başına da başlatabilirsin.", "▶  Savunmayı Başlat (host)"]}
 const MENU_SPOT := Vector3(14, 0, 14) # menü sahnesi bir doğma noktasında: etrafı ağaçsız
 const MENU_CREW := [40, 50, 34, 8, 26] # seçilen karakterin yanında duranlar
 # Menü kamerası [konum, bakılan nokta], ekibe göre: giriş ekranı geniş ve ortalı, menüde ekip sağda.
 const CAM_INTRO := [Vector3(0, 1.75, 6.6), Vector3(0, 1.55, 0)] # 6,6 m: daha geride ağaç var
 const CAM_MENU := [Vector3(0.6, 1.4, 6.6), Vector3(-2.6, 1.1, 0)]
 
+var mode := "arena" # "arena" | "td": host seçer, set_mode ile istemcilere gider
 var ui: Control
+var ui_layer: CanvasLayer
+var td_ui: Control # yalnız TD maçında var (td_ui.gd)
+var hotbar: HBoxContainer # arena envanter çubuğu: TD'de gizlenir
+var help_lbl: Label
+var lobby_title: Label
+var lobby_sub: Label
+var weapon_btn: Button
+var weapon_wrap: ColorRect
+var weapon_grid: GridContainer
+var weapon_list: Array = TdUi.consts("res://weapons.gd").get("LIST", []) # weapons.gd yoksa boş
+var weapon_sel := 0 # Net.my_weapon yoksa yerel seçim
 var info: Label
 var members: Label
 var start_btn: Button
@@ -71,9 +89,12 @@ func _ready() -> void:
 	Net.invited.connect(_on_invited)
 	Updater.status.connect(func(m): info.text = m)
 	multiplayer.peer_disconnected.connect(_on_peer_left)
+	multiplayer.peer_connected.connect(func(id): # yeni gelen hostun modunu öğrensin
+		if multiplayer.is_server():
+			set_mode.rpc_id(id, mode))
 	_set_menu_bg(true)
 	_show_page("intro")
-	_refresh()
+	set_mode("arena")
 	if "--selftest" in OS.get_cmdline_user_args(): # yayın öncesi: paketlenmiş exe'de haritayı açıp bir kare kaydeder
 		Net.host_local()
 		_on_start()
@@ -84,7 +105,8 @@ func _ready() -> void:
 
 func _setup_input() -> void:
 	var keys := {"fwd": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "jump": KEY_SPACE,
-		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "skill": KEY_Q}
+		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "skill": KEY_Q,
+		"slot5": KEY_5, "stats": KEY_TAB, "shop": KEY_B, "ready": KEY_G, "interact": KEY_E} # son satır TD için
 	for a in keys:
 		InputMap.add_action(a)
 		var ev := InputEventKey.new()
@@ -199,6 +221,7 @@ func _txt(parent: Node, text: String, size: int, alpha := 0.85) -> Label:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	ui_layer = layer
 	var theme := _make_theme()
 
 	_build_menu(layer, theme)
@@ -223,7 +246,8 @@ func _build_ui() -> void:
 	center_lbl = _full_label(52, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
 	spec_lbl = _full_label(22, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_TOP)
 	spec_lbl.offset_top = 60
-	_full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM).text = \
+	help_lbl = _full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM)
+	help_lbl.text = \
 		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD atıl | 1-4 eşya | Q karakter yeteneği | Sol tık kullan | ESC menü/ayarlar | F10 çık"
 	# Alt envanter çubuğu (hotbar)
 	var bar := HBoxContainer.new()
@@ -233,6 +257,7 @@ func _build_ui() -> void:
 	bar.offset_top = -140; bar.offset_bottom = -50
 	bar.add_theme_constant_override("separation", 10)
 	hud.add_child(bar)
+	hotbar = bar
 	for i in 5: # 1-4 eşyalar + Q karakter yeteneği
 		var cell := PanelContainer.new()
 		cell.custom_minimum_size = Vector2(90, 84)
@@ -254,6 +279,7 @@ func _build_ui() -> void:
 	hud.hide()
 	_build_settings(layer, theme)
 	_build_chars(layer, theme)
+	_build_weapons(layer, theme)
 
 
 ## Sol üst: karakter adı + 20'lik dilimli can barı, hasarda beyaz iz, sayı.
@@ -388,18 +414,18 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	mc.add_child(cards)
 	_mode_card(cards, "ARENA", "PvP  •  2–4 oyuncu", Color(1.0, 0.55, 0.15),
 		"Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır.",
-		"▶  ARENAYA GİR", _show_page.bind("lobby"))
-	_mode_card(cards, "HİKAYE MODU", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
-		"Arkadaşlarınla omuz omuza. Dalga dalga gelen düşmanlara karşı hayatta kal, güçlen, boss'u devir.",
-		"YAKINDA", Callable())
+		"▶  ARENAYA GİR", _pick_mode.bind("arena"))
+	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
+		"Rapunzel'in kulesini savun. 10 dalga yaratık, seviye atladıkça kart seç, molada mağazadan duvar, tuzak ve taret al.",
+		"▶  KULEYİ SAVUN", _pick_mode.bind("td"))
 	var back := _btn(mc, "◀  Geri", _show_page.bind("main"))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	back.custom_minimum_size.x = 220
 
 	# Arena lobisi: Steam lobisi, arkadaşlar, başlat
 	var lv := _column(_page("lobby"))
-	_logo(lv, "ARENA", 72)
-	_txt(lv, "Lobi kur, arkadaşlarını davet et, savaşı başlat.", 17, 0.75)
+	lobby_title = _logo(lv, "ARENA", 72)
+	lobby_sub = _txt(lv, MODES.arena[1], 17, 0.75)
 	lv.add_child(_gap(14))
 	var panel := PanelContainer.new()
 	lv.add_child(panel)
@@ -414,6 +440,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	scroll.add_child(friends_box)
 	v.add_child(scroll)
 	_btn(v, "Karakter Değiştir", _open_chars)
+	weapon_btn = _btn(v, "", _open_weapons)
 	start_btn = _btn(v, "▶  Oyunu Başlat (host)", _on_start)
 	start_btn.custom_minimum_size.y = 48
 	members = _lbl(v, "", 16)
@@ -506,6 +533,29 @@ func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String
 		var bs := _sb(Color(0.85, 0.2, 0.25), 6, 8)
 		badge.add_theme_stylebox_override("normal", bs)
 		badge.rotation_degrees = 8
+
+
+## Mod kartı: modu host seçer; lobiye bağlı istemci hostun modunda kalır.
+func _pick_mode(m: String) -> void:
+	if Net.online() and not multiplayer.is_server():
+		_show_page("lobby")
+		return
+	set_mode(m)
+	if Net.online():
+		set_mode.rpc(m)
+	_show_page("lobby")
+
+
+@rpc("authority", "call_remote", "reliable")
+func set_mode(m: String) -> void:
+	mode = m if MODES.has(m) else "arena"
+	lobby_title.text = MODES[mode][0]
+	lobby_title.add_theme_font_size_override("font_size", 72 if mode == "arena" else 54) # uzun ad sütuna sığsın
+	lobby_sub.text = MODES[mode][1]
+	start_btn.text = MODES[mode][2]
+	weapon_btn.visible = mode == "td"
+	_update_weapon_btn()
+	_refresh()
 
 
 func _show_page(n: String) -> void:
@@ -733,6 +783,119 @@ func _update_char_btn() -> void:
 	char_btn.text = "KARAKTER  ·  %s" % c.name.to_upper()
 
 
+# ---------- Silah seçimi (TD) ----------
+
+func _build_weapons(layer: CanvasLayer, theme: Theme) -> void:
+	weapon_wrap = ColorRect.new()
+	weapon_wrap.color = Color(0.03, 0.04, 0.08, 0.98)
+	weapon_wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	weapon_wrap.theme = theme
+	layer.add_child(weapon_wrap)
+	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 18)
+	weapon_wrap.add_child(v)
+	_logo(v, "SİLAHINI SEÇ", 50).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_txt(v, "Tower Defense'e bu silahla girersin. Yenileri seviye kartlarından gelir.", 17, 0.7).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	weapon_grid = GridContainer.new()
+	weapon_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	weapon_grid.add_theme_constant_override("h_separation", 12)
+	weapon_grid.add_theme_constant_override("v_separation", 12)
+	v.add_child(weapon_grid)
+	var close := _btn(v, "Kapat", weapon_wrap.hide)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.custom_minimum_size.x = 220
+	weapon_wrap.hide()
+
+
+func _my_weapon() -> int:
+	var w = Net.get("my_weapon")
+	return weapon_sel if w == null else int(w)
+
+
+## Kartlar her açılışta yeniden kurulur: 10 kart, seçili olan vurgulu.
+func _open_weapons() -> void:
+	for c in weapon_grid.get_children():
+		c.queue_free()
+	var rar: Dictionary = TdUi.consts("res://weapons.gd").get("RARITY", {})
+	var top := {} # çubuklar en iyi silaha göre dolar
+	for k in ["dmg", "rate", "speed"]:
+		top[k] = weapon_list.map(func(w): return float(w.get(k, 0.0))).max() if weapon_list.size() > 0 else 1.0
+	var wide := get_viewport().get_visible_rect().size.x >= 1560.0
+	weapon_grid.columns = 5 if wide else 4 # dar pencerede taşmasın
+	for i in weapon_list.size():
+		var w: Dictionary = weapon_list[i]
+		var r: Dictionary = rar.get(w.get("rarity", ""), {})
+		var c: Color = r.get("color", Color(0.75, 0.78, 0.85))
+		var b := Button.new() # tıklanabilir kart: içindekiler fareyi yutmaz
+		b.custom_minimum_size = Vector2(290, 250)
+		var sb := _sb(Color(c.darkened(0.8), 0.95), 12, 0)
+		sb.set_border_width_all(4 if i == _my_weapon() else 2)
+		sb.border_color = Color(1, 0.85, 0.2) if i == _my_weapon() else Color(c, 0.7)
+		var sh: StyleBoxFlat = sb.duplicate()
+		sh.bg_color = Color(c.darkened(0.6), 0.95)
+		for st in ["normal", "pressed", "focus"]:
+			b.add_theme_stylebox_override(st, sb)
+		b.add_theme_stylebox_override("hover", sh)
+		b.pressed.connect(_pick_weapon.bind(i))
+		weapon_grid.add_child(b)
+		var m := MarginContainer.new()
+		m.set_anchors_preset(Control.PRESET_FULL_RECT)
+		for side in ["left", "right", "top", "bottom"]:
+			m.add_theme_constant_override("margin_" + side, 14)
+		b.add_child(m)
+		var cv := VBoxContainer.new()
+		cv.add_theme_constant_override("separation", 4)
+		m.add_child(cv)
+		_logo(cv, str(w.get("name", "?")).to_upper(), 25, c.lightened(0.25)).clip_text = true
+		var tag := _lbl(cv, str(r.get("name", "")).to_upper() + ("   ✔ SEÇİLİ" if i == _my_weapon() else ""), 13)
+		tag.add_theme_color_override("font_color", c)
+		var d := _lbl(cv, str(w.get("desc", "")), 15)
+		d.modulate.a = 0.85
+		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		d.clip_text = true
+		for st in [["Hasar", "dmg"], ["Atış hızı", "rate"], ["Mermi hızı", "speed"]]:
+			var row := HBoxContainer.new()
+			cv.add_child(row)
+			var n := _lbl(row, st[0], 13)
+			n.autowrap_mode = TextServer.AUTOWRAP_OFF
+			n.custom_minimum_size.x = 84
+			n.modulate.a = 0.7
+			var pb := ProgressBar.new()
+			pb.show_percentage = false
+			pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			pb.custom_minimum_size.y = 9
+			pb.add_theme_stylebox_override("background", _sb(Color(0, 0, 0, 0.55), 4, 0))
+			pb.add_theme_stylebox_override("fill", _sb(c, 4, 0))
+			pb.max_value = maxf(top[st[1]], 0.001)
+			pb.value = float(w.get(st[1], 0.0))
+			row.add_child(pb)
+		for n in m.find_children("*", "Control", true, false) + [m]:
+			n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if weapon_list.is_empty():
+		_lbl(weapon_grid, "Silah listesi yüklenemedi (weapons.gd).", 18)
+	weapon_wrap.show()
+
+
+func _pick_weapon(i: int) -> void:
+	weapon_sel = i
+	if Net.has_method("set_weapon"):
+		Net.set_weapon(i)
+	_update_weapon_btn()
+	_refresh()
+	weapon_wrap.hide()
+
+
+func _weapon_name(i: int) -> String:
+	return str(weapon_list[i].get("name", "?")) if i >= 0 and i < weapon_list.size() else "?"
+
+
+func _update_weapon_btn() -> void:
+	weapon_btn.text = "Silah Seç  ·  %s" % _weapon_name(_my_weapon())
+
+
 func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 	settings_wrap = ColorRect.new() # arkayı karartır, tıklamaları yutar
 	settings_wrap.color = Color(0, 0, 0, 0.55)
@@ -850,8 +1013,12 @@ func _on_invited(from_name: String, lobby: int) -> void:
 
 func _refresh() -> void:
 	var lines := PackedStringArray()
+	var wsel = Net.get("weapons") # peer -> silah no (net.gd'de varsa)
 	for id in Net.names:
-		lines.append(("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + Chars.get_char(Net.chars.get(id, 0)).name)
+		var line := ("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + Chars.get_char(Net.chars.get(id, 0)).name
+		if mode == "td" and wsel is Dictionary and wsel.has(id):
+			line += "  •  " + _weapon_name(wsel[id])
+		lines.append(line)
 	members.text = "Lobidekiler:\n" + "\n".join(lines) if Net.online() else ""
 	start_btn.disabled = not (Net.online() and multiplayer.is_server())
 	if Net.online() and world == null and page in ["intro", "main", "modes"]:
@@ -893,7 +1060,7 @@ func _cd_text(t: float) -> String:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if world == null and not char_wrap.visible and not settings_wrap.visible:
+	if world == null and not char_wrap.visible and not weapon_wrap.visible and not settings_wrap.visible:
 		if page == "intro" and (e is InputEventKey or e is InputEventMouseButton) and e.pressed:
 			_show_page("main")
 			get_viewport().set_input_as_handled()
@@ -904,6 +1071,8 @@ func _unhandled_input(e: InputEvent) -> void:
 	if e.is_action_pressed("ui_cancel"):
 		if char_wrap.visible:
 			char_wrap.hide()
+		elif weapon_wrap.visible:
+			weapon_wrap.hide()
 		elif settings_wrap.visible:
 			_close_settings()
 		elif world:
@@ -912,7 +1081,8 @@ func _unhandled_input(e: InputEvent) -> void:
 	if world == null or settings_wrap.visible:
 		return
 	if e is InputEventMouseButton and e.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if td_ui == null: # TD'de imleci td_ui yönetir (mağaza, kartlar açıkken görünür kalmalı)
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif e is InputEventKey and e.pressed and e.keycode == KEY_F10:
 		Net.leave()
 
@@ -923,7 +1093,10 @@ func _on_start() -> void:
 	var ids := [1]
 	ids.append_array(Array(multiplayer.get_peers()))
 	ids.sort()
-	start_game.rpc(ids)
+	if mode == "td":
+		start_td.rpc(ids)
+	else:
+		start_game.rpc(ids)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -937,6 +1110,35 @@ func start_game(ids: Array) -> void:
 		p.set_multiplayer_authority(ids[i])
 		p.spawn_pos = SPAWNS[i % SPAWNS.size()]
 		players.add_child(p)
+	round_over = false
+	center_lbl.text = ""
+	ui.hide()
+	hud.show()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Tower Defense maçı: ortası açık harita, oyuncular kule dibinde; dalgaları td.gd yürütür.
+@rpc("authority", "call_local", "reliable")
+func start_td(ids: Array) -> void:
+	_clear_world()
+	_set_menu_bg(false)
+	_build_world(TD_CLEAR)
+	for i in ids.size():
+		var p: CharacterBody3D = PlayerScript.new()
+		p.name = str(ids[i])
+		p.set_multiplayer_authority(ids[i])
+		p.spawn_pos = TD_SPAWNS[i % TD_SPAWNS.size()]
+		players.add_child(p)
+	if ResourceLoader.exists("res://td.gd"):
+		var t: Node = load("res://td.gd").new()
+		t.name = "TD"
+		world.add_child(t)
+	td_ui = TdUi.new()
+	td_ui.main = self
+	ui_layer.add_child(td_ui)
+	ui_layer.move_child(td_ui, hud.get_index() + 1) # ayarlar ve seçim ekranları üstte kalsın
+	for n in [hotbar, help_lbl, spec_lbl]: # TD'de bunların yerini td_ui tutar
+		n.hide()
 	round_over = false
 	center_lbl.text = ""
 	ui.hide()
@@ -991,6 +1193,12 @@ func _clear_world() -> void:
 		world.queue_free()
 	world = null
 	players = null
+	if td_ui: # TD arayüzü maçla birlikte gider, arena HUD'u eski haline döner
+		ui_layer.remove_child(td_ui)
+		td_ui.queue_free()
+		td_ui = null
+		for n in [hotbar, help_lbl, spec_lbl]:
+			n.show()
 
 
 func _back_to_menu() -> void:
@@ -1008,12 +1216,12 @@ func _back_to_menu() -> void:
 
 # ---------- Harita ----------
 
-func _build_world() -> void:
+func _build_world(clear: Array = SPAWNS) -> void:
 	world = Node3D.new()
 	world.name = "World"
 	add_child(world)
 	var forest: Node3D = ForestScript.new()
-	forest.spawns = SPAWNS
+	forest.spawns = clear
 	world.add_child(forest)
 
 	players = Node3D.new()

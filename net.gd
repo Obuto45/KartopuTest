@@ -14,6 +14,8 @@ var lobby_id := 0
 var names := {} # peer_id -> görünen ad
 var chars := {} # peer_id -> karakter numarası (characters.gd LIST sırası)
 var my_char := 0
+var weapons := {} # peer_id -> TD başlangıç silahı (weapons.gd LIST sırası)
+var my_weapon := 0
 
 
 func _ready() -> void:
@@ -28,7 +30,7 @@ func _ready() -> void:
 	else:
 		push_warning("Steam başlatılamadı: %s" % r)
 	multiplayer.peer_connected.connect(func(_id): lobby_changed.emit())
-	multiplayer.peer_disconnected.connect(func(id): names.erase(id); chars.erase(id); lobby_changed.emit())
+	multiplayer.peer_disconnected.connect(func(id): names.erase(id); chars.erase(id); weapons.erase(id); lobby_changed.emit())
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(func(): status.emit("Bağlantı başarısız."); leave())
 	multiplayer.server_disconnected.connect(func(): status.emit("Host ayrıldı."); leave())
@@ -161,6 +163,7 @@ func leave() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	names.clear()
 	chars.clear()
+	weapons.clear()
 	left.emit()
 
 
@@ -176,9 +179,11 @@ func _register_self() -> void:
 	if multiplayer.is_server():
 		names[1] = n
 		chars[1] = my_char
+		weapons[1] = my_weapon
 		lobby_changed.emit()
 	else:
 		register_name.rpc_id(1, n, my_char)
+		register_weapon.rpc_id(1, my_weapon)
 
 
 ## Karakter değişince lobiye bildir (bağlı değilsek sadece hatırla).
@@ -214,4 +219,30 @@ func register_char(c: int) -> void:
 func sync_names(d: Dictionary, c: Dictionary) -> void:
 	names = d
 	chars = c
+	lobby_changed.emit()
+
+
+## TD silah seçimi: karakter seçimiyle aynı yol, ayrı rpc'ler (register_name imzası değişmesin).
+func set_weapon(i: int) -> void:
+	my_weapon = i
+	if not online():
+		return
+	if multiplayer.is_server():
+		weapons[1] = i
+		sync_weapons.rpc(weapons)
+		lobby_changed.emit()
+	else:
+		register_weapon.rpc_id(1, i)
+
+
+@rpc("any_peer", "reliable")
+func register_weapon(i: int) -> void:
+	weapons[multiplayer.get_remote_sender_id()] = i
+	sync_weapons.rpc(weapons)
+	lobby_changed.emit()
+
+
+@rpc("authority", "reliable")
+func sync_weapons(w: Dictionary) -> void:
+	weapons = w
 	lobby_changed.emit()

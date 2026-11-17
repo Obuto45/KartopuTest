@@ -1,0 +1,432 @@
+extends RefCounted
+## Tower Defense: silah, stat, eşya ve seviye kartı verisi + saf mantık (player.gd yorumlar).
+## Kart çekme kalıbı esin: brannotaylor/SurvivorsClone_Complete (CC0), Player/player.gd::get_random_item.
+##
+## Envanter öğesi: {"kind": "weapon"|"equip"|"build"|"item", "id", "count", "lvl"}; 1–3 silah/ekipman, 4–5 yapı/eşya.
+## Yaratıktan düşen / verilen eşyalar: player.add_item({"kind": "item", "id": <ITEMS anahtarı>}):
+##   "potion" can iksiri (sol tık: 50 can)      "bomb" bomba (sol tık: fırlatılır, 6 m içinde 120 hasar)
+## Ekipman (kart ile gelir): "shield" kalkan, "wall" duvar (arena ile aynı davranış ve bekleme süreleri).
+## Yükseltme seviyeleri player.ups içinde: "<silah id>:<yükseltme id>" ve "char:<id>" -> seviye.
+
+const ITEMS := {
+	"potion": {"name": "Can İksiri", "desc": "50 can yeniler.", "color": Color(0.9, 0.2, 0.3), "heal": 50},
+	"bomb": {"name": "Bomba", "desc": "Fırlatılır: 6 m içinde 120 hasar.", "color": Color(0.2, 0.2, 0.22),
+		"w": {"kind": "rocket", "look": "ball", "dmg": 120, "speed": 17.0, "grav": 14.0, "blast": 6.0, "knock": 10.0, "kick": 0.6}},
+}
+const EQUIPS := {
+	"shield": {"name": "Kalkan", "desc": "Sol tık: bir darbeyi emen kalkan.", "rarity": "rare"},
+	"wall": {"name": "Duvar", "desc": "Sol tık: önüne geçici duvar çıkarır.", "rarity": "rare"},
+}
+const RARITY := {
+	"common": {"name": "Sıradan", "color": Color(0.75, 0.78, 0.82), "weight": 60},
+	"rare": {"name": "Nadir", "color": Color(0.3, 0.6, 1.0), "weight": 26},
+	"epic": {"name": "Destansı", "color": Color(0.7, 0.35, 0.95), "weight": 10},
+	"legendary": {"name": "Efsanevi", "color": Color(1.0, 0.75, 0.2), "weight": 4},
+}
+## jump/speed/shot_speed/shot_power/attack çarpan; armor hasar azaltma oranı; crit şans (kritik x2);
+## bounce ek sekme sayısı; hp can üst sınırı (tabanı karakterin canı).
+const STATS := [
+	{"id": "jump", "name": "Zıplama", "base": 1.0, "step": 0.06, "max": 1.6},
+	{"id": "speed", "name": "Hız", "base": 1.0, "step": 0.05, "max": 1.5},
+	{"id": "shot_speed", "name": "Mermi Hızı", "base": 1.0, "step": 0.1, "max": 2.0},
+	{"id": "shot_power", "name": "Mermi Gücü", "base": 1.0, "step": 0.1, "max": 3.0},
+	{"id": "attack", "name": "Saldırı Hızı", "base": 1.0, "step": 0.08, "max": 2.2},
+	{"id": "armor", "name": "Zırh", "base": 0.0, "step": 0.05, "max": 0.6},
+	{"id": "crit", "name": "Kritik", "base": 0.05, "step": 0.03, "max": 0.5},
+	{"id": "bounce", "name": "Mermi Sekmesi", "base": 0.0, "step": 1.0, "max": 3.0},
+	{"id": "hp", "name": "Can", "base": 100.0, "step": 15.0, "max": 400.0},
+]
+const STAT_TIERS := [["common", 1], ["rare", 2], ["epic", 3]] # stat kartı: nadirlik -> kaç adım
+const POINTS_PER_LEVEL := 1
+const OWN_BOOST := 2.5 # sahip olunan silahın yükseltmeleri bu kat sık çıkar (MegaBonk)
+const BURN_T := 3.0 # silah yanığı süresi (sn)
+const CHAIN_R := 9.0 # sekme: bu mesafedeki sıradaki yaratığa
+const CHAIN_K := 0.75 # her sekmede hasar çarpanı
+const ARENA_DMG := 20.0 # karakter pasifleri (rocket_dmg, power) bu tabana göre çarpana çevrilir
+
+## Silah alanları (yoksa DEF): kind shot (anında isabet) | rocket (mermi; grav ile kavisli, blast ile patlar) |
+## homing (güdümlü, döner) | cone (kısa yay) | melee. rate: atış arası sn; speed: mermi hızı; n: mermi adedi;
+## spread: yelpaze/saçılma (rad); range; pierce: delip geçtiği yaratık; bounce; fire: yanık hasarı/sn;
+## knock; cone: yay eşiği (dot, küçük = geniş); kick: geri tepme; model: hazır glb ya da prop: parça listesi
+## [tür box|cyl|sph, ölçü, konum, renk] (namlu -Z; cyl ölçüsü: üst r, alt r, boy).
+const DEF := {"n": 1, "spread": 0.0, "range": 60.0, "pierce": 0, "blast": 0.0, "grav": 0.0, "bounce": 0, "fire": 0.0,
+	"knock": 0.0, "cone": 0.5, "speed": 0.0, "kick": 0.5, "color": Color(1.0, 0.9, 0.5)}
+const _DARK := Color(0.15, 0.15, 0.17)
+const _WOOD := Color(0.5, 0.33, 0.18)
+const LIST := [
+	{"id": "bazooka", "name": "Bazuka", "desc": "Patlayan roket: 2,5 m alan hasarı.", "rarity": "rare",
+		"dmg": 28, "rate": 0.8, "speed": 30.0, "kind": "rocket", "blast": 2.5, "knock": 6.0, "kick": 1.0, "model": "bazooka"},
+	{"id": "pistol", "name": "Tabanca", "desc": "Hızlı, isabetli tek atış.", "rarity": "common",
+		"dmg": 9, "rate": 0.25, "kind": "shot", "range": 60.0, "kick": 0.35,
+		"prop": [["box", Vector3(0.05, 0.07, 0.22), Vector3(0, 0, -0.08), _DARK], ["box", Vector3(0.045, 0.12, 0.06), Vector3(0, -0.08, 0), _WOOD]]},
+	{"id": "shotgun", "name": "Pompalı", "desc": "7 saçma birden: yakında ezer, uzakta dağılır.", "rarity": "common",
+		"dmg": 5, "rate": 0.85, "kind": "shot", "n": 7, "spread": 0.085, "range": 18.0, "knock": 3.0, "kick": 1.1,
+		"prop": [["cyl", Vector3(0.025, 0.025, 0.6), Vector3(0, 0, -0.3), _DARK], ["box", Vector3(0.05, 0.09, 0.25), Vector3(0, -0.03, 0.1), _WOOD],
+			["box", Vector3(0.06, 0.05, 0.14), Vector3(0, -0.035, -0.25), _WOOD]]},
+	{"id": "smg", "name": "Makineli", "desc": "Çok seri, düşük hasar, hafif saçılır.", "rarity": "common",
+		"dmg": 4, "rate": 0.09, "kind": "shot", "spread": 0.035, "range": 40.0, "kick": 0.25,
+		"prop": [["box", Vector3(0.06, 0.09, 0.32), Vector3(0, 0, -0.12), _DARK], ["box", Vector3(0.04, 0.16, 0.05), Vector3(0, -0.11, -0.1), _DARK],
+			["cyl", Vector3(0.015, 0.015, 0.14), Vector3(0, 0, -0.34), Color(0.4, 0.4, 0.45)]]},
+	{"id": "sniper", "name": "Keskin Nişancı", "desc": "Yavaş ama dev hasar; 3 yaratığı delip geçer.", "rarity": "legendary",
+		"dmg": 60, "rate": 1.5, "kind": "shot", "range": 120.0, "pierce": 3, "knock": 5.0, "kick": 1.4, "color": Color(0.6, 0.9, 1.0),
+		"prop": [["cyl", Vector3(0.018, 0.018, 0.95), Vector3(0, 0, -0.45), _DARK], ["box", Vector3(0.05, 0.08, 0.4), Vector3.ZERO, Color(0.25, 0.3, 0.22)],
+			["cyl", Vector3(0.025, 0.025, 0.22), Vector3(0, 0.07, -0.05), _DARK]]},
+	{"id": "bow", "name": "Yay", "desc": "Kavisli uçan ok: bir yaratığı deler, sessiz ve güçlü.", "rarity": "rare",
+		"dmg": 30, "rate": 0.7, "speed": 42.0, "kind": "rocket", "look": "arrow", "grav": 9.0, "pierce": 1, "kick": 0.3,
+		"prop": [["box", Vector3(0.03, 0.9, 0.03), Vector3(0, 0, -0.25), _WOOD], ["box", Vector3(0.008, 0.85, 0.008), Vector3(0, 0, -0.15), Color(0.9, 0.9, 0.85)],
+			["cyl", Vector3(0.01, 0.01, 0.5), Vector3(0, 0, -0.3), Color(0.8, 0.75, 0.6)]]},
+	{"id": "boomerang", "name": "Bumerang", "desc": "Yaratığı kovalar, 2 kez seker, sonra sana döner.", "rarity": "rare",
+		"dmg": 16, "rate": 1.0, "speed": 20.0, "kind": "homing", "bounce": 2, "knock": 4.0, "range": 30.0, "kick": 0.3,
+		"prop": [["box", Vector3(0.3, 0.03, 0.07), Vector3(0.1, 0, -0.2), _WOOD], ["box", Vector3(0.07, 0.03, 0.3), Vector3(-0.02, 0, -0.3), _WOOD]]},
+	{"id": "flame", "name": "Alev Püskürtücü", "desc": "Kısa menzilli alev yayı: önündeki herkesi yakar.", "rarity": "epic",
+		"dmg": 3, "rate": 0.1, "kind": "cone", "range": 6.5, "cone": 0.8, "fire": 4.0, "kick": 0.12, "color": Color(1.0, 0.5, 0.1),
+		"prop": [["cyl", Vector3(0.07, 0.07, 0.3), Vector3(0, -0.1, 0.05), Color(0.75, 0.15, 0.1)], ["cyl", Vector3(0.03, 0.03, 0.6), Vector3(0, 0, -0.3), _DARK],
+			["cyl", Vector3(0.045, 0.03, 0.08), Vector3(0, 0, -0.62), Color(0.9, 0.5, 0.1)]]},
+	{"id": "sword", "name": "Kılıç", "desc": "Yakın dövüş: önündeki yaydaki herkese vurur, savurur.", "rarity": "common",
+		"dmg": 24, "rate": 0.45, "kind": "melee", "range": 2.7, "cone": 0.4, "knock": 7.0, "kick": 0.0, "model": "sword"},
+	{"id": "grenade", "name": "El Bombası", "desc": "Havadan atılır: 4 m'lik büyük patlama.", "rarity": "epic",
+		"dmg": 42, "rate": 1.3, "speed": 17.0, "kind": "rocket", "look": "ball", "grav": 14.0, "blast": 4.0, "knock": 9.0, "kick": 0.4,
+		"prop": [["sph", Vector3(0.1, 0, 0), Vector3(0, 0, -0.2), Color(0.25, 0.4, 0.2)], ["box", Vector3(0.05, 0.05, 0.05), Vector3(0, 0.11, -0.2), _DARK]]},
+]
+## Silaha özel yükseltmeler: add toplanır, mul çarpılır (seviye başına). Kart: "up:<silah>:<id>".
+const UPS := {
+	"bazooka": [{"id": "blast", "name": "Geniş Patlama", "desc": "Patlama yarıçapı +0,6 m", "max": 4, "rarity": "common", "add": {"blast": 0.6}},
+		{"id": "multi", "name": "Çift Namlu", "desc": "+1 roket", "max": 2, "rarity": "epic", "add": {"n": 1, "spread": 0.05}},
+		{"id": "reload", "name": "Hızlı Dolum", "desc": "%15 hızlı ateş", "max": 4, "rarity": "common", "mul": {"rate": 0.85}}],
+	"pistol": [{"id": "fmj", "name": "Zırh Delici", "desc": "+1 yaratık deler", "max": 3, "rarity": "rare", "add": {"pierce": 1}},
+		{"id": "hair", "name": "Hassas Tetik", "desc": "%15 hızlı ateş", "max": 4, "rarity": "common", "mul": {"rate": 0.85}},
+		{"id": "rico", "name": "Seken Kurşun", "desc": "+1 sekme", "max": 3, "rarity": "rare", "add": {"bounce": 1}},
+		{"id": "cal", "name": "Büyük Kalibre", "desc": "+3 hasar", "max": 5, "rarity": "common", "add": {"dmg": 3}}],
+	"shotgun": [{"id": "pellets", "name": "Ekstra Saçma", "desc": "+2 saçma", "max": 3, "rarity": "rare", "add": {"n": 2}},
+		{"id": "choke", "name": "Şok Namlu", "desc": "Saçılma %25 az, menzil +4 m", "max": 3, "rarity": "common", "mul": {"spread": 0.75}, "add": {"range": 4.0}},
+		{"id": "slug", "name": "Ağır Saçma", "desc": "Saçma başına +2 hasar", "max": 4, "rarity": "common", "add": {"dmg": 2}}],
+	"smg": [{"id": "mag", "name": "Seri Mekanizma", "desc": "%12 hızlı ateş", "max": 4, "rarity": "common", "mul": {"rate": 0.88}},
+		{"id": "stab", "name": "Dengeleyici", "desc": "Saçılma %40 az", "max": 2, "rarity": "common", "mul": {"spread": 0.6}},
+		{"id": "hollow", "name": "Oyuk Uç", "desc": "+1 hasar", "max": 5, "rarity": "rare", "add": {"dmg": 1}},
+		{"id": "burn", "name": "Yakıcı Mermi", "desc": "Yakar: +2 hasar/sn", "max": 3, "rarity": "epic", "add": {"fire": 2.0}}],
+	"sniper": [{"id": "ap", "name": "Tungsten Çekirdek", "desc": "+2 yaratık deler", "max": 3, "rarity": "rare", "add": {"pierce": 2}},
+		{"id": "cal", "name": "Anti-Materyal", "desc": "+15 hasar", "max": 4, "rarity": "rare", "add": {"dmg": 15}},
+		{"id": "bolt", "name": "Yağlı Sürgü", "desc": "%18 hızlı ateş", "max": 3, "rarity": "common", "mul": {"rate": 0.82}}],
+	"bow": [{"id": "multi", "name": "Çoklu Ok", "desc": "+1 ok", "max": 3, "rarity": "epic", "add": {"n": 1, "spread": 0.03}},
+		{"id": "pierce", "name": "Sivri Uç", "desc": "+1 yaratık deler", "max": 3, "rarity": "common", "add": {"pierce": 1}},
+		{"id": "poison", "name": "Zehirli Ok", "desc": "Zehirler: +3 hasar/sn", "max": 3, "rarity": "rare", "add": {"fire": 3.0}}],
+	"boomerang": [{"id": "bounce", "name": "Usta Atış", "desc": "+1 sekme", "max": 4, "rarity": "common", "add": {"bounce": 1}},
+		{"id": "edge", "name": "Keskin Kenar", "desc": "+5 hasar", "max": 4, "rarity": "common", "add": {"dmg": 5}},
+		{"id": "twin", "name": "İkiz Bumerang", "desc": "+1 bumerang", "max": 2, "rarity": "epic", "add": {"n": 1}}],
+	"flame": [{"id": "fuel", "name": "Basınçlı Tank", "desc": "Menzil +1,5 m", "max": 3, "rarity": "common", "add": {"range": 1.5}},
+		{"id": "heat", "name": "Mavi Alev", "desc": "Yanık +2 hasar/sn", "max": 4, "rarity": "rare", "add": {"fire": 2.0}},
+		{"id": "wide", "name": "Geniş Başlık", "desc": "Alev yayı genişler", "max": 3, "rarity": "common", "add": {"cone": -0.12}}],
+	"sword": [{"id": "reach", "name": "Uzun Namlu", "desc": "Menzil +0,5 m", "max": 3, "rarity": "common", "add": {"range": 0.5}},
+		{"id": "edge", "name": "Bilenmiş Çelik", "desc": "+6 hasar", "max": 5, "rarity": "common", "add": {"dmg": 6}},
+		{"id": "spin", "name": "Dönen Savuruş", "desc": "Yay genişler (2. seviyede tam çevre)", "max": 2, "rarity": "rare", "add": {"cone": -0.7}},
+		{"id": "swift", "name": "Hafif Kabza", "desc": "%15 hızlı savurma", "max": 3, "rarity": "common", "mul": {"rate": 0.85}}],
+	"grenade": [{"id": "blast", "name": "Yüksek Patlayıcı", "desc": "Patlama yarıçapı +0,7 m", "max": 4, "rarity": "common", "add": {"blast": 0.7}},
+		{"id": "cluster", "name": "Salkım", "desc": "+1 bomba", "max": 2, "rarity": "epic", "add": {"n": 1, "spread": 0.12}},
+		{"id": "napalm", "name": "Napalm", "desc": "Yakar: +4 hasar/sn", "max": 3, "rarity": "rare", "add": {"fire": 4.0}}],
+}
+## Karaktere özel yükseltmeler (Q yeteneği ve pasifler). need: yetenekte bu anahtar varsa sunulur. Kart: "char:<id>".
+const CHAR_UPS := [
+	{"id": "cd", "name": "Çabuk Toparlanma", "desc": "%s bekleme süresi −%%15", "max": 4, "rarity": "rare"},
+	{"id": "power", "name": "Ustalık", "desc": "%s etkisi +%%25 (hasar, iyileşme)", "max": 4, "rarity": "rare"},
+	{"id": "radius", "name": "Geniş Etki", "desc": "%s alanı +%%20", "max": 3, "rarity": "common", "need": "area"},
+	{"id": "bounces", "name": "Seken Atış", "desc": "%s +1 kez seker", "max": 3, "rarity": "epic", "need": "homing"},
+	{"id": "dur", "name": "Uzun Etki", "desc": "%s güç süresi +%%30", "max": 3, "rarity": "common", "need": "self"},
+	{"id": "dodge", "name": "Çeviklik", "desc": "%s: +%%4 sıyrılma şansı", "max": 5, "rarity": "common", "passive": true},
+	{"id": "regen", "name": "Dayanıklılık", "desc": "%s: +1 can/sn yenilenme", "max": 4, "rarity": "rare", "passive": true},
+]
+
+
+static func get_weapon(i: int) -> Dictionary:
+	return LIST[clampi(i, 0, LIST.size() - 1)]
+
+
+## id ile silah (ya da fırlatılan eşyanın silah verisi); yoksa {}.
+static func find(id: String) -> Dictionary:
+	for w in LIST:
+		if w.id == id:
+			return w
+	return ITEMS.get(id, {}).get("w", {})
+
+
+## Envanter öğesinin HUD'da görünecek adı.
+static func item_name(it: Dictionary) -> String:
+	match it.get("kind", ""):
+		"weapon": return find(it.id).get("name", it.id)
+		"equip": return EQUIPS.get(it.id, {}).get("name", it.id)
+		"item": return ITEMS.get(it.id, {}).get("name", it.id)
+		"build": return str(it.id)
+	return ""
+
+
+## Yükseltmeleri uygulanmış silah (kopya): ateş anında her makine bundan okur.
+static func tuned(id: String, ups: Dictionary) -> Dictionary:
+	var w: Dictionary = DEF.duplicate()
+	w.merge(find(id), true)
+	w["id"] = id
+	for u in UPS.get(id, []):
+		var l: int = ups.get("%s:%s" % [id, u.id], 0)
+		for k in u.get("add", {}):
+			w[k] += u.add[k] * l
+		for k in u.get("mul", {}):
+			w[k] *= pow(u.mul[k], l)
+	if w.fire > 0.0:
+		w["burn"] = [w.fire, BURN_T] # yetenek motoruyla aynı etki anahtarı
+	return w
+
+
+## Yetenekten gelen patlayan roketin (yaylım, gülle) TD karşılığı; hasarı arena sayılarıyla aynı.
+static func arena_rocket(big: bool) -> Dictionary:
+	var w: Dictionary = DEF.duplicate()
+	w.merge({"id": "", "kind": "rocket", "dmg": 40.0 if big else ARENA_DMG, "blast": 4.5 if big else 2.5, "knock": 7.0}, true)
+	return w
+
+
+# ---------- Statlar ----------
+
+static func base_stats(ch: Dictionary) -> Dictionary:
+	var s := {}
+	for d in STATS:
+		s[d.id] = d.base
+	s["hp"] = float(ch.get("hp", 100))
+	return s
+
+
+static func stat_def(id: String) -> Dictionary:
+	for d in STATS:
+		if d.id == id:
+			return d
+	return {}
+
+
+## Statı bir adım artırır; üst sınırdaysa (ya da id yanlışsa) false.
+static func stat_up(stats: Dictionary, id: String) -> bool:
+	var d := stat_def(id)
+	if d.is_empty() or stats[id] >= d.max - 0.0001:
+		return false
+	stats[id] = snappedf(minf(stats[id] + d.step, d.max), 0.001)
+	return true
+
+
+## HUD için: "+%20", "%15", "2", "130".
+static func stat_text(id: String, v: float) -> String:
+	if id in ["hp", "bounce"]:
+		return str(int(v))
+	if id in ["armor", "crit"]:
+		return "%%%d" % roundi(v * 100.0)
+	return "%+d%%" % roundi((v - 1.0) * 100.0)
+
+
+# ---------- Envanter ----------
+
+## d öğesinin gireceği slot (0–4); yer yoksa -1. Silah/ekipman 0–2 (aynısı ikinci kez alınmaz),
+## yapı/eşya 3–4 (aynı tür üst üste yığılır).
+static func find_slot(inv: Array, d: Dictionary) -> int:
+	var gear: bool = d.get("kind", "") in ["weapon", "equip"]
+	if not gear and not d.get("kind", "") in ["build", "item"]:
+		return -1
+	var free := -1
+	for i in (range(0, 3) if gear else range(3, 5)):
+		var it: Dictionary = inv[i]
+		if it.is_empty():
+			if free < 0:
+				free = i
+		elif it.kind == d.kind and it.id == d.id:
+			return -1 if gear else i
+	return free
+
+
+# ---------- Kartlar ----------
+
+static func _card(id: String, title: String, desc: String, rarity: String, type: String) -> Dictionary:
+	return {"id": id, "title": title, "desc": desc, "rarity": rarity, "type": type}
+
+
+## Oyuncuya şu an sunulabilecek bütün kartlar (p: player.gd; stats, ups, inv, ch, sk okunur).
+static func pool(p: Object) -> Array:
+	var out := []
+	for s in STATS:
+		if p.stats[s.id] < s.max - 0.0001:
+			for t in STAT_TIERS:
+				out.append(_card("stat:%s:%d" % [s.id, t[1]], s.name, "%s: %s → %s" % [s.name, stat_text(s.id, p.stats[s.id]),
+					stat_text(s.id, minf(p.stats[s.id] + s.step * t[1], s.max))], t[0], "stat"))
+	for u in CHAR_UPS:
+		var l: int = p.ups.get("char:" + u.id, 0)
+		if l < u.max and (not u.has("need") or p.sk.has(u.need)):
+			out.append(_card("char:" + u.id, u.name, (u.desc % (p.ch.name if u.get("passive", false) else p.ch.skill_name)) + "  (sv. %d/%d)" % [l + 1, u.max], u.rarity, "char"))
+	var owned := []
+	var free := false
+	for i in 3:
+		if p.inv[i].is_empty():
+			free = true
+		else:
+			owned.append(p.inv[i].id)
+	if free: # yeni silah / ekipman yalnızca boş slot varken
+		for w in LIST:
+			if not owned.has(w.id):
+				out.append(_card("weapon:" + w.id, "YENİ SİLAH: " + w.name, w.desc, w.rarity, "weapon"))
+		for id in EQUIPS:
+			if not owned.has(id):
+				out.append(_card("equip:" + id, "EKİPMAN: " + EQUIPS[id].name, EQUIPS[id].desc, EQUIPS[id].rarity, "weapon"))
+	for id in owned:
+		for u in UPS.get(id, []):
+			var l: int = p.ups.get("%s:%s" % [id, u.id], 0)
+			if l < u.max:
+				out.append(_card("up:%s:%s" % [id, u.id], "%s: %s" % [find(id).name, u.name], "%s  (sv. %d/%d)" % [u.desc, l + 1, u.max], u.rarity, "weapon_up"))
+	return out
+
+
+## Nadirlik ağırlığıyla n farklı kart çeker; aynı statın iki kademesi birlikte çıkmaz.
+static func roll_cards(p: Object, n := 3) -> Array:
+	var cards := pool(p)
+	var out := []
+	while out.size() < n and not cards.is_empty():
+		var total := 0.0
+		for c in cards:
+			total += _weight(c)
+		var r := randf() * total
+		var pick: Dictionary = cards[-1]
+		for c in cards:
+			r -= _weight(c)
+			if r <= 0.0:
+				pick = c
+				break
+		out.append(pick)
+		var key := _group(pick)
+		cards = cards.filter(func(c): return _group(c) != key)
+	return out
+
+
+static func _weight(c: Dictionary) -> float:
+	return RARITY[c.rarity].weight * (OWN_BOOST if c.type == "weapon_up" else 1.0)
+
+
+static func _group(c: Dictionary) -> String:
+	return c.id.get_slice(":", 0) + ":" + c.id.get_slice(":", 1) if c.type == "stat" else c.id
+
+
+## Kartı oyuncuya uygular (yalnızca sahibinin makinesinde; yayını player.gd yapar).
+static func apply_card(p: Object, c: Dictionary) -> void:
+	var a: PackedStringArray = c.id.split(":")
+	match c.type:
+		"stat":
+			for i in int(a[2]):
+				stat_up(p.stats, a[1])
+		"char":
+			p.ups[c.id] = p.ups.get(c.id, 0) + 1
+		"weapon":
+			p.add_item({"kind": "equip" if a[0] == "equip" else "weapon", "id": a[1]})
+		"weapon_up":
+			var k := a[1] + ":" + a[2]
+			p.ups[k] = p.ups.get(k, 0) + 1
+			for it in p.inv:
+				if it.get("id", "") == a[1]:
+					it.lvl += 1
+
+
+# ---------- Yaratıklar (grup "enemies": hp, radius, height, global_position = ayak) ----------
+
+static func e_r(e: Node) -> float:
+	var v = e.get("radius")
+	return v if v != null else 0.5
+
+
+static func e_h(e: Node) -> float:
+	var v = e.get("height")
+	return v if v != null else 1.8
+
+
+static func e_mid(e: Node3D) -> Vector3:
+	return e.global_position + Vector3.UP * e_h(e) * 0.5
+
+
+static func alive(tree: SceneTree) -> Array:
+	return tree.get_nodes_in_group("enemies").filter(func(e): return is_instance_valid(e) and e.is_inside_tree() and e.get("hp") != null and e.hp > 0)
+
+
+## Noktanın yaratığın gövde eksenine (dikey doğru parçası) uzaklığı, yarıçap düşülmüş.
+static func dist(e: Node3D, p: Vector3) -> float:
+	var a := e.global_position
+	return Geometry3D.get_closest_point_to_segment(p, a + Vector3.UP * minf(e_r(e), e_h(e) * 0.5), a + Vector3.UP * maxf(e_h(e) - e_r(e), e_h(e) * 0.5)).distance_to(p) - e_r(e)
+
+
+## from -> to doğru parçasının (kalınlık pad) değdiği yaratıklar, yakından uzağa: [[uzaklık, yaratık, nokta], ...].
+static func ray(tree: SceneTree, from: Vector3, to: Vector3, pad := 0.0, skip := []) -> Array:
+	var out := []
+	for e in alive(tree):
+		if skip.has(e):
+			continue
+		var a: Vector3 = e.global_position
+		var h := e_h(e)
+		var r := e_r(e)
+		var pts := Geometry3D.get_closest_points_between_segments(from, to, a + Vector3.UP * minf(r, h * 0.5), a + Vector3.UP * maxf(h - r, h * 0.5))
+		if pts[0].distance_to(pts[1]) < r + pad:
+			out.append([from.distance_to(pts[0]), e, pts[0]])
+	out.sort_custom(func(x, y): return x[0] < y[0])
+	return out
+
+
+static func nearest(tree: SceneTree, p: Vector3, max_d: float, skip := []) -> Node3D:
+	var best: Node3D = null
+	for e in alive(tree):
+		var d := dist(e, p)
+		if d < max_d and not skip.has(e):
+			best = e
+			max_d = d
+	return best
+
+
+## Yetenek / silah etkisini yaratık kancasının beklediği sade sözlüğe çevirir (hasar ve yanık hariç):
+##   slow [çarpan, sn], stun sn, vuln [çarpan, sn], knock Vector3 (itme hızı).
+## Oyunculara özgü etkiler (kör, sustur, ters yön) yaratıkta yarı süreli sersemletme olur.
+static func enemy_fx(e: Dictionary, from: Vector3, at: Vector3, caster: Vector3) -> Dictionary:
+	var out := {}
+	for k in ["slow", "vuln"]:
+		if e.has(k):
+			out[k] = e[k]
+	var stun: float = e.get("stun", 0.0)
+	for k in ["blind", "silence", "confuse"]:
+		stun = maxf(stun, e.get(k, 0.0) * 0.5)
+	if stun > 0.0:
+		out["stun"] = stun
+	var away := at - from
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.05 else Vector3.ZERO
+	var v := away * e.get("knock", 0.0) - away * e.get("pull", 0.0)
+	if e.has("knock") or e.has("up"):
+		v.y += e.get("up", 3.0) if e.has("knock") else e.up
+	if e.has("yank"):
+		var to := caster - at
+		v = to.normalized() * minf(to.length() * 2.2, e.yank) + Vector3.UP * 5.0
+	if v != Vector3.ZERO:
+		out["knock"] = v
+	return out
+
+
+# ---------- Görsel ----------
+
+## Parça listesinden silah modeli (namlu -Z'ye bakar).
+static func make_prop(w: Dictionary) -> Node3D:
+	var root := Node3D.new()
+	for p in w.get("prop", []):
+		var mi := MeshInstance3D.new()
+		var m
+		match p[0]:
+			"cyl":
+				m = CylinderMesh.new()
+				m.top_radius = p[1].x; m.bottom_radius = p[1].y; m.height = p[1].z
+				mi.rotation.x = -PI / 2 # üst ucu namlu tarafına
+			"sph":
+				m = SphereMesh.new()
+				m.radius = p[1].x; m.height = p[1].x * 2.0
+			_:
+				m = BoxMesh.new()
+				m.size = p[1]
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = p[3]
+		mat.metallic = 0.4; mat.roughness = 0.5
+		m.material = mat
+		mi.mesh = m
+		mi.position = p[2]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(mi)
+	return root

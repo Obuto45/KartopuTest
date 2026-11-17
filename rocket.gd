@@ -14,8 +14,15 @@ var spd := SPEED
 var big := false # gülle: iri ve ağır
 var light: OmniLight3D
 var smoke: CPUParticles3D
+# Tower Defense (w doluysa): silah verisi (weapons.gd). Oyunculara değil yaratıklara çarpar,
+# hasarı atanın kopyası hesaplar; grav ile kavisli uçar, pierce ile deler, bounces ile seker.
+var w := {}
+var struck := [] # vurulan yaratıklar: aynısına iki kez değmez
+var pierce := 0
+var bounces := 0
 
 const Fx := preload("res://explosion.gd")
+const Weapons := preload("res://weapons.gd")
 
 
 func _piece(m: PrimitiveMesh, c: Color, y: float, metal := 0.6) -> MeshInstance3D:
@@ -33,10 +40,22 @@ func _piece(m: PrimitiveMesh, c: Color, y: float, metal := 0.6) -> MeshInstance3
 
 func _ready() -> void:
 	spd = SPEED * shooter.ch.get("throw_mult", 1.0) * (0.8 if big else 1.0)
-	var up := Vector3.UP if abs(dir.y) < 0.99 else Vector3.FORWARD
-	look_at(global_position + dir, up)
+	if not w.is_empty():
+		spd = (w.speed * shooter.ch.get("throw_mult", 1.0) if w.speed > 0.0 else spd) * shooter.st("shot_speed")
+		pierce = w.pierce
+		bounces = w.bounce + int(shooter.st("bounce", 0.0))
+	_face()
+	var lk: String = w.get("look", "ball" if big else "rocket")
 
-	if big: # top gülle
+	if lk == "arrow": # ok: ince gövde + uç; alev, duman, ışık yok
+		var shaft := CylinderMesh.new()
+		shaft.top_radius = 0.012; shaft.bottom_radius = 0.012; shaft.height = 0.7
+		_piece(shaft, Color(0.8, 0.75, 0.6), 0.0, 0.0)
+		var tip := CylinderMesh.new()
+		tip.top_radius = 0.0; tip.bottom_radius = 0.03; tip.height = 0.1
+		_piece(tip, Color(0.6, 0.6, 0.65), 0.4)
+		return
+	if lk == "ball": # top gülle
 		var ball := SphereMesh.new()
 		ball.radius = 0.22; ball.height = 0.44
 		_piece(ball, Color(0.2, 0.2, 0.22), 0.0)
@@ -100,21 +119,33 @@ func _ready() -> void:
 	Fx.drop(self, smoke, 1.2)
 
 
+func _face() -> void:
+	look_at(global_position + dir, Vector3.UP if abs(dir.y) < 0.99 else Vector3.FORWARD)
+
+
 func _physics_process(dt: float) -> void:
 	if done:
 		return
 	life -= dt
-	fire.emitting = life < 2.93 # ~2 m sonra iz başlar
-	smoke.emitting = fire.emitting
-	smoke.position = global_position - dir * 0.5
-	light.light_energy = 2.4 + randf() * 1.6 # alev titrer
+	if fire:
+		fire.emitting = life < 2.93 # ~2 m sonra iz başlar
+		smoke.emitting = fire.emitting
+		smoke.position = global_position - dir * 0.5
+		light.light_energy = 2.4 + randf() * 1.6 # alev titrer
+	var td := not w.is_empty()
+	var mine := is_instance_valid(shooter) and shooter.is_multiplayer_authority()
+	if td and w.grav > 0.0: # kavisli uçuş
+		var v := dir * spd + Vector3.DOWN * w.grav * dt
+		spd = v.length()
+		dir = v / spd
+		_face()
 	var from := global_position
 	var to := from + dir * spd * dt
 	var hit = null
 	if life <= 0.0:
 		hit = from
 	# Oyuncular: kapsülü 3 noktalı küre zinciriyle yakla, ince ışın içinden geçmesin.
-	if hit == null:
+	if hit == null and not td: # TD'de dost ateşi yok: oyuncuların içinden geçer
 		for p in get_tree().get_nodes_in_group("players"):
 			if p == shooter or p.hp <= 0:
 				continue
@@ -133,16 +164,44 @@ func _physics_process(dt: float) -> void:
 	if hit == null:
 		var q := PhysicsRayQueryParameters3D.create(from, to)
 		if is_instance_valid(shooter):
-			q.exclude = [shooter.get_rid()]
+			q.exclude = shooter.td_rids() if td else [shooter.get_rid()]
 		var r := get_world_3d().direct_space_state.intersect_ray(q)
 		if r:
 			hit = r.position
+			to = hit
+	if td and life > 0.0: # yaratıklar: duvardan önce yol üstündekiler
+		for h in Weapons.ray(get_tree(), from, to, 0.15, struck):
+			struck.append(h[1])
+			var nx: Node3D = Weapons.nearest(get_tree(), h[2], Weapons.CHAIN_R, struck) if pierce <= 0 and bounces > 0 else null
+			var last := pierce <= 0 and nx == null
+			if mine:
+				if w.blast > 0.0:
+					shooter.td_explode.rpc(name, h[2], w.blast, last)
+				else:
+					shooter.td_affect(h[1], w, from)
+			if last:
+				hit = h[2]
+				if w.blast > 0.0: # patlama yayını roketi de sildi
+					done = true
+					return
+				break
+			if pierce > 0:
+				pierce -= 1
+				continue
+			bounces -= 1 # sıradaki yaratığa dön
+			global_position = h[2]
+			dir = (Weapons.e_mid(nx) - h[2]).normalized()
+			_face()
+			return
 	if hit == null:
 		global_position = to
 		return
 	done = true
-	if is_instance_valid(shooter) and shooter.is_multiplayer_authority():
+	if mine:
 		visible = false
-		shooter.explode.rpc(name, hit)
+		if td:
+			shooter.td_explode.rpc(name, hit, w.blast, true)
+		else:
+			shooter.explode.rpc(name, hit)
 	else:
 		queue_free() # patlamayı atanın yayını gösterecek

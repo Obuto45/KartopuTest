@@ -1,0 +1,380 @@
+extends CharacterBody3D
+## TD yaratığı. Host simüle eder (basit yönelme, navmesh yok); istemcide td.gd'nin toplu yayınından
+## gelen konuma yumuşatılır. Can, hasar sayısı, ölüm: td.gd'nin rpc'leri her makinede apply_hit çağırır.
+## Mermiler için okunur alanlar: hp, radius, height, global_position (ayak noktası).
+## Çarpışma katmanı 2: oyuncular içinden geçer (sürü oyuncuyu hapsetmesin), ışınlar yine isabet eder.
+
+const Balance := preload("res://balance.gd")
+const Fx := preload("res://explosion.gd")
+const TICK := 0.2 # yapay zekâ karar aralığı (sn); kareler arası yalnızca yürür
+const MODEL_SCALE := 0.72
+const TOWER_R := 2.1
+const STUCK_T := 1.5 # bu kadar ilerleyemezse: önündeki yapıya saldırır ya da yana kaçar
+const SPIT_T := 0.45 # uzaktan atışın uçuş süresi (kaçılabilir)
+const BAR_CODE := "shader_type spatial;
+render_mode unshaded, cull_disabled, shadows_disabled;
+instance uniform float f = 1.0;
+void vertex() {
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+}
+void fragment() {
+	vec2 e = min(UV, 1.0 - UV) * vec2(12.0, 2.0);
+	bool rim = min(e.x, e.y) < 0.22;
+	ALBEDO = rim ? vec3(0.0) : (UV.x < f ? mix(vec3(0.9, 0.15, 0.1), vec3(0.3, 0.9, 0.3), f) : vec3(0.12));
+	ALPHA = 0.9;
+}"
+
+static var _shared := {} # paylaşılan malzeme / ağ: 40 yaratık 40 kopya üretmesin
+
+var eid := 0
+var type := ""
+var d: Dictionary # Balance.ENEMIES[type]
+var hp := 1
+var max_hp := 1
+var dmg := 1
+var radius := 0.4
+var height := 1.9
+var armor := 0
+var td: Node
+var host := false
+var model: Node3D
+var meshes: Array
+var anim: AnimationPlayer
+var cur := ""
+var run_anim := "Run"
+var atk_anim := "Punch"
+var bar: MeshInstance3D
+var flash_t := 0.0
+var swing_t := 0.0 # > 0: vuruş animasyonu oynuyor
+var moving := false
+var net_pos := Vector3.ZERO
+var net_yaw := 0.0
+# Yalnızca host:
+var tick_t := 0.0
+var dir := Vector3.ZERO # yatay yürüme yönü (sıfır = duruyor)
+var aim := 0.0 # bakılacak yön
+var atk_cd := 0.0
+var last_pos := Vector3.ZERO
+var stuck_t := 0.0
+var side := 0.0
+var side_t := 0.0
+var block: Node3D # yolu kesen, saldırılan yapı
+var slow_t := 0.0
+var slow_k := 1.0
+
+
+## Paylaşılan kaynak: yoksa make ile üretir.
+static func shared(k: String, make: Callable) -> Resource:
+	if not _shared.has(k):
+		_shared[k] = make.call()
+	return _shared[k]
+
+
+## Kameraya dönük can çubuğu (yapılar da kullanır). Doluluk: örnek başına "f".
+static func make_bar(w: float, y: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = shared("bar%.1f" % w, func() -> Resource:
+		var q := QuadMesh.new()
+		q.size = Vector2(w, 0.13)
+		var m := ShaderMaterial.new()
+		m.shader = Shader.new()
+		m.shader.code = BAR_CODE
+		q.material = m
+		return q)
+	mi.position.y = y
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visible = false # ilk hasara kadar gizli: kalabalıkta ekran dolmasın
+	return mi
+
+
+## Dünyada yükselip sönen yazı (hasar sayısı, para).
+static func float_text(world: Node, pos: Vector3, text: String, c: Color, px: float) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.pixel_size = px
+	l.font_size = 48
+	l.outline_size = 14
+	l.modulate = c
+	l.position = pos
+	world.add_child(l)
+	var tw := l.create_tween().set_parallel()
+	tw.tween_property(l, "position:y", pos.y + 1.1, 0.7).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(l, "modulate:a", 0.0, 0.3).set_delay(0.4)
+	tw.chain().tween_callback(l.queue_free)
+
+
+static func spark_mesh() -> Mesh:
+	return shared("spark", func() -> Resource:
+		var s := SphereMesh.new()
+		s.radius = 0.06; s.height = 0.12
+		s.radial_segments = 4; s.rings = 2
+		s.material = Fx.mat("spark")
+		return s)
+
+
+func _ready() -> void:
+	add_to_group("enemies")
+	collision_layer = 2
+	collision_mask = 1
+	host = multiplayer.is_server()
+	d = Balance.ENEMIES[type]
+	var s: float = d.scale
+	radius = 0.4 * s
+	height = 1.9 * s
+	armor = d.get("armor", 0)
+	max_hp = hp
+	net_pos = position
+	last_pos = position
+	tick_t = randf() * TICK # kararlar karelere yayılsın
+	var cs := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = radius
+	cap.height = height
+	cs.shape = cap
+	cs.position.y = height * 0.5
+	add_child(cs)
+
+	model = load("res://models/chars/%s.glb" % d.model).instantiate()
+	model.rotation.y = PI # modellerin önü +Z'ye bakıyor
+	add_child(model)
+	var tint: Color = d.tint
+	var over := shared("tint" + type, func() -> Resource: # çarpma karışımı: doku ve ışık korunur, renk kayar
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+		m.albedo_color = tint
+		return m)
+	meshes = model.find_children("*", "MeshInstance3D", true, false)
+	for mi in meshes:
+		mi.material_overlay = over
+	anim = model.find_children("*", "AnimationPlayer", true, false)[0]
+	for n in ["Idle", "Run", "Walk", "Victory"]: # dosyada döngü işareti yok
+		if anim.has_animation(n):
+			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+	run_anim = "Run" if d.speed >= 4.5 or not anim.has_animation("Walk") else "Walk"
+	atk_anim = d.get("anim", "Punch")
+	bar = make_bar(clampf(0.9 * s, 0.8, 2.4), height + 0.45)
+	add_child(bar)
+	# Yerden büyüyerek çıkar.
+	model.scale = Vector3.ONE * MODEL_SCALE * s * 0.15
+	create_tween().tween_property(model, "scale", Vector3.ONE * MODEL_SCALE * s, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+
+func _physics_process(dt: float) -> void:
+	if hp <= 0:
+		return
+	if flash_t > 0.0:
+		flash_t -= dt
+		if flash_t <= 0.0:
+			_overlay(_shared["tint" + type])
+	swing_t -= dt
+	if host:
+		_host(dt)
+	else:
+		global_position = net_pos if global_position.distance_squared_to(net_pos) > 36.0 else global_position.lerp(net_pos, minf(1.0, dt * 12.0))
+		rotation.y = lerp_angle(rotation.y, net_yaw, minf(1.0, dt * 10.0))
+	var want := "Idle"
+	if td.state == "lost":
+		want = "Victory"
+	elif swing_t > 0.0:
+		want = atk_anim
+	elif moving:
+		want = run_anim
+	if want != cur:
+		cur = want
+		anim.play(want, 0.15)
+		# Adım hızı yürüme hızına uysun (koşu ~7, yürüyüş ~4,7 m/sn'ye göre çizilmiş).
+		anim.speed_scale = clampf(d.speed / ((7.0 if want == "Run" else 4.7) * d.scale), 0.5, 2.2) if want == run_anim else 1.0
+
+
+func _overlay(m: Material) -> void:
+	for mi in meshes:
+		mi.material_overlay = m
+
+
+# ---------- Host: yapay zekâ ----------
+
+func _host(dt: float) -> void:
+	tick_t -= dt
+	atk_cd -= dt
+	slow_t -= dt
+	if tick_t <= 0.0:
+		tick_t += TICK
+		_think()
+	moving = dir != Vector3.ZERO
+	var spd: float = d.speed * (slow_k if slow_t > 0.0 else 1.0)
+	velocity.x = dir.x * spd
+	velocity.z = dir.z * spd
+	velocity.y = 0.0 if is_on_floor() else velocity.y - 20.0 * dt
+	if moving or not is_on_floor():
+		move_and_slide()
+		if moving:
+			aim = atan2(-dir.x, -dir.z)
+	rotation.y = lerp_angle(rotation.y, aim, minf(1.0, dt * 10.0))
+
+
+func _think() -> void:
+	if td.state != "fight":
+		dir = Vector3.ZERO
+		return
+	# Hedef: yolu kesen yapı > (avcıysa) en yakın canlı oyuncu > kule.
+	var tgt: Node3D = null
+	var goal := Vector3.ZERO
+	var reach: float = d.range + TOWER_R + radius
+	if is_instance_valid(block) and block.hp > 0 and global_position.distance_squared_to(block.global_position) < 16.0:
+		tgt = block
+		goal = block.global_position
+		reach = 99.0 # zaten dibinde
+	else:
+		block = null
+		if d.target == "player":
+			tgt = _nearest_player()
+			if tgt:
+				goal = tgt.global_position
+				reach = d.range + radius + 0.4
+	var to := goal - global_position
+	to.y = 0.0
+	var dist := to.length()
+	if dist <= reach:
+		dir = Vector3.ZERO
+		aim = atan2(-to.x, -to.z)
+		stuck_t = 0.0
+		if atk_cd <= 0.0:
+			atk_cd = d.rate
+			_attack(tgt, goal)
+		return
+	var want := to / dist
+	# Takılma: gerçek yer değiştirmeye bakılır (kaçan oyuncuyu kovalamak takılma sayılmasın).
+	var moved := global_position.distance_to(last_pos)
+	last_pos = global_position
+	stuck_t = stuck_t + TICK if moved < d.speed * TICK * 0.3 else 0.0
+	if stuck_t >= STUCK_T:
+		stuck_t = 0.0
+		for i in get_slide_collision_count():
+			var c := get_slide_collision(i).get_collider() as Node3D
+			if c and c.is_in_group("builds"):
+				block = c
+		if block == null: # ağaç / kaya: bir süre yana kaç
+			side = 1.0 if randf() < 0.5 else -1.0
+			side_t = 1.2
+	if side_t > 0.0:
+		side_t -= TICK
+		want = want.rotated(Vector3.UP, side * 1.3)
+	# Ayrışma: üst üste binmesinler, hedefin çevresine yayılsınlar.
+	for o in td.elist:
+		if o != self:
+			var v: Vector3 = global_position - o.global_position
+			var m: float = radius + o.radius + 0.3
+			var l2 := v.x * v.x + v.z * v.z
+			if l2 < m * m and l2 > 0.0001:
+				var l := sqrt(l2)
+				want += Vector3(v.x, 0, v.z) * ((m - l) / m / l * 1.5)
+	dir = want.normalized()
+
+
+func _nearest_player() -> Node3D:
+	var best: Node3D = null
+	var bd := INF
+	for p in td.plist:
+		if is_instance_valid(p) and p.hp > 0:
+			var dd := global_position.distance_squared_to(p.global_position)
+			if dd < bd:
+				bd = dd
+				best = p
+	return best
+
+
+func _attack(tgt: Node3D, goal: Vector3) -> void:
+	td.enemy_fx.rpc(eid, goal)
+	if d.has("explode"):
+		td.explode(self)
+	elif tgt == null:
+		td.hurt_tower(dmg)
+	elif tgt == block:
+		td.hurt_build(tgt, dmg)
+	elif d.range > 4.0: # uzaktan: mermi varınca oyuncu hâlâ oradaysa
+		td.delayed_hit(tgt, goal, dmg, SPIT_T)
+	else:
+		td.hit_player(tgt, dmg)
+
+
+# ---------- Her makinede: görsel ----------
+
+## Vuruş anı (td.enemy_fx): animasyon; uzaktan vuran için hedefe uçan tükürük.
+func attack_fx(pos: Vector3) -> void:
+	if hp <= 0:
+		return
+	swing_t = 0.55
+	cur = ""
+	anim.stop()
+	if d.range > 4.0 and not d.has("explode"):
+		var mi := MeshInstance3D.new()
+		mi.mesh = shared("spit", func() -> Resource:
+			var s := SphereMesh.new()
+			s.radius = 0.16; s.height = 0.32
+			s.radial_segments = 8; s.rings = 4
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.albedo_color = Color(1.2, 2.4, 0.4)
+			s.material = m
+			return s)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.position = global_position + Vector3.UP * height * 0.75
+		td.get_parent().add_child(mi)
+		var tw := mi.create_tween()
+		tw.tween_property(mi, "position", pos + Vector3.UP * 0.9, SPIT_T)
+		tw.tween_callback(mi.queue_free)
+
+
+## td._hit çağırır: yeni can, gösterilecek hasar (0 = sessiz, -1 = kendini patlattı), kritik mi.
+func apply_hit(v: int, n: int, crit: bool) -> void:
+	if hp <= 0:
+		return
+	hp = v
+	var world := td.get_parent()
+	if n > 0:
+		float_text(world, global_position + Vector3(randf_range(-0.3, 0.3), height + 0.3, randf_range(-0.3, 0.3)),
+			str(n), Color(1.0, 0.85, 0.15) if crit else Color.WHITE, 0.013 if crit else 0.008)
+		flash_t = 0.09
+		_overlay(shared("flash", func() -> Resource:
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			m.albedo_color = Color(0.7, 0.7, 0.7)
+			return m))
+	bar.visible = hp < max_hp and hp > 0
+	bar.set_instance_shader_parameter("f", float(hp) / max_hp)
+	if hp > 0:
+		return
+	# Ölüm: hedef olmaktan çık, düş, altın kıvılcım saç, yere bat.
+	remove_from_group("enemies")
+	collision_layer = 0
+	collision_mask = 0
+	_overlay(_shared["tint" + type])
+	var c := global_position + Vector3.UP * height * 0.5
+	if n == -1:
+		var fx: Node3D = Fx.new()
+		fx.position = c
+		fx.scale = Vector3.ONE * 0.9
+		world.add_child(fx)
+		Sfx.play3d(Sfx.boom, c, 0.0)
+		queue_free()
+		return
+	anim.speed_scale = 1.0
+	anim.play("Death", 0.1)
+	var p := Fx.parts(spark_mesh(), 10, 0.7, 2.0, 5.0, [Color(1.0, 0.85, 0.2), Color(1.0, 0.7, 0.1, 0.0)], 1.0, 0.3)
+	p.position = c
+	p.direction = Vector3.UP
+	p.spread = 60.0
+	p.gravity = Vector3(0, -9, 0)
+	world.add_child(p)
+	p.emitting = true
+	p.create_tween().tween_callback(p.queue_free).set_delay(1.0)
+	float_text(world, c + Vector3.UP * 0.4, "+%d" % d.money, Color(1.0, 0.8, 0.2), 0.007)
+	Sfx.play3d(Sfx.hurt, c, -8.0)
+	var tw := create_tween()
+	tw.tween_interval(1.3)
+	tw.tween_property(self, "position:y", position.y - height * 0.6, 0.6)
+	tw.tween_callback(queue_free)
