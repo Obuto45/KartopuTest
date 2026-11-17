@@ -160,7 +160,8 @@ var ups := {} # yükseltme seviyeleri: "<silah>:<id>" ve "char:<id>"
 var cards: Array = [] # seçim bekleyen kartlar
 var pending := 0 # kartı seçilmemiş seviye sayısı
 var respawn_t := 0.0
-var burns := {} # yaratık adı -> [yaratık, hasar/sn, kalan sn]
+var burns := {} # yaratık adı -> [yaratık, hasar/sn, kalan sn, etki sözlüğü (evrim alanları), son konum]
+var _last_crit := false # son td_dmg kritik miydi (evrim: kritik zinciri)
 var hand: Node3D # koddan üretilen silah modellerinin tutucusu
 var vm: Node3D # kendi gözünden eller + silah (yalnız yerel oyuncuda; viewmodel.gd)
 var held_id := "" # çıkarılmış silah; _held() değişince _switched
@@ -611,9 +612,17 @@ func _tick(dt: float, on_floor: bool) -> void:
 		for k in burns.keys(): # TD: yaktığımız yaratıklar
 			var b: Array = burns[k]
 			b[2] -= 1.0
-			if not is_instance_valid(b[0]) or b[0].hp <= 0 or b[2] < 0.0:
+			var dead: bool = not is_instance_valid(b[0]) or b[0].hp <= 0
+			if dead or b[2] < 0.0:
 				burns.erase(k)
+				if dead and b[3].has("death_blast"): # evrim (Avcı Yayı): yanarken ölen patlar
+					_evo_boom(b[4], b[3].death_blast[0], {"dmg": b[3].dmg * b[3].death_blast[1]})
 			else:
+				b[4] = b[0].global_position
+				if b[3].get("ignite", 0.0) > 0.0: # evrim (Ejderha Nefesi): yanık komşuya geçer
+					for e in Weapons.alive(get_tree()):
+						if not burns.has(e.name) and Weapons.dist(e, b[4]) < b[3].ignite:
+							burns[e.name] = [e, b[1], b[2], b[3], e.global_position]
 				td_dmg(b[0], b[1], false)
 	if ch.get("sit_shield", false):
 		still_t = still_t + dt if Vector2(velocity.x, velocity.z).length() < 0.5 else minf(still_t, 0.0)
@@ -1825,21 +1834,26 @@ func _td_shot(w: Dictionary, from: Vector3, d: Vector3, mine: bool) -> void:
 	if r:
 		to = r.position
 	var seen := []
+	var extra := 0 # evrim (Altıpatlar Lordu): kritik vuruş ek sekme
 	for h in Weapons.ray(get_tree(), from, to).slice(0, w.pierce + 1):
 		seen.append(h[1])
 		if mine:
 			td_affect(h[1], w, from)
+			if _last_crit:
+				extra = w.get("crit_chain", 0)
 		if seen.size() > w.pierce:
 			to = h[2] # son yaratıkta durdu
 	_beam_fx(_muzzle(), to, w.color)
 	if seen.is_empty():
 		return
-	for i in w.bounce + int(st("bounce", 0.0)):
+	for i in w.bounce + int(st("bounce", 0.0)) + extra:
 		var nx := Weapons.nearest(get_tree(), to, Weapons.CHAIN_R, seen)
 		if nx == null:
 			return
 		w = w.duplicate()
 		w.dmg *= Weapons.CHAIN_K
+		if w.has("burn"): # sinerji ateş + sekme: sekerken yanığı da taşır, üstüne 1,5 kat uzun yanar
+			w.burn = [w.fire, Weapons.BURN_T * 1.5]
 		_beam_fx(to, Weapons.e_mid(nx), w.color)
 		if mine:
 			td_affect(nx, w, to)
@@ -1868,10 +1882,24 @@ func td_explode(rocket_name: String, pos: Vector3, blast: float, last: bool) -> 
 			for e in Weapons.alive(get_tree()):
 				if Weapons.dist(e, pos) < blast:
 					td_affect(e, r.w, pos)
+			if r.w.has("mini"): # evrim (Kıyamet Bazukası): ana patlamanın çevresinde mini patlamalar
+				var mw: Dictionary = r.w.duplicate()
+				mw.dmg *= r.w.mini[1]
+				mw.knock = 0.0
+				for i in int(r.w.mini[0]):
+					_evo_boom(pos + Vector3.RIGHT.rotated(Vector3.UP, TAU * i / r.w.mini[0]) * blast * 0.8, r.w.mini[2], mw)
 	else:
 		_ring_fx(pos, Color(1.0, 0.9, 0.6, 0.8), 0.35, 0.15)
 	if r and last:
 		r.queue_free()
+
+
+## Evrim patlaması: görüntü herkese (roketsiz td_explode), hasar yalnızca bizde.
+func _evo_boom(pos: Vector3, radius: float, eff: Dictionary) -> void:
+	td_explode.rpc("evo", pos, radius, false)
+	for e in Weapons.alive(get_tree()):
+		if Weapons.dist(e, pos) < radius:
+			td_affect(e, eff, pos)
 
 
 ## Etkiyi yaratığa uygular (yalnızca atanın makinesinde çağrılır): hasar ve yanık burada hesaplanır,
@@ -1880,7 +1908,7 @@ func td_affect(e: Node, eff: Dictionary, from: Vector3) -> void:
 	if eff.get("dmg", 0) > 0:
 		td_dmg(e, eff.dmg)
 	if eff.has("burn"):
-		burns[e.name] = [e, eff.burn[0], eff.burn[1]]
+		burns[e.name] = [e, eff.burn[0], eff.burn[1], eff, e.global_position]
 	if eff.has("drain"):
 		gain(eff.drain)
 	var fx := Weapons.enemy_fx(eff, from, e.global_position, global_position)
@@ -1898,10 +1926,12 @@ func td_affect(e: Node, eff: Dictionary, from: Vector3) -> void:
 
 ## Kritik burada atılır (x2); sonucu host'a bildirir.
 func td_dmg(e: Node, dmg: float, can_crit := true) -> void:
+	_last_crit = false
 	if e.is_in_group("chickens"):
 		_hunt(e)
 		return
 	var crit := can_crit and randf() < st("crit", 0.0)
+	_last_crit = crit
 	var n := maxi(roundi(dmg * (2.0 if crit else 1.0)), 1)
 	# isabet işareti ve tık hemen, host'un cevabını beklemeden (öldürme tahmini: istemcinin bildiği son can)
 	hit_ms = Time.get_ticks_msec()
