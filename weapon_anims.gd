@@ -226,12 +226,12 @@ static func _make(id: String) -> Dictionary:
 			var pull := Vector3(0.12, 0.02, 0.0)
 			var cock := [Vector3(0.06, 0.1, 0.16), Vector3(0.45, 0, -0.2)]
 			c["prime"] = {"len": 0.5, "tracks": {
-					"Rig/Weapon/pin": [_k(0), _k(0.12), _k(0.3, pull)],
-					"Rig/Weapon/ring": [_k(0), _k(0.12), _k(0.3, pull)],
-					"HandL": [_k(0), _k(0.12), _k(0.3, pull), _k(0.5, Vector3(-0.05, -0.25, 0.1))],
-					"Rig": [_k(0), _k(0.3), _k(0.5, cock[0], cock[1])]},
-				"vis": [[0.0, "Rig/Weapon/pin", true], [0.0, "Rig/Weapon/ring", true], [0.42, "Rig/Weapon/pin", false], [0.42, "Rig/Weapon/ring", false]],
-				"poses": [[0.0, "L", "pinch"], [0.42, "L", "open"]], "events": [[0.3, "pin"]]}
+					"Rig/Weapon/pin": [_k(0), _k(0.04), _k(0.15, pull)],
+					"Rig/Weapon/ring": [_k(0), _k(0.04), _k(0.15, pull)],
+					"HandL": [_k(0), _k(0.04), _k(0.15, pull), _k(0.5, Vector3(-0.05, -0.25, 0.1))],
+					"Rig": [_k(0), _k(0.15), _k(0.5, cock[0], cock[1])]},
+				"vis": [[0.0, "Rig/Weapon/pin", true], [0.0, "Rig/Weapon/ring", true], [0.25, "Rig/Weapon/pin", false], [0.25, "Rig/Weapon/ring", false]],
+				"poses": [[0.0, "L", "pinch"], [0.25, "L", "open"]], "events": [[0.15, "pin"]]}
 			c["throw"] = {"len": 0.4, "tracks": {
 					"Rig": [_k(0, cock[0], cock[1]), _k(0.12, Vector3(-0.02, 0.06, -0.35), Vector3(-0.5, 0, 0.1)), _k(0.4, Vector3(0, -0.3, 0), Vector3(-0.6, 0, 0))],
 					"HandL": [_k(0, Vector3(-0.05, -0.25, 0.1))],

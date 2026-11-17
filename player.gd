@@ -161,6 +161,10 @@ var reloading := false
 var reload_t := 0.0 # doldurmanın kalan süresi (HUD çubuğu)
 var anim_gen := 0 # vm'siz oyuncuda zamanlanmış klip olaylarını geçersiz kılar
 var flame_t := 0.0 # alev pilotu büyük kalsın
+var fuse_left := 0.0 # pimi çekilmiş bombanın kalan sigortası
+var pinned := false
+var throw_q := false # pim çekilmeden bırakıldı: pim gelince at
+var prime_id := "" # "grenade" ya da "item:bomb"
 var hand_p := Vector3.ZERO
 var props := {} # silah id -> model
 var hold: Node3D # elde görünen silah: sağ kol ona uzanır
@@ -1270,6 +1274,8 @@ func _held() -> String:
 	if td == null:
 		return "bazooka" if slot == 1 else "sword" if slot == 4 else ""
 	var it: Dictionary = inv[clampi(slot, 1, 5) - 1]
+	if it.get("kind", "") == "item" and it.id in ["potion", "bomb"]:
+		return "item:" + it.id # elde şişe / bomba (viewmodel)
 	return it.id if it.get("kind", "") == "weapon" else ""
 
 
@@ -1302,8 +1308,14 @@ func _host(m: String, args: Array) -> void:
 
 func _td_local(dt: float, can_act: bool, alive: bool) -> void:
 	reload_t = maxf(reload_t - dt, 0.0)
+	if pinned: # elde sigorta işler
+		fuse_left -= dt
+		if fuse_left <= 0.0:
+			_cook_out()
 	if can_act and InputMap.has_action("reload") and Input.is_action_just_pressed("reload"):
 		start_reload()
+	if Input.is_action_just_released("throw"):
+		_release_throw()
 	if can_act and Input.is_action_pressed("throw"):
 		_td_use(Input.is_action_just_pressed("throw"))
 	_td_ghost(alive)
@@ -1330,6 +1342,10 @@ func _td_use(just: bool) -> void:
 			if mag > 0 and int(it.get("ammo", mag)) <= 0:
 				start_reload() # yedek sınırsız: boşken tetik doldurur
 				return
+			if it.id == "grenade": # bas: pim çek; bırakınca at (_release_throw)
+				if just:
+					_prime("grenade")
+				return
 			if cd <= 0.0:
 				cd = w.rate / st("attack") * ch.get("fire_cd", 1.0) * bv("rapid")
 				if mag > 0:
@@ -1351,6 +1367,10 @@ func _td_use(just: bool) -> void:
 				_take(slot - 1)
 		"item":
 			var d: Dictionary = Weapons.ITEMS.get(it.id, {})
+			if it.id == "bomb": # el bombasıyla aynı: pim, beklet, at
+				if just:
+					_prime("item:bomb")
+				return
 			if not just or d.is_empty() or (d.has("heal") and hp >= max_hp):
 				return
 			if d.has("heal"):
@@ -1407,12 +1427,31 @@ func _on_vm_event(n: String) -> void:
 			else:
 				busy = ""
 				reload_t = 0.0
+				var it: Dictionary = inv[slot - 1] if td else {}
+				if it.get("kind", "") == "weapon" and int(it.get("ammo", 1)) <= 0:
+					start_reload() # boşaldı: kendiliğinden doldur (yeni bomba, ok, roket)
 		"ready":
 			busy = ""
+		"pin":
+			if busy == "prime":
+				pinned = true
+				fuse_left = Weapons.tuned(prime_id.trim_prefix("item:"), ups).get("fuse", 3.0)
+				if throw_q:
+					_release_throw()
+		"release":
+			if busy == "throw":
+				_throw_now()
 
 
 ## Elde tutulan silah değişti: süren doldurma iptal (şarjör dolmaz), çıkarma klibi baştan.
 func _switched(id: String) -> void:
+	if pinned and is_multiplayer_authority(): # pimli bombayla ölüm / silah değişimi: ayağa düşer
+		rocket_n += 1
+		td_fire.rpc(prime_id.trim_prefix("item:"), global_position + Vector3.UP * 0.6, PackedVector3Array([Vector3.DOWN]), rocket_n, fuse_left)
+		_spent(prime_id)
+	pinned = false
+	throw_q = false
+	fuse_left = 0.0
 	held_id = id
 	reloading = false
 	reload_t = 0.0
@@ -1449,6 +1488,63 @@ func _anim_timers(id: String, clip: String, speed: float) -> void:
 		get_tree().create_timer(e[0] / speed).timeout.connect(func():
 			if g == anim_gen:
 				_on_vm_event(e[1]))
+
+
+## Bombayı hazırla: prime klibi, "pin" olayında sigorta başlar.
+func _prime(id: String) -> void:
+	_sync_held()
+	if busy != "" and busy != "draw":
+		return
+	busy = "prime"
+	prime_id = id
+	pinned = false
+	throw_q = false
+	_anim("prime")
+
+
+## Basılı tutulan atışı bırakır (el bombası, bomba eşyası). Pim henüz çekilmediyse çekilince atar.
+func _release_throw() -> void:
+	if busy != "prime":
+		return
+	if not pinned:
+		throw_q = true
+		return
+	busy = "throw"
+	_anim("throw")
+
+
+func _throw_now() -> void:
+	var id := prime_id.trim_prefix("item:")
+	pinned = false
+	_td_shoot(id, Weapons.tuned(id, ups), maxf(fuse_left, 0.05))
+	fuse_left = 0.0
+	_spent(prime_id)
+
+
+## Sigorta elde bitti: elde patlar; yaratıklara tam, sahibine yarım hasar.
+func _cook_out() -> void:
+	var id := prime_id.trim_prefix("item:")
+	pinned = false
+	fuse_left = 0.0
+	rocket_n += 1
+	td_fire.rpc(id, _muzzle(), PackedVector3Array([-look.global_basis.z]), rocket_n, 0.001)
+	take_hit(int(Weapons.tuned(id, ups).dmg * 0.5), true)
+	busy = ""
+	_spent(prime_id)
+	if prime_id == "grenade":
+		start_reload()
+
+
+## Atılan bomba elden çıktı: el bombasının şarjörü boşalır, bomba eşyası tükenir.
+func _spent(id: String) -> void:
+	if id == "item:bomb":
+		var i := inv.find_custom(func(d): return d.get("id", "") == "bomb")
+		if i >= 0:
+			_take(i)
+	else:
+		var i := inv.find_custom(func(d): return d.get("id", "") == "grenade")
+		if i >= 0:
+			inv[i]["ammo"] = 0
 
 
 ## Diğer makinelerde elde tutulan modelin parça klibi (Görev 10 doldurur).
@@ -1507,7 +1603,7 @@ func _td_aim(max_d: float) -> Vector3:
 
 
 ## Atış kararı yerelde: yönleri (saçılma dahil) biz seçer, td_fire ile herkese yayarız.
-func _td_shoot(id: String, w: Dictionary) -> void:
+func _td_shoot(id: String, w: Dictionary, fuse := 0.0) -> void:
 	var eye: bool = w.kind != "rocket" # anında isabet gözden çıkar: yakındaki hedefte namlu kayması olmasın
 	var origin := look.global_position if eye else _muzzle()
 	var to := _td_aim(200.0) - origin
@@ -1521,13 +1617,14 @@ func _td_shoot(id: String, w: Dictionary) -> void:
 		else:
 			dirs.append(to.normalized().rotated(Vector3.UP, w.spread * (i - (n - 1) * 0.5)))
 	rocket_n += 1
-	td_fire.rpc(id, origin, dirs, rocket_n)
+	td_fire.rpc(id, origin, dirs, rocket_n, fuse)
 
 
 ## Her makinede görüntü ve mermi; yaratığa hasarı yalnızca atanın makinesi hesaplar.
 @rpc("authority", "call_local", "reliable")
-func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int) -> void:
+func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse := 0.0) -> void:
 	var w := Weapons.tuned(id, ups)
+	w["fuse"] = fuse # > 0: sigortalı bomba (çarpınca patlamaz)
 	var mine := is_multiplayer_authority()
 	w.dmg *= _pow(w)
 	kick = w.kick

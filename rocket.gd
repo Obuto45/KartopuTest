@@ -20,6 +20,7 @@ var w := {}
 var struck := [] # vurulan yaratıklar: aynısına iki kez değmez
 var pierce := 0
 var bounces := 0
+var vel := Vector3.ZERO # sigortalı bomba: seken hız
 
 const Fx := preload("res://explosion.gd")
 const Weapons := preload("res://weapons.gd")
@@ -39,6 +40,7 @@ func _piece(m: PrimitiveMesh, c: Color, y: float, metal := 0.6) -> MeshInstance3
 
 
 func _ready() -> void:
+	add_to_group("rockets")
 	spd = SPEED * shooter.ch.get("throw_mult", 1.0) * (0.8 if big else 1.0)
 	if not w.is_empty():
 		spd = (w.speed * shooter.ch.get("throw_mult", 1.0) if w.speed > 0.0 else spd) * shooter.st("shot_speed")
@@ -126,6 +128,9 @@ func _face() -> void:
 func _physics_process(dt: float) -> void:
 	if done:
 		return
+	if w.get("fuse", 0.0) > 0.0:
+		_fused(dt)
+		return
 	life -= dt
 	if fire:
 		fire.emitting = life < 2.93 # ~2 m sonra iz başlar
@@ -207,3 +212,41 @@ func _physics_process(dt: float) -> void:
 			shooter.explode.rpc(name, hit)
 	else:
 		queue_free() # patlamayı atanın yayını gösterecek
+
+
+## Sigortalı bomba (el bombası, bomba eşyası): çarpınca patlamaz; yerde ve yaratıkta seker,
+## sigorta bitince atanın kopyası patlamayı yayınlar.
+func _fused(dt: float) -> void:
+	if vel == Vector3.ZERO and spd > 0.0:
+		vel = dir * spd
+		spd = 0.0
+	if fire:
+		fire.emitting = false
+		smoke.emitting = false
+		light.visible = false
+	w.fuse -= dt
+	var mine := is_instance_valid(shooter) and shooter.is_multiplayer_authority()
+	if w.fuse <= 0.0:
+		done = true
+		if mine:
+			visible = false
+			shooter.td_explode.rpc(name, global_position, w.blast, true)
+		return
+	vel += Vector3.DOWN * w.grav * dt
+	var from := global_position
+	var to := from + vel * dt
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	if is_instance_valid(shooter):
+		q.exclude = shooter.td_rids()
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	var e := Weapons.ray(get_tree(), from, to, 0.15)
+	if r:
+		global_position = r.position + r.normal * 0.05
+		vel = vel.bounce(r.normal) * 0.4
+		if r.normal.y > 0.7 and vel.length() < 1.0:
+			vel = Vector3.ZERO # durdu
+	elif not e.is_empty():
+		global_position = from
+		vel = -vel * 0.3 # yaratıktan geri sek
+	else:
+		global_position = to

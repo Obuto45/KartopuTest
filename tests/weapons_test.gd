@@ -134,7 +134,11 @@ func _ready() -> void:
 		_reset()
 		if w.kind == "melee":
 			me.global_position = Vector3(0, 0.1, -4.2)
-		var hits: Array = await _fire(w.id, 2.6 if w.kind == "homing" else 1.2)
+		var hits: Array = await _fire(w.id, 0.4 if w.id == "grenade" else 2.6 if w.kind == "homing" else 1.2)
+		if w.id == "grenade": # pim çekildi; bırakınca atılır, sigorta bitince patlar
+			me._release_throw()
+			await _wait(3.0)
+			hits = td.hits.duplicate()
 		chk("silah %-16s E1'e hasar" % w.name, _names(hits).has("E1"), "isabet=%d hedef=%s ilk=%s" % [hits.size(), _names(hits), hits[0] if hits else "-"])
 	_reset()
 	await _wait(1.5)
@@ -310,9 +314,41 @@ func _ready() -> void:
 	chk("can iksiri: 50 can, tek kullanım", kept and me.hp == 90 and me.inv[4].is_empty(), me.hp)
 	me.add_item({"kind": "item", "id": "bomb"})
 	td.hits.clear()
+	me.busy = ""
 	me._td_use(true)
-	await _wait(1.5)
+	await _wait(0.4)
+	me._release_throw()
+	await _wait(3.2)
 	chk("bomba: fırlatılır, alan hasarı 120", me.inv[4].is_empty() and td.hits.any(func(x): return x[1] >= 120), td.hits) # önceki rastgele kart saldırı statını yükseltmiş olabilir
+
+	# --- el bombası: pim çek, beklet, at
+	_reset()
+	me.slot = 1
+	me.inv[0] = {"kind": "weapon", "id": "grenade", "count": 1, "lvl": 1, "ammo": 1}
+	me._sync_held()
+	me.busy = ""
+	td.hits.clear()
+	me._td_use(true) # bas: pim
+	await _wait(0.4)
+	chk("basılı: pim çekildi, henüz atılmadı", me.busy == "prime" and me.fuse_left < 3.0 and me.fuse_left > 2.4, me.fuse_left)
+	me._release_throw()
+	await _wait(3.0)
+	chk("bırakınca atılır, sigortayla patlar", _names(td.hits).has("E1"), td.hits)
+	me.inv[0].ammo = 1
+	me.busy = ""
+	me.hp = me.max_hp
+	me._td_use(true)
+	await _wait(3.3)
+	chk("elde patlarsa sahibine yarım hasar", me.hp == me.max_hp - int(Weapons.tuned("grenade", {}).dmg * 0.5), me.hp)
+	me.inv[0].ammo = 1
+	me.busy = ""
+	me.hp = me.max_hp
+	me._td_use(true)
+	await _wait(0.5)
+	me.td_hit(1000)
+	await _wait(3.0)
+	chk("pimliyken ölünce bomba yere düşüp patlar", me.fuse_left == 0.0 and get_tree().get_nodes_in_group("rockets").is_empty(), me.fuse_left)
+	me.hp = me.max_hp
 
 	# --- zırh, ölüm, yeniden doğma
 	_reset()
