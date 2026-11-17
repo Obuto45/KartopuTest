@@ -131,20 +131,21 @@ func _environment() -> void:
 	env.sky = Sky.new()
 	env.sky.sky_material = _smat("res://shaders/sky.gdshader")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 1.1 # gölgedeki karakterler seçilsin
+	env.ambient_light_energy = 1.2 # gölgedeki karakterler seçilsin
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_white = 6.0
 	env.glow_enabled = true # yalnızca çok parlak şeyler (güneş, patlama) parlar
-	env.glow_intensity = 0.45
-	env.glow_bloom = 0.03
-	env.glow_hdr_threshold = 1.1
+	env.glow_intensity = 0.6
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 1.4 # güneşli yapraklar değil, yalnız patlama / kıvılcım parlasın
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.06
 	env.adjustment_saturation = 1.12
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
-	env.ssao_intensity = 2.2
+	env.ssao_intensity = 1.6 # çimenin altı kapkara olmasın
+	env.ssao_power = 1.5
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.86, 0.74, 0.6)
 	env.fog_density = 0.004
@@ -173,11 +174,20 @@ func _environment() -> void:
 	var fill := DirectionalLight3D.new() # karşıdan soğuk dolgu: gölge tarafı kapkara kalmaz
 	fill.rotation_degrees = Vector3(-25, 220, 0)
 	fill.light_color = Color(0.6, 0.72, 1.0)
-	fill.light_energy = 0.3
+	fill.light_energy = 0.42
 	fill.light_specular = 0.0
 	fill.light_volumetric_fog_energy = 0.0
 	fill.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY # gökte ikinci güneş çizilmesin
 	add_child(fill)
+	var apply := func() -> void: # Ayarlar > Grafik kalitesi
+		var q: int = Settings.quality
+		env.ssao_enabled = q >= 1
+		env.volumetric_fog_enabled = q >= 2
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if q >= 1 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		sun.directional_shadow_max_distance = 80.0 if q >= 1 else 50.0
+	apply.call()
+	Settings.changed.connect(apply)
+	tree_exiting.connect(func() -> void: Settings.changed.disconnect(apply))
 
 
 ## Doğma noktalarından ve diğer nesnelerden uzak boş bir nokta bulur; bulamazsa null.

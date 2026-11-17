@@ -1,5 +1,5 @@
 extends Node
-## Oyun ayarları (ses, ekran). user://settings.cfg dosyasına kaydedilir.
+## Oyun ayarları (ses, ekran, grafik kalitesi, kamera sarsıntısı). user://settings.cfg dosyasına kaydedilir.
 
 const PATH := "user://settings.cfg"
 const MODES := ["Pencere", "Tam ekran", "Kenarlıksız tam ekran"]
@@ -8,6 +8,11 @@ const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1
 var volume := 0.8 # 0..1
 var mode := 0 # MODES indeksi
 var resolution := 0 # RESOLUTIONS indeksi
+const QUALITIES := ["Düşük", "Orta", "Yüksek"]
+var quality := 2 # QUALITIES indeksi: Düşük = SSAO / hacimsel sis kapalı, 2 bölmeli gölge, FXAA
+var shake := 1.0 # kamera sarsıntısı çarpanı 0..1 (mide bulantısı yapanlar için)
+
+signal changed # grafik kalitesi değişti: ortam (forest.gd) kendini günceller
 
 
 func _ready() -> void:
@@ -16,8 +21,19 @@ func _ready() -> void:
 		volume = clampf(float(c.get_value("audio", "volume", volume)), 0.0, 1.0)
 		mode = clampi(int(c.get_value("display", "mode", mode)), 0, MODES.size() - 1)
 		resolution = clampi(int(c.get_value("display", "resolution", resolution)), 0, RESOLUTIONS.size() - 1)
+		quality = clampi(int(c.get_value("graphics", "quality", quality)), 0, QUALITIES.size() - 1)
+		shake = clampf(float(c.get_value("graphics", "shake", shake)), 0.0, 1.0)
 	apply_audio()
 	apply_display()
+	apply_quality()
+
+
+## Kenar yumuşatma burada; ışık/sis ayarlarını "changed" ile ortam uygular.
+func apply_quality() -> void:
+	var vp := get_tree().root
+	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][quality]
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if quality == 0 else Viewport.SCREEN_SPACE_AA_DISABLED
+	changed.emit()
 
 
 func apply_audio() -> void:
@@ -48,4 +64,6 @@ func save() -> void:
 	c.set_value("audio", "volume", volume)
 	c.set_value("display", "mode", mode)
 	c.set_value("display", "resolution", resolution)
+	c.set_value("graphics", "quality", quality)
+	c.set_value("graphics", "shake", shake)
 	c.save(PATH)

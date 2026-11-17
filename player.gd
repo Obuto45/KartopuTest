@@ -1143,8 +1143,8 @@ func _feel(dt: float, mine: bool, spd: float, air: bool, hidden: bool) -> void:
 		off += Vector3(sway.x * 0.3 + cos(bob_t) * 0.01 * bob_k, -sway.y * 0.3 - absf(sin(bob_t)) * 0.012 * bob_k + sin(t * 1.8) * 0.003 + sq * 0.2, 0)
 		tilt += Vector3(-sway.y + sq * 0.3, -sway.x, -sway.x * 0.5)
 		# Kamera: sarsıntı ~0,4 sn'de söner, inişte hafif çöker, hızda görüş açısı genişler.
-		shake_k *= maxf(1.0 - dt * 10.0, 0.0)
-		var n := Vector3(sin(t * 53.0 + 1.0), sin(t * 71.0), sin(t * 61.0 + 2.0)) * shake_k
+		shake_k *= maxf(1.0 - dt * 7.0, 0.0)
+		var n := Vector3(sin(t * 53.0 + 1.0), sin(t * 71.0), sin(t * 61.0 + 2.0)) * shake_k * minf(shake_k, 1.0) * Settings.shake # karesel: küçük sarsıntı hafif, büyüğü sert
 		cam.rotation = n * SHAKE_ANG
 		cam.v_offset = minf(sq, 0.0) * 0.5
 		var fov := SCOPE_FOV if scoped else FOV + clampf((spd - SPEED * 1.3) / (DASH_SPEED - SPEED * 1.3), 0.0, 1.0) * FOV_DASH

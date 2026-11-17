@@ -122,7 +122,7 @@ func _ready() -> void:
 
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.6, 0.25)
-	light.light_energy = 14.0
+	light.light_energy = 22.0
 	light.omni_range = 9.0 * k # ışık menzili düğüm ölçeğinden etkilenmez
 	add_child(light)
 
@@ -167,7 +167,7 @@ func _ready() -> void:
 	var tw := create_tween().set_parallel()
 	tw.tween_property(ball, "scale", Vector3.ONE * 1.75, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	anim(tw, ball, "progress", 0.0, 1.0, 0.6)
-	tw.tween_property(light, "light_energy", 0.0, 0.35)
+	tw.tween_property(light, "light_energy", 0.0, 0.32).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT) # ilk karede parlak, hızla söner
 	anim(tw, wave, "shape", Vector4(0.1, 0.16, 0.12, 1.5), Vector4(0.96, 0.03, 0.12, 1.5), 0.32).set_ease(Tween.EASE_OUT)
 	anim(tw, wave, "col", wc, Color(wc, 0.0), 0.32).set_ease(Tween.EASE_IN)
 	if low:
