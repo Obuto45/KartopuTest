@@ -11,9 +11,15 @@ const WA := preload("res://weapon_anims.gd")
 const Weapons := preload("res://weapons.gd")
 const LAYER := 2
 const FOV := 62.0
-const ARM_SCALE := 0.8 # oyuncu modelinden (0.72) biraz büyük: kol ~0,75 m, uzun namlunun ön tutamağına yetişir
+const ARM_SCALE := 0.9 # oyuncu modelinden (0.72) biraz büyük: kol ~0,75 m, uzun namlunun ön tutamağına yetişir
 const SHOULDER_WIDEN := 0.05 # model biriminde, her omuz dışa
+## Sağ omuz kameranın gerisinde: tetik eli göğse yakın, kol neredeyse açık kalsın ki ön kol el eksenini sürdürsün
+## (kırık bilek olmasın); sol kol uzun namlunun ön tutamağına yetişmek için yerinde kalır.
+const RIGHT_BACK := 0.45
 const SHOULDERS := Vector3(0, -0.4, -0.02) # iki omuz ortası, kamera uzayında: göz hizasının epey altında, ekran dışında
+## Dirsek yön noktası: elin 0,6 m gerisi (ön kol el eksenini sürdürsün, bilek kırılmasın) + kamera uzayında bu fark
+## (aşağı, sağ el için; sol elde x aynası). El dönükse (avuç yukarı destek eli) "aşağı" yine ekranın aşağısıdır.
+const POLE := Vector3(0.0, -0.15, 0.0)
 const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.13, -0.1, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
 
 var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
@@ -102,7 +108,8 @@ func _arms(m: Node3D) -> void:
 	for s in ["L", "R"]: # omuzları açar: kollar ekrana ortadan değil alt köşelerden girsin
 		var i := sk.find_bone("Shoulder." + s)
 		var pb := sk.get_bone_global_rest(sk.get_bone_parent(i)).basis
-		sk.set_bone_pose_position(i, sk.get_bone_rest(i).origin + pb.inverse() * Vector3(SHOULDER_WIDEN * (1 if s == "L" else -1), 0, 0))
+		var back := RIGHT_BACK / ARM_SCALE if s == "R" else 0.0 # model uzayı: +Z kameranın önü
+		sk.set_bone_pose_position(i, sk.get_bone_rest(i).origin + pb.inverse() * Vector3(SHOULDER_WIDEN * (1 if s == "L" else -1), 0, -back))
 	for mi: MeshInstance3D in m.find_children("*", "MeshInstance3D", true, false):
 		mi.layers = 1 << (LAYER - 1)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -117,8 +124,8 @@ func _arms(m: Node3D) -> void:
 		t.name = "ArmTarget"
 		t.position = Vector3(0, 0, 0.04)
 		(hand_r if s == "R" else hand_l).add_child(t)
-		var pole := Marker3D.new() # dirsek aşağı-dışa
-		pole.position = Vector3(0.6 if s == "R" else -0.6, -0.9, 0.1)
+		var pole := Marker3D.new() # konumu her kare _process'te (elin gerisi)
+		pole.name = "Pole" + s
 		add_child(pole)
 		ik.set_root_bone_name(k, "UpperArm." + s)
 		ik.set_middle_bone_name(k, "LowerArm." + s)
@@ -232,6 +239,11 @@ func _process(dt: float) -> void:
 		vp.msaa_3d = get_viewport().msaa_3d
 	base.position = view[0] + sway_offset
 	base.rotation = view[1] + sway_tilt
+	for s in ["R", "L"]:
+		var pole := get_node_or_null("Pole" + s) as Node3D
+		if pole:
+			var h := hand_r if s == "R" else hand_l
+			pole.global_position = h.global_transform * Vector3(0, 0, 0.6) + global_basis * (POLE * Vector3(1 if s == "R" else -1, 1, 1))
 
 
 func _ev(name: String) -> void:

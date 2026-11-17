@@ -19,12 +19,13 @@ const THUMB_R := [0.0094, 0.0079, 0.0073]
 
 ## "f": parmak başına [kök, orta, uç] rotation.x (eksi = bük); "s": yelpaze açıklığı (rotation.y);
 ## "t": başparmak [taban eğim x, taban sapma y, taban yuvarlanma z, orta, uç] (y/z sol elde aynalanır).
+## grip: el 1.05 boyunda orta/yüzük kabzaya daha çok bükülür (tests/grip_test.gd ile ölçüldü).
 ## pinch .superpowers/sdd/hands_fit.gd; grip (kabza r≈0.021), bottle (iksir gövdesi r≈0.045), cork (uçlar tıpanın iki yanında,
 ## aralık 0.036) ölçekli el için hands_fit3.gd ile uyduruldu (silindir/küre sarma, uç teması, çarpışmasızlık).
 const POSES := {
 	"open": {"f": [[-0.06, -0.10, -0.06], [-0.05, -0.10, -0.06], [-0.06, -0.12, -0.07], [-0.08, -0.14, -0.08]],
 		"s": 0.07, "t": [-0.25, -0.60, -1.00, -0.05, -0.10]},
-	"grip": {"f": [[-1.22, -0.38, -0.16], [-1.1, -0.56, -0.46], [-1.05, -0.48, -0.4], [-1.6, -1.31, -0.82]],
+	"grip": {"f": [[-1.22, -0.38, -0.16], [-1.1, -0.78, -0.62], [-1.05, -0.72, -0.58], [-1.6, -1.31, -0.82]],
 		"s": 0.0, "t": [-1.06, -0.56, -2.0, -0.31, -0.7]},
 	"support": {"f": [[-0.45, -0.50, -0.30], [-0.50, -0.55, -0.35], [-0.55, -0.60, -0.35], [-0.60, -0.65, -0.40]],
 		"s": 0.03, "t": [-0.45, -0.25, -1.15, -0.20, -0.15]},

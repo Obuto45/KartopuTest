@@ -33,11 +33,14 @@ const GRIPS := {
 	"bazooka": [-0.01, -0.12, 0.02, -0.14],
 	"flame": [0.005, -0.08, 0.02, -0.11],
 }
-const GRIP_C := Vector3(-0.0385, 0, -0.068) # "grip" pozunun sardığı silindirin ekseni (sağ el kökünde)
-const BOTTLE_C := Vector3(-0.0625, 0, -0.0595) # "bottle" pozunun sardığı küre/şişe merkezi
+## Aşağıdaki üç nokta el boyu 0.85 iken uydurulmuştu (değer / 0.85 = birim el); el büyüyünce HS ile ölçeklenmezse
+## el kabzaya göre yanlış yerde durur (parmaklar açılır, serçe kabzaya girer).
+const FIT_HS := 0.85
+const GRIP_C := Vector3(-0.0385, 0, -0.068) * HS / FIT_HS # "grip" pozunun sardığı silindirin ekseni (sağ el kökünde)
+const BOTTLE_C := Vector3(-0.0625, 0, -0.0595) * HS / FIT_HS # "bottle" pozunun sardığı küre/şişe merkezi
 const PINCH_R := Vector3(-0.064, 0.02, -0.094) * HS # sağ el "pinch" ucu
 const PINCH := Vector3(0.064, 0.02, -0.094) * HS # sol el "pinch" ucu (işaret-başparmak arası)
-const CORK := Vector3(0.044, 0.023, -0.1006) # sol el "cork" uçlarının ortası (aralarındaki doğru ~ -Z boyunca)
+const CORK := Vector3(0.044, 0.023, -0.1006) * HS / FIT_HS # sol el "cork" uçlarının ortası (aralarındaki doğru ~ -Z boyunca)
 
 static var _clips := {}
 static var _rest := {}
@@ -106,7 +109,7 @@ static func rest(id: String) -> Dictionary:
 ## Kabza ölçüsünden sağ el bileği: "grip" silindiri kabzanın ön yüzüne yaslanır, avuç sağ yüzde.
 static func _wrap(g: Array) -> Array:
 	var rot := Vector3(g[3], 0, 0)
-	var a := Vector3(minf(g[2] - 0.021, 0.003), g[1], g[0] + 0.008) # kalın kabzada parmak uçları sol yüzü bulsun
+	var a := Vector3(minf(g[2] - 0.021 * HS / FIT_HS, 0.003), g[1], g[0] + 0.008) # kalın kabzada parmak uçları sol yüzü bulsun
 	return _hold(a, rot, GRIP_C)
 
 
