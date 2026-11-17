@@ -86,6 +86,48 @@ func _ready() -> void:
 	_build_cards()
 	_build_shop()
 	_build_end()
+	_build_aim()
+
+
+## Dürbün çerçevesi (keskin nişancı, sağ tık) ve yay germe halkası (nişangâhın çevresi).
+var scope: ColorRect
+var ring: Control
+
+
+func _build_aim() -> void:
+	scope = ColorRect.new()
+	scope.set_anchors_preset(PRESET_FULL_RECT)
+	scope.mouse_filter = MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = """shader_type canvas_item;
+uniform vec2 px;
+void fragment() {
+	vec2 p = (UV - 0.5) * px / px.y;
+	float r = length(p);
+	float a = smoothstep(0.40, 0.405, r) + step(abs(p.x), 0.0012) * step(r, 0.4) + step(abs(p.y), 0.0012) * step(r, 0.4);
+	a = max(a, smoothstep(0.392, 0.4, r) * 0.6);
+	COLOR = vec4(0.0, 0.0, 0.0, clamp(a, 0.0, 1.0));
+}"""
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	scope.material = m
+	scope.visible = false
+	add_child(scope)
+	ring = Control.new()
+	ring.mouse_filter = MOUSE_FILTER_IGNORE
+	ring.set_anchors_preset(PRESET_CENTER)
+	ring.draw.connect(func():
+		var k: float = _g(player, "draw_k", 0.0)
+		if _g(player, "busy", "") == "charge":
+			var c := Color.WHITE if k >= 1.0 else Color(1, 1, 1, 0.55)
+			ring.draw_arc(Vector2.ZERO, 26.0, -PI / 2, -PI / 2 + TAU * k, 48, c, 3.0 if k >= 1.0 else 2.0, true))
+	add_child(ring)
+
+
+func _update_aim() -> void:
+	scope.visible = _g(player, "scoped", false)
+	(scope.material as ShaderMaterial).set_shader_parameter("px", size)
+	ring.queue_redraw()
 
 
 func _fit() -> void:
@@ -349,6 +391,8 @@ func _process(dt: float) -> void:
 			td.connect("changed", func(): slow_t = 0.0)
 	if (player == null or not is_instance_valid(player)) and main.players:
 		player = main.players.get_node_or_null(str(multiplayer.get_unique_id()))
+	if scope:
+		_update_aim()
 	var st: String = _g(td, "state", "break")
 	var wave: int = _g(td, "wave", 0)
 	var money: int = _g(td, "money", 0)

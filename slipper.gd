@@ -72,9 +72,16 @@ func _ready() -> void:
 				mi.rotation.y = a
 
 
+## Bumerang sahibine döndü (ya da ömrü bitti): elde yeniden görünür, yenisi atılabilir.
+func _caught() -> void:
+	if h.get("look", "") == "boomerang" and is_instance_valid(thrower) and thrower.has_method("caught"):
+		thrower.caught()
+
+
 func _td_process(dt: float) -> void:
 	life -= dt
 	if life <= 0.0 or not is_instance_valid(thrower):
+		_caught()
 		queue_free()
 		return
 	if not ret and (not is_instance_valid(target) or target.hp <= 0):
@@ -101,6 +108,7 @@ func _td_process(dt: float) -> void:
 	if reach < 0.0 or (not ret and target == null):
 		return
 	if ret:
+		_caught()
 		queue_free()
 		return
 	Sfx.play3d(Sfx.hurt, global_position, -4.0)

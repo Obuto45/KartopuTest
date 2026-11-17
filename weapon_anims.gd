@@ -215,8 +215,8 @@ static func _make(id: String) -> Dictionary:
 					"Rig/Weapon/string_bot": [_k(0, Z, Vector3(0.49, 0, 0)), _k(0.04, Z, Vector3(-0.06, 0, 0)), _k(0.1)],
 					"Rig/HandR": [_k(0, nock), _k(0.08, nock + Vector3(0.04, 0.02, 0.04)), _k(0.3)],
 					"Rig": [_k(0, Vector3(-0.03, 0.01, 0), Vector3(0, 0, 0.12)), _k(0.06, Vector3(0, 0.01, 0.02), Vector3(0.05, 0, 0)), _k(0.3)]},
-				"vis": [[0.0, "Rig/Weapon/arrow", false]],
-				"poses": [[0.0, "R", "open"], [0.25, "R", "pinch"]], "events": [[0.0, "release"], [0.3, "done"]]}
+				"vis": [[0.02, "Rig/Weapon/arrow", false]],
+				"poses": [[0.0, "R", "open"], [0.25, "R", "pinch"]], "events": [[0.02, "release"], [0.3, "done"]]}
 			c["reload"] = {"len": 0.35, "tracks": {
 					"Rig/Weapon/arrow": [_k(0, Vector3(0.06, -0.15, 0.2)), _k(0.3)],
 					"Rig/HandR": [_k(0, Vector3(0.06, -0.15, 0.2)), _k(0.3)]},

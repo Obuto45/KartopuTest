@@ -165,6 +165,14 @@ var fuse_left := 0.0 # pimi çekilmiş bombanın kalan sigortası
 var pinned := false
 var throw_q := false # pim çekilmeden bırakıldı: pim gelince at
 var prime_id := "" # "grenade" ya da "item:bomb"
+var draw_k := 0.0 # yay gerginliği 0..1
+var scoped := false # keskin nişancı dürbünü (sağ tık)
+var scope_block := false # atıştan sonra sürgü çekilene (chamber) dek dürbün kapalı
+var thrown := 0 # havadaki bumerang
+var combo := 0 # kılıç serisi: 0, 1, 2 (üçüncü güçlü)
+var combo_t := 0.0
+var swing_k := 0.0 # bekleyen kılıç vuruşunun gücü ("fired" olayında vurur)
+const SCOPE_FOV := 20.0
 var hand_p := Vector3.ZERO
 var props := {} # silah id -> model
 var hold: Node3D # elde görünen silah: sağ kol ona uzanır
@@ -404,7 +412,7 @@ func _aim_bone(s: Skeleton3D, i: int, dir: Vector3) -> void:
 
 
 func _speed() -> float:
-	return SPEED * ch.get("speed", 1.0) * bv("haste") * bv("slow") * st("speed")
+	return SPEED * ch.get("speed", 1.0) * bv("haste") * bv("slow") * st("speed") * (0.8 if busy == "charge" else 1.0) * (0.65 if scoped else 1.0)
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -550,6 +558,9 @@ func _local(dt: float) -> void:
 		elif slot == 4 and sword_cd <= 0.0:
 			sword_cd = SWORD_CD
 			swing.rpc(global_position, -transform.basis.z)
+			_anim("swing%d" % (combo + 1)) # Arena: aynı seri, hasar SWORD_DMG ile
+			combo = (combo + 1) % 3
+			combo_t = 0.6
 	if td == null and can_act and slot == 1 and Input.is_action_pressed("throw") and cd <= 0.0:
 		cd = THROW_CD * ch.get("fire_cd", 1.0) * bv("rapid")
 		_shoot(int(bv("multi")), 0.07, false)
@@ -987,6 +998,9 @@ func _animate(dt: float) -> void:
 	vis.visible = not hidden
 	size_k = lerpf(size_k, bv("size"), 0.15)
 	vis.scale = Vector3.ONE * size_k
+	combo_t -= dt
+	if combo_t <= 0.0:
+		combo = 0 # seri 0.6 sn'de bozulur
 	var held := _held() if hp > 0 else ""
 	gun.visible = held == "bazooka"
 	sword.visible = held == "sword"
@@ -1104,7 +1118,8 @@ func _feel(dt: float, mine: bool, spd: float, air: bool, hidden: bool) -> void:
 		var n := Vector3(sin(t * 53.0 + 1.0), sin(t * 71.0), sin(t * 61.0 + 2.0)) * shake_k
 		cam.rotation = n * SHAKE_ANG
 		cam.v_offset = minf(sq, 0.0) * 0.5
-		cam.fov = lerpf(cam.fov, FOV + clampf((spd - SPEED * 1.3) / (DASH_SPEED - SPEED * 1.3), 0.0, 1.0) * FOV_DASH, minf(1.0, dt * 8.0))
+		var fov := SCOPE_FOV if scoped else FOV + clampf((spd - SPEED * 1.3) / (DASH_SPEED - SPEED * 1.3), 0.0, 1.0) * FOV_DASH
+		cam.fov = lerpf(cam.fov, fov, minf(1.0, dt * (20.0 if scoped else 8.0)))
 		if spec_cam: # yay kolu kameranın yerini kendi yönetir: yalnızca kaydır
 			spec_cam.h_offset = n.y * 0.08
 			spec_cam.v_offset = n.x * 0.08
@@ -1308,6 +1323,11 @@ func _host(m: String, args: Array) -> void:
 
 func _td_local(dt: float, can_act: bool, alive: bool) -> void:
 	reload_t = maxf(reload_t - dt, 0.0)
+	if busy == "charge": # yay: 0.6 sn'de tam gerilir
+		draw_k = minf(1.0, draw_k + dt * st("attack") / Weapons.tuned("bow", ups).get("charge", 0.6))
+	scoped = alive and held_id == "sniper" and busy == "" and not scope_block and InputMap.has_action("aim") and Input.is_action_pressed("aim")
+	if vm:
+		vm.visible = held_id != "" and not scoped # dürbünde silah ekrandan çekilir
 	if pinned: # elde sigorta işler
 		fuse_left -= dt
 		if fuse_left <= 0.0:
@@ -1346,14 +1366,31 @@ func _td_use(just: bool) -> void:
 				if just:
 					_prime("grenade")
 				return
-			if cd <= 0.0:
+			if it.id == "bow": # bas: ger; bırakınca ok (gerginlik güç ve hızı belirler)
+				if just:
+					_charge()
+				return
+			if _can_fire():
 				cd = w.rate / st("attack") * ch.get("fire_cd", 1.0) * bv("rapid")
+				if w.kind == "melee": # kılıç: 3'lü seri, vuruş klibin "fired" anında
+					var c := combo
+					combo = (combo + 1) % 3
+					combo_t = 0.6
+					swing_k = 1.5 if c == 2 else 1.0
+					if c == 2:
+						cd += 0.35 # seriden sonra toparlanma
+					_anim("swing%d" % (c + 1), maxf(1.0, WeaponAnims.clips(it.id)["swing%d" % (c + 1)].len / cd))
+					return
+				if it.id == "sniper":
+					scope_block = true
 				if mag > 0:
 					it["ammo"] = int(it.get("ammo", mag)) - 1
 				if it.id == "flame":
 					flame_t = 0.2
 				_td_shoot(it.id, w)
-				if WeaponAnims.has(it.id, "fire"):
+				if w.kind == "homing":
+					_anim("throw")
+				elif WeaponAnims.has(it.id, "fire"):
 					_anim("fire", maxf(1.0, WeaponAnims.clips(it.id).fire.len / cd))
 		"equip":
 			if just and it.id == "shield":
@@ -1440,7 +1477,17 @@ func _on_vm_event(n: String) -> void:
 					_release_throw()
 		"release":
 			if busy == "throw":
-				_throw_now()
+				if held_id == "bow":
+					_loose()
+				else:
+					_throw_now()
+		"fired":
+			if swing_k > 0.0: # kılıç vuruş anı
+				var k := swing_k
+				swing_k = 0.0
+				_td_shoot("sword", Weapons.tuned("sword", ups), 0.0, k)
+		"chamber":
+			scope_block = false
 
 
 ## Elde tutulan silah değişti: süren doldurma iptal (şarjör dolmaz), çıkarma klibi baştan.
@@ -1452,6 +1499,9 @@ func _switched(id: String) -> void:
 	pinned = false
 	throw_q = false
 	fuse_left = 0.0
+	draw_k = 0.0
+	swing_k = 0.0
+	scope_block = false
 	held_id = id
 	reloading = false
 	reload_t = 0.0
@@ -1502,8 +1552,50 @@ func _prime(id: String) -> void:
 	_anim("prime")
 
 
-## Basılı tutulan atışı bırakır (el bombası, bomba eşyası). Pim henüz çekilmediyse çekilince atar.
+## Yayı germeye başla (draw_string); _td_local draw_k'yı artırır.
+func _charge() -> void:
+	_sync_held()
+	if busy != "" and busy != "draw":
+		return
+	busy = "charge"
+	draw_k = 0.0
+	_anim("draw_string")
+
+
+## Gerilmiş oku bırakır: güç ve hız gerginlikle %40 -> %100.
+func _loose() -> void:
+	var k := lerpf(0.4, 1.0, draw_k)
+	draw_k = 0.0
+	var it: Dictionary = inv[slot - 1]
+	it["ammo"] = int(it.get("ammo", 1)) - 1
+	_td_shoot("bow", Weapons.tuned("bow", ups), 0.0, k)
+
+
+## Ateş edilebilir mi: animasyon serbest, bekleme bitti, şarjörde mermi var, bumerang elde.
+func _can_fire() -> bool:
+	var it: Dictionary = inv[slot - 1] if td else {}
+	if busy != "" or cd > 0.0 or it.get("kind", "") != "weapon":
+		return false
+	var w := Weapons.tuned(it.id, ups)
+	var mag := Weapons.mag_of(w)
+	if mag > 0 and int(it.get("ammo", mag)) <= 0:
+		return false
+	return w.kind != "homing" or thrown < w.n + int(bv("multi")) - 1
+
+
+## Bumerang döndü (slipper.gd çağırır).
+func caught() -> void:
+	thrown = maxi(thrown - 1, 0)
+	if is_multiplayer_authority() and held_id == "boomerang" and busy == "":
+		_anim("catch")
+
+
+## Basılı tutulan atışı bırakır: yay, el bombası, bomba eşyası. Pim henüz çekilmediyse çekilince atar.
 func _release_throw() -> void:
+	if busy == "charge":
+		busy = "throw"
+		_anim("release")
+		return
 	if busy != "prime":
 		return
 	if not pinned:
@@ -1603,7 +1695,7 @@ func _td_aim(max_d: float) -> Vector3:
 
 
 ## Atış kararı yerelde: yönleri (saçılma dahil) biz seçer, td_fire ile herkese yayarız.
-func _td_shoot(id: String, w: Dictionary, fuse := 0.0) -> void:
+func _td_shoot(id: String, w: Dictionary, fuse := 0.0, k := 1.0) -> void:
 	var eye: bool = w.kind != "rocket" # anında isabet gözden çıkar: yakındaki hedefte namlu kayması olmasın
 	var origin := look.global_position if eye else _muzzle()
 	var to := _td_aim(200.0) - origin
@@ -1617,16 +1709,20 @@ func _td_shoot(id: String, w: Dictionary, fuse := 0.0) -> void:
 		else:
 			dirs.append(to.normalized().rotated(Vector3.UP, w.spread * (i - (n - 1) * 0.5)))
 	rocket_n += 1
-	td_fire.rpc(id, origin, dirs, rocket_n, fuse)
+	td_fire.rpc(id, origin, dirs, rocket_n, fuse, k)
 
 
 ## Her makinede görüntü ve mermi; yaratığa hasarı yalnızca atanın makinesi hesaplar.
 @rpc("authority", "call_local", "reliable")
-func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse := 0.0) -> void:
+func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse := 0.0, k := 1.0) -> void:
 	var w := Weapons.tuned(id, ups)
 	w["fuse"] = fuse # > 0: sigortalı bomba (çarpınca patlamaz)
+	w.speed *= k # k: yay gerginliği / kılıç serisinin son vuruşu
+	w.knock *= k
+	if w.kind == "homing":
+		thrown += dirs.size()
 	var mine := is_multiplayer_authority()
-	w.dmg *= _pow(w)
+	w.dmg *= _pow(w) * k
 	kick = w.kick
 	shake(origin, w.kick * 0.2)
 	Sfx.play3d(Sfx.fire if w.kind in ["shot", "rocket"] else Sfx.whoosh, origin, -8.0 if w.rate < 0.2 else -2.0)

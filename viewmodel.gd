@@ -43,6 +43,7 @@ func setup(color: Color) -> void:
 	ap = AnimationPlayer.new()
 	base.add_child(ap)
 	ap.root_node = NodePath("..")
+	ap.callback_mode_method = AnimationMixer.ANIMATION_CALLBACK_MODE_METHOD_IMMEDIATE # olay klip hâlâ "oynarken" gelsin
 	vp = SubViewport.new()
 	vp.transparent_bg = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -100,6 +101,10 @@ func equip(new_id: String) -> void:
 		for t in a.get_track_count():
 			if a.track_get_type(t) == Animation.TYPE_METHOD:
 				a.track_set_path(t, "..") # yöntemler bu düğümde (_ev, _pose)
+				for k in a.track_get_key_count(t): # olay klip adını taşısın: geçişte sönen klibin olayı sızmasın
+					var v: Dictionary = a.track_get_key_value(t, k)
+					if v.method == "_ev":
+						a.track_set_key_value(t, k, {"method": "_ev_of", "args": [c, v.args[0]]})
 		lib.add_animation(c, a)
 	if ap.has_animation_library(""):
 		ap.remove_animation_library("")
@@ -153,6 +158,12 @@ func _process(_dt: float) -> void:
 
 func _ev(name: String) -> void:
 	event.emit(name)
+
+
+## Yalnız şu an oynayan klibin olayları geçer (karışımda sönen önceki klip "done" yayınlamasın).
+func _ev_of(clip: String, name: String) -> void:
+	if ap.current_animation == clip:
+		event.emit(name)
 
 
 func _pose(side: String, name: String) -> void:

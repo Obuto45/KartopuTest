@@ -134,10 +134,10 @@ func _ready() -> void:
 		_reset()
 		if w.kind == "melee":
 			me.global_position = Vector3(0, 0.1, -4.2)
-		var hits: Array = await _fire(w.id, 0.4 if w.id == "grenade" else 2.6 if w.kind == "homing" else 1.2)
-		if w.id == "grenade": # pim çekildi; bırakınca atılır, sigorta bitince patlar
+		var hits: Array = await _fire(w.id, 0.4 if w.id == "grenade" else 0.65 if w.id == "bow" else 2.6 if w.kind == "homing" else 1.2)
+		if w.id in ["grenade", "bow"]: # basılı tut (pim / germe), bırakınca at
 			me._release_throw()
-			await _wait(3.0)
+			await _wait(3.0 if w.id == "grenade" else 1.2)
 			hits = td.hits.duplicate()
 		chk("silah %-16s E1'e hasar" % w.name, _names(hits).has("E1"), "isabet=%d hedef=%s ilk=%s" % [hits.size(), _names(hits), hits[0] if hits else "-"])
 	_reset()
@@ -170,7 +170,9 @@ func _ready() -> void:
 	h = await _fire("flame", 2.4)
 	chk("alev yakar: saniyede 4 hasarlık yanık", h.any(func(x): return x[1] == 4), h.size())
 	me.stats.shot_speed = 2.0
-	await _fire("bow", 0.0)
+	await _fire("bow", 0.65) # tam ger
+	me._release_throw()
+	await _wait(0.05)
 	var arrow = world.get_children().filter(func(n): return str(n.name).begins_with("T1_"))
 	chk("mermi hızı x2 -> ok 84 m/sn", arrow.size() == 1 and absf(arrow[0].spd - 84.0) < 1.0, arrow.size())
 	me.ups = {"shotgun:pellets": 2, "bazooka:blast": 1}
@@ -349,6 +351,49 @@ func _ready() -> void:
 	await _wait(3.0)
 	chk("pimliyken ölünce bomba yere düşüp patlar", me.fuse_left == 0.0 and get_tree().get_nodes_in_group("rockets").is_empty(), me.fuse_left)
 	me.hp = me.max_hp
+
+	# --- yay germe, dürbün, bumerang, kılıç serisi
+	_reset()
+	me.slot = 1
+	me.inv[0] = {"kind": "weapon", "id": "bow", "count": 1, "lvl": 1, "ammo": 1}
+	me._sync_held()
+	me.busy = ""
+	me._td_use(true)
+	await _wait(0.3)
+	td.hits.clear()
+	me._release_throw()
+	await _wait(0.6)
+	var weak: Array = td.hits.duplicate()
+	me.inv[0].ammo = 1
+	me.busy = ""
+	me.reloading = false
+	me._td_use(true)
+	await _wait(0.7)
+	td.hits.clear()
+	me._release_throw()
+	await _wait(0.6)
+	chk("yay: tam gerili güçlü, yarım gerili zayıf", weak.size() == 1 and td.hits.size() == 1 and td.hits[0][1] > weak[0][1], [weak, td.hits])
+	me.inv[0] = {"kind": "weapon", "id": "sniper", "count": 1, "lvl": 1, "ammo": 5}
+	me.scoped = true
+	chk("dürbün yürümeyi yavaşlatır", is_equal_approx(me._speed(), me.SPEED * me.ch.get("speed", 1.0) * 0.65), me._speed())
+	me.scoped = false
+	await _fire("boomerang", 0.05)
+	chk("bumerang havadayken yeniden atılmaz", me.thrown == 1 and not me._can_fire(), me.thrown)
+	await _wait(6.0)
+	chk("dönünce yakalanır", me.thrown == 0, me.thrown)
+	me.inv[0] = {"kind": "weapon", "id": "sword", "count": 1, "lvl": 1}
+	me.global_position = Vector3(0, 0.1, -4.2)
+	me._sync_held()
+	var dm := []
+	for i in 3:
+		me.cd = 0.0
+		me.busy = ""
+		td.hits.clear()
+		me._td_use(true)
+		await _wait(0.3)
+		dm.append(td.hits[0][1] if td.hits else 0)
+	chk("kılıç 3'lü seri, üçüncü daha güçlü", dm[2] > dm[0] and me.combo == 0, dm)
+	_reset()
 
 	# --- zırh, ölüm, yeniden doğma
 	_reset()
