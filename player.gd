@@ -1543,7 +1543,7 @@ func _switched(id: String) -> void:
 
 func _sync_held() -> void:
 	var h := _held() if hp > 0 else ""
-	if h != held_id:
+	if h != held_id and not (busy == "drink" and hp > 0): # son şişe yudumda biter: klip (iniş, done) sonuna dek oynasın
 		_switched(h)
 
 

@@ -413,6 +413,11 @@ func _ready() -> void:
 	chk("yudumda +50 ve bir şişe eksilir", me.hp >= mini(70, me.max_hp) and me.hp <= mini(75, me.max_hp) and me.inv[3].count == 1, [me.hp, me.max_hp, me.inv[3]])
 	await _wait(0.65) # done 1.7'de
 	chk("içme bitti", me.busy == "", me.busy)
+	me._td_use(true) # son şişe: yudumda slot boşalır ama klip sonuna dek oynar
+	await _wait(1.2)
+	chk("son şişe: yudumdan sonra klip sürer", me.inv[3].is_empty() and me.busy == "drink" and me.held_id == "item:potion", [me.inv[3], me.busy, me.held_id])
+	await _wait(0.65)
+	chk("son şişe: klip bitince eller iner", me.busy == "" and me.held_id == "", [me.busy, me.held_id])
 	me.inv[3] = {"kind": "build", "id": "wall", "count": 2, "lvl": 1}
 	me._sync_held()
 	chk("yapı slotunda eller boş (yerleştirme klibi var)", me.held_id == "build" and WA.has("build", "place"), me.held_id)
@@ -545,6 +550,10 @@ func _ready() -> void:
 	chk("içme: tıpa izi var", range(da.get_track_count()).any(func(t): return str(da.track_get_path(t)) == "Rig/Weapon/cork"))
 	var dp := WA.build("item:potion", "drink", true)
 	chk("içme parts_only: yalnız şişe parçaları (HandL, fill yok)", range(dp.get_track_count()).all(func(t): return not str(dp.track_get_path(t)).begins_with("HandL") and not str(dp.track_get_path(t)).begins_with("Rig")))
+	chk("içme parts_only: modelsiz iksirde çözülemeyen tıpa izi yok", range(dp.get_track_count()).all(func(t): return not str(dp.track_get_path(t)).begins_with("cork")))
+	var mt := da.find_track(NodePath("."), Animation.TYPE_METHOD)
+	var calls := range(da.track_get_key_count(mt)).map(func(k): return da.method_track_get_params(mt, k))
+	chk("aynı andaki el pozları ezilmez (sağ el bottle, sol el open)", calls.has(["R", "bottle"]) and calls.has(["L", "open"]), calls)
 	var po := WA.build("pistol", "reload", true)
 	chk("parts_only: yalnız parça izleri", range(po.get_track_count()).all(func(t): return po.track_get_type(t) == Animation.TYPE_METHOD or not str(po.track_get_path(t)).begins_with("HandL")))
 	const NEED := {"pistol": ["fire", "dry", "reload", "reload_empty"], "smg": ["fire", "dry", "reload"], "sniper": ["fire", "dry", "reload"],

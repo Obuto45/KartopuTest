@@ -133,10 +133,11 @@ static func build(id: String, clip: String, parts_only := false) -> Animation:
 	var a := Animation.new()
 	a.length = c.len
 	var tracks: Dictionary = c.get("tracks", {})
+	var no_parts := parts_only and model_id(id) == "" # 3. şahısta modelsiz eşya (iksir) boş düğüm: tıpa vb. yok
 	for path in rs:
 		var out: String = path
 		if parts_only:
-			if not path.begins_with("Rig/Weapon/"):
+			if not path.begins_with("Rig/Weapon/") or no_parts:
 				continue
 			out = path.trim_prefix("Rig/Weapon/")
 		var keys: Array = tracks.get(path, [[0.0, Z, Z]])
@@ -161,7 +162,7 @@ static func build(id: String, clip: String, parts_only := false) -> Animation:
 	for path in vis:
 		var out: String = path
 		if parts_only:
-			if not path.begins_with("Rig/Weapon/"):
+			if not path.begins_with("Rig/Weapon/") or no_parts:
 				continue
 			out = path.trim_prefix("Rig/Weapon/")
 		var tv := a.add_track(Animation.TYPE_VALUE)
@@ -173,7 +174,7 @@ static func build(id: String, clip: String, parts_only := false) -> Animation:
 	for p in c.get("props", []):
 		var out: String = p[1]
 		if parts_only:
-			if not out.begins_with("Rig/Weapon/"):
+			if not out.begins_with("Rig/Weapon/") or no_parts:
 				continue
 			out = out.trim_prefix("Rig/Weapon/")
 		if not props.has(out):
@@ -185,10 +186,19 @@ static func build(id: String, clip: String, parts_only := false) -> Animation:
 	if not parts_only:
 		var tm := a.add_track(Animation.TYPE_METHOD)
 		a.track_set_path(tm, ".")
-		for p in c.get("poses", []):
-			a.track_insert_key(tm, p[0], {"method": "_pose", "args": [p[1], p[2]]})
+		# Aynı zamana ikinci yöntem anahtarı öncekini ezer: olaylar tam zamanında, pozlar hafifçe kaydırılır
+		# (klip sonundaysa geriye: "done" ile aynı andaki poz klibin dışına düşmesin).
+		var used := {}
 		for e in c.get("events", []):
+			used[snappedf(e[0], 0.0001)] = true
 			a.track_insert_key(tm, e[0], {"method": "_ev", "args": [e[1]]})
+		for p in c.get("poses", []):
+			var t: float = p[0]
+			var step := -0.0001 if t >= a.length - 0.0001 else 0.0001
+			while used.has(snappedf(t, 0.0001)):
+				t += step
+			used[snappedf(t, 0.0001)] = true
+			a.track_insert_key(tm, t, {"method": "_pose", "args": [p[1], p[2]]})
 	return a
 
 
