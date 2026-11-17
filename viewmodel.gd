@@ -33,6 +33,9 @@ var view: Array = [Vector3.ZERO, Vector3.ZERO]
 ## model_path: karakter glb'si; verilirse kendi kolları ellere uzanır ("" = yalnız eller).
 func setup(color: Color, model_path := "") -> void:
 	top_level = true
+	var model: Node3D = (load(model_path) as PackedScene).instantiate() if model_path != "" else null
+	if model:
+		color = skin_color(model, color) # eller kolla aynı tende (zombi yeşil, inek beyaz)
 	base = Node3D.new()
 	base.name = "Base"
 	add_child(base)
@@ -72,15 +75,14 @@ func setup(color: Color, model_path := "") -> void:
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tr.texture = vp.get_texture()
 	cl.add_child(tr)
-	if model_path != "":
-		_arms(model_path)
+	if model:
+		_arms(model)
 	visible = false
 
 
 ## Karakter modelinin kopyası kamera uzayında; omuzlar kameranın arkasında-altında, yalnız kollar görünür.
 ## Kafa/boyun/bacak/yumruk kemikleri sıfıra büzülür; iki TwoBoneIK3D kolları el bileklerine uzatır.
-func _arms(path: String) -> void:
-	var m := (load(path) as PackedScene).instantiate() as Node3D
+func _arms(m: Node3D) -> void:
 	m.name = "Arms"
 	for a in m.find_children("*", "AnimationPlayer", true, false):
 		a.free() # dinlenme pozunda kalsın
@@ -122,6 +124,16 @@ func _arms(path: String) -> void:
 		ik.set_end_bone_name(k, "Fist." + s)
 		ik.set_target_node(k, ik.get_path_to(t))
 		ik.set_pole_node(k, ik.get_path_to(pole))
+
+
+## Modelin "Skin" malzemesinin rengi; bulunamazsa yedek.
+static func skin_color(model: Node, fallback: Color) -> Color:
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		for i in mi.mesh.get_surface_count():
+			var m := mi.get_active_material(i) as BaseMaterial3D
+			if m and m.resource_name == "Skin":
+				return m.albedo_color
+	return fallback
 
 
 ## Silahı değiştirir ve çıkarma klibini oynatır; "" = eller iner (görünmez).

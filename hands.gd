@@ -1,9 +1,9 @@
-## Koddan yuvarlak hatlı, parmaklı eldiven el. Kök bilekte; avuç içi -X (sağ) / +X (sol), parmaklar -Z.
+## Koddan yuvarlak hatlı, parmaklı çıplak el (karakterin ten rengi). Kök bilekte; avuç içi -X (sağ) / +X (sol), parmaklar -Z.
 ## Başparmak ve işaret parmağı kökte +Y (üst) tarafında. İç çerçeve "h": avuç -Y'ye bakar, parmak bükmek rotation.x < 0 (h, kökte Z etrafında çevrilir).
 ## Parmak i: f<i> (kök eklem) → a (orta eklem) → b (uç eklem). Başparmak: thumb (taban) → a → b.
 extends RefCounted
 
-const SCALE := 0.85 # el boyu (iç "h" düğümü); weapon_anims el sabitleri bununla çarpılır
+const SCALE := 1.05 # el boyu (iç "h" düğümü); weapon_anims el sabitleri bununla çarpılır
 const BLEND_RATE := 30.0 # 1 - exp(-30 * 0.08) ≈ %91: hedefe ~0.08 sn'de yaklaşır
 
 ## Parmaklar (işaret, orta, yüzük, serçe): [x, eklem z, boğum boyları, yarıçap]. h içinde; x, sx ile aynalanır.
@@ -49,10 +49,8 @@ static func make(color: Color, left: bool) -> Node3D:
 	root.add_child(h)
 	# Başparmak/işaret h'de +X*sx → kökte +Y (iki elde de üstte): sağ el gerçekten sağ, sol el onun aynası.
 	var sx := 1.0 if left else -1.0
-	color = color.lerp(Color(0.5, 0.5, 0.5), 0.2).darkened(0.08) # oyuncak gibi doygun durmasın
-	var glove := _mat(color, 0.7)
-	var pad := _mat(color.darkened(0.18), 0.85) # avuç ve parmak ucu deri yaması
-	var cuff := _mat(color.darkened(0.5), 0.75)
+	var glove := _mat(color, 0.62) # ten (adı eski: el her yerde bu malzemeyle kurulur)
+	var pad := _mat(color.lerp(Color(1.0, 0.82, 0.74), 0.22), 0.7) # avuç içi ve parmak uçları: hafif açık, pembemsi
 	# Avuç: basık elipsoit + eklem sırtı + topuk + serçe kenarı (köşeler yumuşak)
 	_mi(h, "palm", _sphere(), glove, Vector3(0, 0.001, -0.047), Vector3.ZERO, Vector3(0.080, 0.032, 0.098))
 	_mi(h, "palm_pad", _sphere(), pad, Vector3(0, -0.005, -0.050), Vector3.ZERO, Vector3(0.068, 0.026, 0.080))
@@ -60,16 +58,9 @@ static func make(color: Color, left: bool) -> Node3D:
 	_mi(h, "heel", _capsule(0.016, 0.078), glove, Vector3(-0.002 * sx, -0.003, -0.017), Vector3(0, 0, PI / 2), Vector3(0.8, 1, 1))
 	_mi(h, "edge", _capsule(0.0135, 0.075), glove, Vector3(-0.028 * sx, -0.002, -0.048), Vector3(PI / 2, 0, 0), Vector3(0.9, 1, 1))
 	_mi(h, "thenar", _sphere(), glove, Vector3(0.020 * sx, -0.011, -0.034), Vector3(0, 0.45 * sx, 0), Vector3(0.034, 0.026, 0.056))
-	# Bilek bağlantısı ve ~4,5 cm kısa manşet (kol içine girer, aradaki boşluğu örter)
+	# Bilek: elden kola uzanan ten rengi gövde (kolun inceltilmiş ön koluna girer, aradaki boşluğu örter)
 	_mi(h, "wrist_joint", _capsule(0.025, 0.05), glove, Vector3(0, -0.001, -0.004), Vector3(PI / 2, 0, 0), Vector3(1.2, 1, 0.7))
-	var wrist := Node3D.new()
-	wrist.name = "wrist"
-	wrist.position = Vector3(0, 0, 0.03)
-	wrist.scale = Vector3(1, 0.8, 1)
-	h.add_child(wrist)
-	_mi(wrist, "cuff", _cyl(0.029, 0.031, 0.045), cuff, Vector3.ZERO, Vector3(-PI / 2, 0, 0))
-	_mi(wrist, "rim", _torus(0.029, 0.034), cuff, Vector3(0, 0, 0.021), Vector3(PI / 2, 0, 0))
-	_mi(wrist, "strap", _cyl(0.0302, 0.0306, 0.012), pad, Vector3(0, 0, -0.008), Vector3(-PI / 2, 0, 0))
+	_mi(h, "wrist", _capsule(0.024, 0.09), glove, Vector3(0, -0.001, 0.035), Vector3(PI / 2, 0, 0), Vector3(1.15, 1, 0.75))
 	var joints: Array[Node3D] = []
 	for i in 4:
 		var d: Array = FINGERS[i]
