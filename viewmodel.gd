@@ -6,6 +6,7 @@ extends Node3D
 signal event(name: String)
 
 const Hands := preload("res://hands.gd")
+const Potion := preload("res://potion.gd")
 const WA := preload("res://weapon_anims.gd")
 const Weapons := preload("res://weapons.gd")
 const LAYER := 2
@@ -13,7 +14,7 @@ const FOV := 62.0
 const ARM_SCALE := 0.72 # oyuncu modeliyle aynı (player.MODEL_SCALE): kol ~0,68 m, yay tutuşuna da yeter
 const SHOULDER_WIDEN := 0.15 # model biriminde, her omuz dışa
 const SHOULDERS := Vector3(0, -0.3, 0.0) # iki omuz ortası, kamera uzayında: göz hizasının altında, ekran dışında
-const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.16, -0.2, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
+const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.15, -0.17, -0.34), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
 
 var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
 var sway_tilt := Vector3.ZERO
@@ -134,7 +135,7 @@ func equip(new_id: String) -> void:
 	if id == "":
 		return
 	var mid := WA.model_id(id)
-	weapon = Weapons.make_prop({"id": mid}) if mid != "" else (_potion() if id == "item:potion" else Node3D.new())
+	weapon = Weapons.make_prop({"id": mid}) if mid != "" else (Potion.make() if id == "item:potion" else Node3D.new())
 	weapon.name = "Weapon"
 	rig.add_child(weapon)
 	var w := Weapons.find(id)
@@ -158,10 +159,14 @@ func equip(new_id: String) -> void:
 					var v: Dictionary = a.track_get_key_value(t, k)
 					if v.method == "_ev":
 						a.track_set_key_value(t, k, {"method": "_ev_of", "args": [c, v.args[0]]})
+					if a.track_get_key_time(t, k) == 0.0: # tam 0'daki yöntem anahtarı oynatma başında atlanıyor
+						a.track_set_key_time(t, k, 0.001)
 		lib.add_animation(c, a)
 	if ap.has_animation_library(""):
 		ap.remove_animation_library("")
 	ap.add_animation_library("", lib)
+	for p in WA.clips(id).draw.poses: # çıkarma başında el pozu anında (önceki silahın pozundan süzülmesin)
+		Hands.pose(hand_l if p[1] == "L" else hand_r, p[2])
 	ap.play("draw")
 	ap.advance(0.0)
 
@@ -196,9 +201,11 @@ func show_part(name: String, on: bool) -> void:
 		n.visible = on
 
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
 	if base == null:
 		return
+	Hands.update(hand_r, dt)
+	Hands.update(hand_l, dt)
 	var main := get_viewport().get_camera_3d()
 	if main and main != vcam:
 		global_transform = main.global_transform
@@ -220,7 +227,7 @@ func _ev_of(clip: String, name: String) -> void:
 
 
 func _pose(side: String, name: String) -> void:
-	Hands.pose(hand_l if side == "L" else hand_r, name)
+	Hands.pose(hand_l if side == "L" else hand_r, name, true)
 
 
 func _no_shadow(mi: MeshInstance3D) -> void:
@@ -237,28 +244,3 @@ func _no_shadow(mi: MeshInstance3D) -> void:
 			m.disable_receive_shadows = true
 			mi.set_surface_override_material(s, m)
 
-
-## İksir şişesi (modeli yok): kırmızı ışıyan gövde, boyun, mantar tıpa.
-func _potion() -> Node3D:
-	var root := Node3D.new()
-	for d in [[0.038, 0.09, 0.0, Color(0.9, 0.15, 0.2), 1.2], [0.014, 0.04, 0.065, Color(0.85, 0.9, 1.0), 0.0], [0.016, 0.02, 0.095, Color(0.55, 0.35, 0.2), 0.0]]:
-		var mi := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = d[0]
-		cm.bottom_radius = d[0]
-		cm.height = d[1]
-		mi.mesh = cm
-		var m := StandardMaterial3D.new()
-		m.albedo_color = d[3]
-		if d[4] > 0.0:
-			m.emission_enabled = true
-			m.emission = d[3]
-			m.emission_energy_multiplier = d[4]
-		mi.material_override = m
-		mi.position.y = d[2]
-		root.add_child(mi)
-	var mk := Marker3D.new()
-	mk.name = "muzzle"
-	mk.position.y = 0.11
-	root.add_child(mk)
-	return root

@@ -79,9 +79,11 @@ func _fp_shots(me: Node) -> void:
 	await _fp_hold(me, 3, {"kind": "item", "id": "potion", "count": 2, "lvl": 1})
 	me.hp = 40
 	me._td_use(true)
-	await _wait(0.55)
-	await _shot("fp_potion")
-	await _wait(0.6)
+	await _wait(0.5)
+	await _shot("fp_potion_cork") # tıpa çekiliyor
+	await _wait(0.5)
+	await _shot("fp_potion") # ağızda, yudumlar
+	await _wait(0.9) # klip 1.7 sn
 	await _fp_hold(me, 1, {"kind": "weapon", "id": "bow", "count": 1, "lvl": 1, "ammo": 1})
 	me._td_use(true)
 	await _wait(0.8)

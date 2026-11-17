@@ -409,9 +409,9 @@ func _ready() -> void:
 	me._td_use(true)
 	await _wait(0.2)
 	chk("iksir: hemen iyileştirmez, içiyor", me.hp == 20 and me.busy == "drink", [me.hp, me.busy])
-	await _wait(0.5)
+	await _wait(0.95) # gulp 1.05'te
 	chk("yudumda +50 ve bir şişe eksilir", me.hp >= mini(70, me.max_hp) and me.hp <= mini(75, me.max_hp) and me.inv[3].count == 1, [me.hp, me.max_hp, me.inv[3]])
-	await _wait(0.5)
+	await _wait(0.65) # done 1.7'de
 	chk("içme bitti", me.busy == "", me.busy)
 	me.inv[3] = {"kind": "build", "id": "wall", "count": 2, "lvl": 1}
 	me._sync_held()
@@ -495,13 +495,34 @@ func _ready() -> void:
 		var need: Array = ["body", "muzzle", "grip_l"] + PARTS.get(w.id, [])
 		chk("%s parçaları" % w.id, need.all(func(n): return m.find_child(n, true, false) != null), need)
 		m.free()
-	var hR: Node3D = load("res://hands.gd").make(Color.RED, false)
-	chk("el parçaları", ["palm", "thumb", "f0", "f3", "wrist"].all(func(n): return hR.find_child(n, true, false) != null))
-	load("res://hands.gd").pose(hR, "grip")
-	var fa: float = hR.find_child("f1", true, false).rotation.x
-	load("res://hands.gd").pose(hR, "open")
-	chk("kavrama parmakları büker, açık düzeltir", fa < -0.8 and absf(hR.find_child("f1", true, false).rotation.x) < 0.2, fa)
-	hR.free()
+	const Hands := preload("res://hands.gd")
+	for left in [false, true]:
+		var hd: Node3D = Hands.make(Color.RED, left)
+		chk("el parçaları (sol=%s)" % left, ["palm", "thumb", "f0", "f3", "wrist"].all(func(n): return hd.find_child(n, true, false) != null))
+		chk("parmak ve başparmak 3 boğum (f0/a/b)", range(4).all(func(i): return hd.find_child("f%d" % i, true, false).has_node("a/b")) and hd.find_child("thumb", true, false).has_node("a/b"))
+		chk("pozlar: grip support open pinch bottle cork", ["grip", "support", "open", "pinch", "bottle", "cork"].all(func(n): return Hands.POSES.has(n)))
+		var f1: Node3D = hd.find_child("f1", true, false)
+		Hands.pose(hd, "grip")
+		var fa := f1.rotation.x
+		Hands.pose(hd, "open")
+		chk("kavrama parmakları büker, açık düzeltir", fa < -0.8 and absf(f1.rotation.x) < 0.2, fa)
+		Hands.pose(hd, "grip", true)
+		chk("blend pozu anında değiştirmez", absf(f1.rotation.x) < 0.2, f1.rotation.x)
+		Hands.update(hd, 0.5)
+		chk("update(0.5) sonrası hedefte", absf(f1.rotation.x - fa) < 0.01, f1.rotation.x)
+		chk("el gölge atmaz", hd.find_children("*", "MeshInstance3D", true, false).all(func(m): return m.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF))
+		hd.free()
+	var ha: Node3D = Hands.make(Color.RED, false)
+	var hb: Node3D = Hands.make(Color.BLUE, false)
+	chk("el ağları paylaşılır", ha.find_child("f0", true, false).get_child(0).mesh == hb.find_child("f0", true, false).get_child(0).mesh)
+	ha.free()
+	hb.free()
+	var pot: Node3D = load("res://potion.gd").make()
+	chk("iksir çocukları", ["glass", "liquid", "cork", "muzzle", "twine", "glow"].all(func(n): return pot.get_node_or_null(n) != null) and pot.get_node("muzzle") is Marker3D)
+	var lm := (pot.get_node("liquid") as MeshInstance3D).material_override as ShaderMaterial
+	pot.set("fill", 0.3)
+	chk("iksir fill -> shader", lm != null and is_equal_approx(float(lm.get_shader_parameter("fill")), 0.3))
+	pot.free()
 	for id in ["pistol", "shotgun", "smg", "sniper", "bazooka", "flame", "bow", "grenade", "boomerang", "sword", "item:potion", "item:bomb"]:
 		chk("%s draw" % id, WA.has(id, "draw"))
 	var an := WA.build("pistol", "reload")
@@ -515,6 +536,15 @@ func _ready() -> void:
 					ev.append([an.track_get_key_time(t, k), v.args[0]])
 	chk("mag_in %85'te", ev.any(func(e): return e[1] == "mag_in" and is_equal_approx(e[0], 1.3 * 0.85)), ev)
 	chk("iksir gulp", WA.has("item:potion", "drink"))
+	var dr: Dictionary = WA.clips("item:potion").drink
+	var t_of := func(n: String) -> float: return dr.events.filter(func(e): return e[1] == n)[0][0]
+	chk("içme: gulp < done, done sonda", t_of.call("gulp") < t_of.call("done") and is_equal_approx(t_of.call("done"), dr.len), dr.events)
+	var da := WA.build("item:potion", "drink")
+	var ft := da.find_track(NodePath("Rig/Weapon:fill"), Animation.TYPE_VALUE)
+	chk("içme: Rig/Weapon:fill değer izi 1 -> 0.05", ft >= 0 and is_equal_approx(da.value_track_interpolate(ft, 0.0), 1.0) and da.value_track_interpolate(ft, dr.len) < 0.1)
+	chk("içme: tıpa izi var", range(da.get_track_count()).any(func(t): return str(da.track_get_path(t)) == "Rig/Weapon/cork"))
+	var dp := WA.build("item:potion", "drink", true)
+	chk("içme parts_only: yalnız şişe parçaları (HandL, fill yok)", range(dp.get_track_count()).all(func(t): return not str(dp.track_get_path(t)).begins_with("HandL") and not str(dp.track_get_path(t)).begins_with("Rig")))
 	var po := WA.build("pistol", "reload", true)
 	chk("parts_only: yalnız parça izleri", range(po.get_track_count()).all(func(t): return po.track_get_type(t) == Animation.TYPE_METHOD or not str(po.track_get_path(t)).begins_with("HandL")))
 	const NEED := {"pistol": ["fire", "dry", "reload", "reload_empty"], "smg": ["fire", "dry", "reload"], "sniper": ["fire", "dry", "reload"],
@@ -533,7 +563,24 @@ func _ready() -> void:
 	await _wait(0.5)
 	chk("viewmodel çıkarma bitti -> ready", got.has("ready") and vm.current() == "pistol", got)
 	chk("namlu ileride", vm.to_local(vm.muzzle()).z < -0.2, vm.to_local(vm.muzzle()))
+	vm.equip("item:potion")
+	vm.weapon.set("fill", 0.2)
+	vm.weapon.get_node("cork").position.y = 0.3
+	vm.equip("item:potion")
+	chk("iksir yeniden kuşanılınca dolu, tıpa yerinde", is_equal_approx(float(vm.weapon.get("fill")), 1.0) and is_equal_approx(vm.weapon.get_node("cork").position.y, 0.085))
+	chk("çıkarma başında sağ el pozu anında (bottle)", is_equal_approx(vm.hand_r.find_child("f0", true, false).rotation.x, Hands.POSES.bottle.f[0][0]))
 	vm.queue_free()
+	var va: Node3D = load("res://viewmodel.gd").new()
+	add_child(va)
+	va.setup(Color.BLUE, "res://models/chars/casual2_male.glb")
+	va.equip("pistol")
+	var sks := va.find_children("*", "Skeleton3D", true, false)
+	chk("kollu viewmodel: Skeleton3D var", sks.size() == 1)
+	if sks.size() == 1:
+		var sk: Skeleton3D = sks[0]
+		chk("kol ağları katman 2, gölgesiz", va.get_node("Arms").find_children("*", "MeshInstance3D", true, false).all(func(m): return m.layers == 2 and m.cast_shadow == 0))
+		chk("Fist.L büzük (~0)", sk.get_bone_pose_scale(sk.find_bone("Fist.L")).x < 0.01)
+	va.queue_free()
 	chk("yerel oyuncuda viewmodel, 3. şahıs silahı gizli", me.vm != null and not me.gun.visible and me.cam.cull_mask & 2 == 0)
 
 	Net.set_weapon(3)
