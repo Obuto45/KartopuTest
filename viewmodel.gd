@@ -28,6 +28,7 @@ var vp: SubViewport
 var vcam: Camera3D
 var id := ""
 var view: Array = [Vector3.ZERO, Vector3.ZERO]
+var _in_event := false # animasyon olayı yayılırken true (bkz. play)
 
 
 ## model_path: karakter glb'si; verilirse kendi kolları ellere uzanır ("" = yalnız eller).
@@ -189,6 +190,9 @@ func equip(new_id: String) -> void:
 func play(clip: String, speed := 1.0) -> void:
 	if id == "":
 		return
+	if _in_event: # klibin kendi olayından yeni klip: oynatıcı geri çağrının içinde, seek onu yeniden işletip çöker
+		play.call_deferred(clip, speed)
+		return
 	if not ap.has_animation(clip):
 		clip = "idle"
 	ap.play(clip, 0.05, speed)
@@ -224,20 +228,22 @@ func _process(dt: float) -> void:
 	if main and main != vcam:
 		global_transform = main.global_transform
 		vcam.global_transform = main.global_transform
-		vp.size = get_viewport().get_visible_rect().size
+		vp.size = get_window().size # gerçek pencere pikseli: arayüz ölçeklense de eller bulanık olmasın
 		vp.msaa_3d = get_viewport().msaa_3d
 	base.position = view[0] + sway_offset
 	base.rotation = view[1] + sway_tilt
 
 
 func _ev(name: String) -> void:
+	_in_event = true
 	event.emit(name)
+	_in_event = false
 
 
 ## Yalnız şu an oynayan klibin olayları geçer (karışımda sönen önceki klip "done" yayınlamasın).
 func _ev_of(clip: String, name: String) -> void:
 	if ap.current_animation == clip:
-		event.emit(name)
+		_ev(name)
 
 
 func _pose(side: String, name: String) -> void:
