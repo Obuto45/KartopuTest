@@ -10,6 +10,8 @@ const WA := preload("res://weapon_anims.gd")
 const Weapons := preload("res://weapons.gd")
 const LAYER := 2
 const FOV := 62.0
+const ARM_SCALE := 0.58 # kol ~0,55 m: tipik tutuşta hafif bükük
+const ARM_POS := Vector3(0, -1.28, 0.11) # omuzlar kameranın ~0,28 m altında, biraz arkasında
 const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.16, -0.2, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
 
 var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
@@ -26,7 +28,8 @@ var id := ""
 var view: Array = [Vector3.ZERO, Vector3.ZERO]
 
 
-func setup(color: Color) -> void:
+## model_path: karakter glb'si; verilirse kendi kolları ellere uzanır ("" = yalnız eller).
+func setup(color: Color, model_path := "") -> void:
 	top_level = true
 	base = Node3D.new()
 	base.name = "Base"
@@ -67,7 +70,47 @@ func setup(color: Color) -> void:
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tr.texture = vp.get_texture()
 	cl.add_child(tr)
+	if model_path != "":
+		_arms(model_path)
 	visible = false
+
+
+## Karakter modelinin kopyası kamera uzayında; omuzlar kameranın arkasında-altında, yalnız kollar görünür.
+## Kafa/boyun/bacak/yumruk kemikleri sıfıra büzülür; iki TwoBoneIK3D kolları el bileklerine uzatır.
+func _arms(path: String) -> void:
+	var m := (load(path) as PackedScene).instantiate() as Node3D
+	m.name = "Arms"
+	for a in m.find_children("*", "AnimationPlayer", true, false):
+		a.free() # dinlenme pozunda kalsın
+	m.scale = Vector3.ONE * ARM_SCALE
+	m.rotation.y = PI # modelin önü +Z
+	m.position = ARM_POS
+	add_child(m)
+	var sk: Skeleton3D = m.find_children("*", "Skeleton3D", true, false)[0]
+	for b in ["Head", "Neck", "UpperLeg.L", "UpperLeg.R", "Foot.L", "Foot.R", "Fist.L", "Fist.R"]:
+		var i := sk.find_bone(b)
+		if i >= 0:
+			sk.set_bone_pose_scale(i, Vector3.ONE * 0.001)
+	for mi: MeshInstance3D in m.find_children("*", "MeshInstance3D", true, false):
+		mi.layers = 1 << (LAYER - 1)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_no_shadow(mi)
+	var ik := TwoBoneIK3D.new()
+	sk.add_child(ik)
+	ik.setting_count = 2
+	for k in 2:
+		var s: String = ["R", "L"][k]
+		var t := Marker3D.new() # manşetin içi: el kökünün biraz gerisi
+		t.position = Vector3(0, 0, 0.04)
+		(hand_r if s == "R" else hand_l).add_child(t)
+		var pole := Marker3D.new() # dirsek aşağı-dışa
+		pole.position = Vector3(0.6 if s == "R" else -0.6, -0.9, 0.1)
+		add_child(pole)
+		ik.set_root_bone_name(k, "UpperArm." + s)
+		ik.set_middle_bone_name(k, "LowerArm." + s)
+		ik.set_end_bone_name(k, "Fist." + s)
+		ik.set_target_node(k, ik.get_path_to(t))
+		ik.set_pole_node(k, ik.get_path_to(pole))
 
 
 ## Silahı değiştirir ve çıkarma klibini oynatır; "" = eller iner (görünmez).

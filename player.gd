@@ -260,7 +260,7 @@ func _ready() -> void:
 		cam.cull_mask &= ~2 # katman 2 viewmodel'in, onu kendi görüntü alanı çizer
 		vm = preload("res://viewmodel.gd").new()
 		add_child(vm)
-		vm.setup(ch.color)
+		vm.setup(ch.color, "res://models/chars/%s.glb" % ch.model)
 		vm.event.connect(_on_vm_event)
 		# Kendi gözünden: silahlar küçük ve uzakta, ekranın sağ altında dursun.
 		gun.scale = Vector3.ONE * 0.45
