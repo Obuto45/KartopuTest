@@ -77,6 +77,11 @@ func _ready() -> void:
 	_ok("denge tablosu", Balance.ENEMIES.size() >= 6 and Balance.wave(10, 1).boss == "boss" and Balance.wave(5, 4).boss == "ogre"
 		and Balance.wave(3, 4).groups[0].count > Balance.wave(3, 1).groups[0].count and Balance.SPAWN_POINTS.size() == 8)
 
+	var hen: Node = w.get_tree().get_nodes_in_group("chickens").filter(func(c): return w.is_ancestor_of(c))[0]
+	var p1: Node = main.players.get_node("1")
+	p1.td_dmg(hen, 5)
+	_ok("tavuk: vurulunca ölür, can iksiri verir", hen.hp == 0 and p1.inv.any(func(it): return it.get("id", "") == "potion"), str(p1.inv))
+
 	# 2) Hazır oyu -> dalga 1
 	td.ready_up()
 	await _until(func(): return td.state == "fight", 6.0)

@@ -496,6 +496,7 @@ func _chickens() -> void:
 			continue
 		for j in 1 + (_vis.randi() % 3 if i < 4 else 0): # ilk dördü civcivli
 			var c: Node3D = ChickenScript.new()
+			c.name = "Chicken%d_%d" % [i, j] # sabit ad: ölüm ağda adla eşitlenir
 			c.chick = j > 0
 			c.rng.seed = _vis.randi()
 			c.position = home + Vector3(_vis.randf_range(-1, 1), 0, _vis.randf_range(-1, 1)) * float(j)

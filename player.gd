@@ -1126,6 +1126,10 @@ func explode(rocket_name, pos: Vector3) -> void:
 		r.queue_free()
 	var big := str(rocket_name).begins_with("B")
 	boom_fx(pos, 1.8 if big else 1.0)
+	if is_multiplayer_authority(): # arena: patlama alanındaki tavuklar
+		for c in get_tree().get_nodes_in_group("chickens"):
+			if c.hp > 0 and c.global_position.distance_to(pos) < (BIG_RADIUS if big else BLAST_RADIUS):
+				_hunt(c)
 	if big:
 		apply_blast(pos, BIG_RADIUS, BIG_DMG)
 	else:
@@ -1505,8 +1509,26 @@ func td_affect(e: Node, eff: Dictionary, from: Vector3) -> void:
 
 ## Kritik burada atılır (x2); sonucu host'a bildirir.
 func td_dmg(e: Node, dmg: float, can_crit := true) -> void:
+	if e.is_in_group("chickens"):
+		_hunt(e)
+		return
 	var crit := can_crit and randf() < st("crit", 0.0)
 	_host("damage_enemy", [str(e.name), maxi(roundi(dmg * (2.0 if crit else 1.0)), 1), crit])
+
+
+## Tavuğu vuran makine: ölümü herkese yayar, ödülü alır (TD'de can iksiri, yer yoksa ya da arenada 25 can).
+## shortcut: tavukların konumu ağda eşit değil; başka oyuncular kendi ekranlarındaki kopyanın öldüğünü görür.
+func _hunt(c: Node) -> void:
+	chicken_die.rpc(str(c.name))
+	if not (td and add_item({"kind": "item", "id": "potion"})):
+		gain(25)
+
+
+@rpc("authority", "call_local", "reliable")
+func chicken_die(cname: String) -> void:
+	for c in get_tree().get_nodes_in_group("chickens"):
+		if str(c.name) == cname and c.hp > 0:
+			c.die()
 
 
 ## Yaratık hasarı (host çağırır); zırh statı take_hit içinde uygulanır, kalkan bir darbeyi emer.

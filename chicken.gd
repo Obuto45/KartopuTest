@@ -7,6 +7,10 @@ const HALF := 28.5 # duvarın içinde kal
 const KEEP_OUT := 4.5 # merkezden uzak dur (TD'de kule orada)
 
 var chick := false
+# Silahların yaratıklarda aradığı alanlar ("enemies" grubu): TD silahları tavuğu da vurabilsin.
+var hp := 1
+var radius := 0.3
+var height := 0.5
 var rng := RandomNumberGenerator.new()
 var target: Vector3
 var wait := 0.0
@@ -61,6 +65,7 @@ func _ready() -> void:
 		_part(head, ball, Vector3(0, 0.24, -0.02), Vector3(0.05, 0.1, 0.14), Color(0.85, 0.12, 0.1)) # ibik
 		_part(head, ball, Vector3(0, 0.03, -0.12), Vector3(0.05, 0.08, 0.05), Color(0.85, 0.12, 0.1))
 	add_to_group("chickens")
+	add_to_group("enemies")
 	scale = Vector3.ONE * (0.5 if chick else rng.randf_range(0.9, 1.15))
 	target = position
 	wait = rng.randf_range(0.0, 3.0)
@@ -82,6 +87,33 @@ func flee(from: Vector3) -> void:
 	scare = 1.6
 	wait = 0.0
 	_pick(position, position - Vector3(from.x, 0, from.z), rng.randf_range(5.0, 8.0))
+
+
+## Vuruldu: tüy bulutu bırakıp yok olur (player.chicken_die her makinede çağırır).
+func die() -> void:
+	hp = 0
+	var p := CPUParticles3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(0.09, 0.05)
+	var m := StandardMaterial3D.new()
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	q.material = m
+	p.mesh = q
+	p.amount = 24
+	p.lifetime = 1.2
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.spread = 180.0
+	p.initial_velocity_min = 1.0
+	p.initial_velocity_max = 3.0
+	p.gravity = Vector3(0, -2.5, 0)
+	p.angle_max = 360.0
+	p.position = position + Vector3.UP * 0.3
+	get_parent().add_child(p)
+	p.emitting = true
+	get_tree().create_timer(1.5).timeout.connect(p.queue_free)
+	queue_free()
 
 
 func boom(at: Vector3) -> void:
