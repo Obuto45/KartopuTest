@@ -49,7 +49,7 @@ const ARENA_DMG := 20.0 # karakter pasifleri (rocket_dmg, power) bu tabana göre
 ## spread: yelpaze/saçılma (rad); range; pierce: delip geçtiği yaratık; bounce; fire: yanık hasarı/sn;
 ## knock; cone: yay eşiği (dot, küçük = geniş); kick: geri tepme; model: hazır glb ya da prop: parça listesi
 ## [tür box|cyl|sph, ölçü, konum, renk] (namlu -Z; cyl ölçüsü: üst r, alt r, boy).
-const DEF := {"n": 1, "spread": 0.0, "range": 60.0, "pierce": 0, "blast": 0.0, "grav": 0.0, "bounce": 0, "fire": 0.0,
+const DEF := {"dmg": 0, "rate": 1.0, "n": 1, "spread": 0.0, "range": 60.0, "pierce": 0, "blast": 0.0, "grav": 0.0, "bounce": 0, "fire": 0.0,
 	"knock": 0.0, "cone": 0.5, "speed": 0.0, "kick": 0.5, "color": Color(1.0, 0.9, 0.5)}
 const _DARK := Color(0.15, 0.15, 0.17)
 const _WOOD := Color(0.5, 0.33, 0.18)
@@ -391,7 +391,7 @@ static func enemy_fx(e: Dictionary, from: Vector3, at: Vector3, caster: Vector3)
 	var away := at - from
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.05 else Vector3.ZERO
-	var v := away * e.get("knock", 0.0) - away * e.get("pull", 0.0)
+	var v: Vector3 = away * e.get("knock", 0.0) - away * e.get("pull", 0.0)
 	if e.get("knock", 0.0) > 0.0 or e.has("up"):
 		v.y += e.get("up", 3.0)
 	if e.has("yank"):

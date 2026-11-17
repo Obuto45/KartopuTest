@@ -323,6 +323,25 @@ func damage_enemy(enemy_name: String, dmg: int, crit: bool) -> void:
 			damage(e, dmg, crit)
 
 
+## Yavaşlatma / sersemletme (hız 0) / itme: atan makine bildirir, host uygular.
+## shortcut: "vuln" (fazla hasar alma) uygulanmıyor; gerekince damage() içine çarpan eklenir.
+@rpc("any_peer", "call_local", "reliable")
+func effect_enemy(enemy_name: String, fx: Dictionary) -> void:
+	if not multiplayer.is_server():
+		return
+	var e: Node3D = _by_id.get(enemy_name.trim_prefix("E").to_int())
+	if e == null or e.hp <= 0:
+		return
+	if fx.has("stun"):
+		e.slow_k = 0.0
+		e.slow_t = minf(float(fx.stun), 5.0)
+	elif fx.has("slow"):
+		e.slow_k = clampf(float(fx.slow[0]), 0.0, 1.0)
+		e.slow_t = minf(float(fx.slow[1]), 8.0)
+	if fx.get("knock") is Vector3:
+		e.move_and_collide((fx.knock as Vector3).limit_length(12.0) * Vector3(0.25, 0, 0.25))
+
+
 ## Host: zırhı düşer, canı yayar, ölümde ödülü havuza ekler. n = -1: kendini patlattı (ödül yok).
 func damage(e: Node3D, dmg: int, crit: bool, n := 0) -> void:
 	if e.hp <= 0 or state != "fight":

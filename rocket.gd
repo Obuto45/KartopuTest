@@ -135,7 +135,7 @@ func _physics_process(dt: float) -> void:
 	var td := not w.is_empty()
 	var mine := is_instance_valid(shooter) and shooter.is_multiplayer_authority()
 	if td and w.grav > 0.0: # kavisli uçuş
-		var v := dir * spd + Vector3.DOWN * w.grav * dt
+		var v: Vector3 = dir * spd + Vector3.DOWN * w.grav * dt
 		spd = v.length()
 		dir = v / spd
 		_face()

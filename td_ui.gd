@@ -678,7 +678,10 @@ func _open_shop() -> void:
 			var d := _t(v, str(it.get("desc", "")), 14)
 			d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			d.modulate.a = 0.8
-			var b := _button(h, "₺ %d" % int(it.get("price", 0)), Callable())
+			var b := Button.new() # _buy düğmenin kendisini ister, o yüzden _button ile kurulmaz
+			b.text = "₺ %d" % int(it.get("price", 0))
+			b.focus_mode = FOCUS_NONE
+			h.add_child(b)
 			b.pressed.connect(_buy.bind(it, b))
 			b.custom_minimum_size = Vector2(104, 46)
 			b.size_flags_vertical = SIZE_SHRINK_CENTER

@@ -32,7 +32,8 @@ var tower_hp := 1500
 var tower_max := 1500
 var enemies_left := 0
 var kills := 27
-var ready := {1: true}
+func is_ready(id): return id == 1
+func can_place(_id, _p): return true
 func _ready(): add_to_group("td")
 func buy(_id): return true
 func ready_up(): pass

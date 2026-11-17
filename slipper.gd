@@ -85,7 +85,7 @@ func _td_process(dt: float) -> void:
 				queue_free()
 				return
 			ret = true
-	turn += h.get("turn_gain", 0.0) * dt
+	turn += maxf(h.get("turn_gain", 0.0), 3.0) * dt # iri yaratığın çevresinde dönüp durmasın
 	var reach := 0.8
 	if ret or target:
 		var aim: Vector3 = thrower.global_position + Vector3.UP if ret else Weapons.e_mid(target)

@@ -21,10 +21,10 @@ void vertex() {
 }
 void fragment() {
 	float tw = sin(UV.y * 260.0 + sin(UV.x * 6.2832) * 2.2); // örgü kıvrımı
-	vec3 gold = mix(vec3(0.78, 0.5, 0.1), vec3(1.0, 0.82, 0.3), 0.5 + 0.5 * tw);
+	vec3 gold = mix(vec3(0.62, 0.36, 0.04), vec3(0.95, 0.66, 0.12), 0.5 + 0.5 * tw);
 	ALBEDO = (UV.y > 0.955 && UV.y < 0.972) ? vec3(0.55, 0.2, 0.7) : gold; // uçta mor kurdele
 	ROUGHNESS = 0.45;
-	EMISSION = gold * 0.12; // gölgede de altın kalsın
+	EMISSION = gold * 0.08; // gölgede de altın kalsın
 }"
 
 var vis: Node3D # tüm görüntü: eğilme ve yıkılış bunu oynatır
@@ -99,7 +99,7 @@ func _ready() -> void:
 	stone.set_shader_parameter("blocks", 1.0)
 	stone.set_shader_parameter("moss", 0.55)
 	var wood := _std(Color(0.36, 0.24, 0.14))
-	var tile := _std(Color(0.42, 0.2, 0.5), 0.7) # mor kiremit
+	var tile := _std(Color(0.34, 0.17, 0.5), 0.7) # mor kiremit
 	var gold := _std(Color(1.0, 0.78, 0.25), 0.35, 0.3)
 
 	_part(_cyl(2.2, 2.4, 0.9, 18), stone, Vector3(0, 0.45, 0)) # kaide
@@ -163,12 +163,13 @@ func _rapunzel() -> void:
 		_part(_cyl(0.045, 0.05, 0.5, 6), skin, Vector3(-0.1, 1.12, z * 1.1), Vector3(0, 0, -0.4), g) # kollar önde
 	_part(_cyl(0.06, 0.07, 0.12, 6), skin, Vector3(0, 1.46, 0), Vector3.ZERO, g)
 	_part(_ball(0.19), skin, Vector3(0, 1.68, 0), Vector3.ZERO, g)
-	# Saç: başı arkadan, üstten ve yanlardan saran kabuk + alına düşen perçem. (Renk: örgüyle aynı gölgelendirici.)
-	var cap := _part(_ball(0.235), hair, Vector3(0.035, 1.71, 0), Vector3.ZERO, g)
+	# Saç: başı arkadan, üstten ve yanlardan saran kabuk + alına düşen perçem. 
+	var locks := _std(Color(0.9, 0.6, 0.1), 0.5, 0.08) # örgünün açık tonu, çizgisiz
+	var cap := _part(_ball(0.235), locks, Vector3(0.035, 1.71, 0), Vector3.ZERO, g)
 	cap.scale = Vector3(1.0, 1.0, 1.08)
-	_part(_ball(0.16, 8), hair, Vector3(-0.1, 1.82, 0), Vector3.ZERO, g).scale = Vector3(1.0, 0.6, 1.3)
+	_part(_ball(0.16, 8), locks, Vector3(-0.1, 1.82, 0), Vector3.ZERO, g).scale = Vector3(1.0, 0.6, 1.3)
 	for z in [-0.17, 0.17]: # yanlardan inen tutamlar: yandan bakınca profil de saçın arkasında
-		_part(_cyl(0.07, 0.05, 0.5, 6), hair, Vector3(-0.06, 1.5, z), Vector3.ZERO, g)
+		_part(_cyl(0.07, 0.05, 0.5, 6), locks, Vector3(-0.06, 1.5, z), Vector3.ZERO, g)
 	_part(_cyl(0.07, 0.085, 0.05, 10), _std(Color(1.0, 0.85, 0.3), 0.3, 0.6), Vector3(0.02, 1.93, 0), Vector3.ZERO, g) # taç
 
 	# Örgü: baş arkası -> sırt -> korkuluğun üstü -> aşağı. Eğri boyunca 8 kenarlı, boğumlu tüp.
@@ -215,14 +216,14 @@ func _damage_fx() -> void:
 	for i in 7:
 		var a := 0.6 + i * 2.3
 		var y := 1.5 + fmod(i * 3.7, 7.5)
-		var r := 2.03 - y * 0.038 # gövde yüzeyi
+		var r := 2.04 - y * 0.038 # gövde yüzeyi
 		var seg := Node3D.new()
 		seg.position = Vector3(cos(a) * r, y, sin(a) * r)
 		seg.rotation.y = -a
 		seg.visible = false
 		vis.add_child(seg)
 		for k in 3: # zikzak üç parça
-			_part(_box(0.06, 0.75, 0.1), black, Vector3(0, k * 0.6, (k % 2) * 0.22 - 0.11), Vector3(0.45 * (1 if k % 2 == 0 else -1), 0, 0), seg)
+			_part(_box(0.04, 0.75, 0.09), black, Vector3(0, k * 0.6, (k % 2) * 0.22 - 0.11), Vector3(0.45 * (1 if k % 2 == 0 else -1), 0, 0), seg)
 		cracks.append(seg)
 	smoke = Fx.parts(Fx.quad("puff", 2.4), 14, 3.0, 0.4, 1.2, [Color(0.1, 0.09, 0.08, 0.0), Color(0.12, 0.11, 0.1, 0.8), Color(0.3, 0.29, 0.28, 0.0)], 0.5, 1.3, false)
 	smoke.position = Vector3(-0.8, BODY_H + 1.0, 1.4)

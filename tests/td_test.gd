@@ -97,6 +97,8 @@ func _ready() -> void:
 	var k0: int = td.kills
 	var e0: Node = td.elist[0]
 	var xp0: int = td.xp + (td.level - 1) * 1000
+	td.effect_enemy(e0.name, {"stun": 2.0})
+	_ok("effect_enemy: sersemletme yaratığı durdurur", e0.slow_k == 0.0 and e0.slow_t > 1.5)
 	td.damage_enemy(e0.name, 5, false)
 	var part: bool = e0.hp == e0.max_hp - 5 and e0.bar.visible
 	td.damage_enemy(e0.name, 99999, true)
@@ -136,13 +138,13 @@ func _ready() -> void:
 	# 6) Duvar yolu keser ve saldırıya uğrar (dalga 2'nin kendi sırası boşaltılır, yaratıklar elle konur)
 	td.ready_up()
 	await _until(func(): return td.state == "fight", 6.0)
-	td._queue.clear()
+	td._queue = [[1e9, "", Vector3.ZERO]] # nöbetçi: sıra boşalıp dalga kendiliğinden bitmesin
 	td._to_spawn = 0
 	td._spawn_now("grunt", Vector3(13, 0, 0))
 	var g: Node = td.elist[0]
 	await _until(func(): return wall.hp < wall.max_hp, 20.0)
 	_ok("duvar yolu kesti ve saldırıldı", wall.hp < wall.max_hp and g.global_position.x > 8.0 and td.tower_hp == td.tower_max,
-		"duvar %d/%d, yaratık x=%.1f" % [wall.hp, wall.max_hp, g.global_position.x])
+		"duvar %d/%d, yaratık x=%.1f, kule %d" % [wall.hp, wall.max_hp, g.global_position.x, td.tower_hp])
 	# Tuzak ve dikenli duvar
 	td._spawn_now("grunt", Vector3(-13, 0, 0))
 	var g2: Node = td.elist[1]
@@ -162,6 +164,7 @@ func _ready() -> void:
 	_ok("taret yaratık öldürdü", td.kills > k1)
 
 	# 7) Dalga 10'a kadar: her şeyi öldürerek kazan
+	td._queue.clear()
 	var guard := 0
 	while td.state != "won" and td.state != "lost" and guard < 400000:
 		guard += 1
