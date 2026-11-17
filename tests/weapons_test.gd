@@ -348,6 +348,13 @@ func _ready() -> void:
 		var need: Array = ["body", "muzzle", "grip_l"] + PARTS.get(w.id, [])
 		chk("%s parçaları" % w.id, need.all(func(n): return m.find_child(n, true, false) != null), need)
 		m.free()
+	var hR: Node3D = load("res://hands.gd").make(Color.RED, false)
+	chk("el parçaları", ["palm", "thumb", "f0", "f3", "wrist"].all(func(n): return hR.find_child(n, true, false) != null))
+	load("res://hands.gd").pose(hR, "grip")
+	var fa: float = hR.find_child("f1", true, false).rotation.x
+	load("res://hands.gd").pose(hR, "open")
+	chk("kavrama parmakları büker, açık düzeltir", fa < -0.8 and absf(hR.find_child("f1", true, false).rotation.x) < 0.2, fa)
+	hR.free()
 
 	Net.set_weapon(3)
 	chk("Net.set_weapon", Net.my_weapon == 3 and Net.weapons.get(1) == 1)
