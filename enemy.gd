@@ -35,6 +35,11 @@ var dmg := 1
 var radius := 0.4
 var height := 1.9
 var armor := 0
+var bonus_armor := 0 # "armored" modifikatörü
+var spd_k := 1.0 # hız çarpanı ("fast", üst sınırlı)
+var elite := false
+var money := 0 # ölünce verdiği para (mod / zorluk çarpanlı)
+var tint_key := ""
 var td: Node
 var host := false
 var model: Node3D
@@ -121,10 +126,11 @@ func _ready() -> void:
 	collision_mask = 1
 	host = multiplayer.is_server()
 	d = Balance.ENEMIES[type]
-	var s: float = d.scale
+	var s: float = d.scale * (1.25 if elite else 1.0)
 	radius = 0.4 * s
 	height = 1.9 * s
-	armor = d.get("armor", 0)
+	armor = d.get("armor", 0) + bonus_armor
+	tint_key = "tint" + type + ("E" if elite else "")
 	max_hp = hp
 	net_pos = position
 	last_pos = position
@@ -140,8 +146,8 @@ func _ready() -> void:
 	model = load("res://models/chars/%s.glb" % d.model).instantiate()
 	model.rotation.y = PI # modellerin önü +Z'ye bakıyor
 	add_child(model)
-	var tint: Color = d.tint
-	var over := shared("tint" + type, func() -> Resource: # çarpma karışımı: doku ve ışık korunur, renk kayar
+	var tint: Color = Color(1.8, 1.5, 0.6) if elite else d.tint # elit: parlak
+	var over := shared(tint_key, func() -> Resource: # çarpma karışımı: doku ve ışık korunur, renk kayar
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.blend_mode = BaseMaterial3D.BLEND_MODE_MUL
@@ -169,7 +175,7 @@ func _physics_process(dt: float) -> void:
 	if flash_t > 0.0:
 		flash_t -= dt
 		if flash_t <= 0.0:
-			_overlay(_shared["tint" + type])
+			_overlay(_shared[tint_key])
 	swing_t -= dt
 	if host:
 		_host(dt)
@@ -205,7 +211,7 @@ func _host(dt: float) -> void:
 		tick_t += TICK
 		_think()
 	moving = dir != Vector3.ZERO
-	var spd: float = d.speed * (slow_k if slow_t > 0.0 else 1.0)
+	var spd: float = d.speed * spd_k * (slow_k if slow_t > 0.0 else 1.0)
 	velocity.x = dir.x * spd
 	velocity.z = dir.z * spd
 	velocity.y = 0.0 if is_on_floor() else velocity.y - 20.0 * dt
@@ -294,7 +300,7 @@ func _attack(tgt: Node3D, goal: Vector3) -> void:
 	elif tgt == null:
 		td.hurt_tower(dmg)
 	elif tgt == block:
-		td.hurt_build(tgt, dmg)
+		td.hurt_build(tgt, dmg * (2 if type == "ogre" else 1)) # Dev Goblin yapıları ezer
 	elif d.range > 4.0: # uzaktan: mermi varınca oyuncu hâlâ oradaysa
 		td.delayed_hit(tgt, goal, dmg, SPIT_T)
 	else:
@@ -353,7 +359,7 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 	remove_from_group("enemies")
 	collision_layer = 0
 	collision_mask = 0
-	_overlay(_shared["tint" + type])
+	_overlay(_shared[tint_key])
 	var c := global_position + Vector3.UP * height * 0.5
 	if n == -1:
 		var fx: Node3D = Fx.new()
@@ -373,7 +379,7 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 	world.add_child(p)
 	p.emitting = true
 	p.create_tween().tween_callback(p.queue_free).set_delay(1.0)
-	float_text(world, c + Vector3.UP * 0.4, "+%d" % d.money, Color(1.0, 0.8, 0.2), 0.007)
+	float_text(world, c + Vector3.UP * 0.4, "+%d" % money, Color(1.0, 0.8, 0.2), 0.007)
 	Sfx.play3d(Sfx.kill, c, -6.0)
 	var tw := create_tween()
 	tw.tween_interval(1.3)

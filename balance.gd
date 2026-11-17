@@ -85,6 +85,18 @@ const DIFFS := {
 }
 
 
+## Dalga modifikatörleri (roll_mods): arayüz ad / açıklamayı buradan okur. "night" yalnız bayrak (görünüm başka yerde).
+const MODS := {
+	"fast": {"name": "Hızlı", "desc": "Yaratıklar %20 hızlı, %25 fazla para verir."},
+	"armored": {"name": "Zırhlı", "desc": "Tüm yaratıklara +3 zırh."},
+	"gold": {"name": "Altın", "desc": "Ödül x2, yaratıkların canı +%30."},
+	"swarm": {"name": "Sürü", "desc": "%40 daha çok yaratık, canları %25 az."},
+	"elite": {"name": "Elit", "desc": "Her kümede bir elit: 3 kat can, büyük, sandık bırakır."},
+	"night": {"name": "Gece", "desc": "Karanlık basar, görüş kısalır."},
+}
+const SPEED_CAP := 6.9 # "fast" ile bile oyuncuya (7) yetişilmez
+const DROPS := {"potion": 0.03, "bomb": 0.015} # yaratık ölünce düşme olasılığı (elit: hep "chest")
+
 ## Oyuncu sayısı çarpanı: sayı x(1 + 0,55 x fazla oyuncu), can x(1 + 0,15 x fazla oyuncu).
 ## 4 oyuncu: 2,65 x 1,45 = 3,84 kat toplam can, 4 kat ateş gücüne karşı -> kişi başı yük solo ile aynı düzeyde,
 ## ama yaratık sayısı arttığı için kule daha çok yönden sıkışır (kolaylaşmaz). Ödüller sayıyla birlikte büyür.
@@ -92,30 +104,76 @@ static func crowd(players: int) -> float:
 	return 1.0 + 0.55 * (clampi(players, 1, 4) - 1)
 
 
-## n: 1..WAVE_COUNT. Can dalga başına +%10 (dalga 10: x1,9), hasar +%6 (x1,54): oyuncunun kart ve statlarla
-## büyümesinin biraz altında; zorluk asıl olarak tür karışımı ve sayıdan gelir.
+## n: 1..WAVE_COUNT (sonsuzda daha büyük). Can dalga başına +%10 (dalga 10: x1,9), hasar +%6 (x1,54): oyuncunun kart ve
+## statlarla büyümesinin biraz altında; zorluk asıl olarak tür karışımı ve sayıdan gelir.
+## n > WAVE_COUNT (sonsuz): 9. ve 10. dalganın ortalaması, sayı +%8/dalga, can x1,12^(n-10), her 5. dalga boss.
 ## diff: DIFFS anahtarı; mods: roll_mods sonucu (sonuç sözlüğüne "mods" olarak geçer).
 static func wave(n: int, players: int, diff := "normal", mods: Array = []) -> Dictionary:
-	n = clampi(n, 1, WAVE_COUNT)
+	n = maxi(n, 1)
 	var p := clampi(players, 1, 4)
-	var w: Dictionary = WAVES[n - 1]
+	var df: Dictionary = DIFFS.get(diff, DIFFS.normal)
+	var cnt := crowd(p) * (1.4 if "swarm" in mods else 1.0)
 	var groups := []
-	for type in w:
-		if type != "boss":
-			groups.append({"type": type, "count": ceili(w[type] * crowd(p))})
-	return {"groups": groups, "hp_mult": (1.0 + 0.1 * (n - 1)) * (1.0 + 0.15 * (p - 1)),
-		"dmg_mult": (1.0 + 0.06 * (n - 1)) * (1.0 + 0.05 * (p - 1)), "boss": w.get("boss", ""),
-		"boss_hp": 1.0 + 0.5 * (p - 1), "mods": mods} # boss tek gelir: sayı çarpanı yerine canı büyür (4 oyuncu: x2,5 x1,45)
+	var boss := ""
+	var hp := 1.0 + 0.1 * (mini(n, WAVE_COUNT) - 1)
+	if n <= WAVE_COUNT:
+		var w: Dictionary = WAVES[n - 1]
+		for type in w:
+			if type != "boss":
+				groups.append({"type": type, "count": ceili(w[type] * cnt)})
+		boss = w.get("boss", "")
+	else:
+		var a: Dictionary = WAVES[WAVE_COUNT - 2]
+		var b: Dictionary = WAVES[WAVE_COUNT - 1]
+		for type in a:
+			if type != "boss":
+				groups.append({"type": type, "count": ceili((a[type] + b.get(type, 0)) * 0.5 * (1.0 + 0.08 * (n - WAVE_COUNT)) * cnt)})
+		hp *= pow(1.12, n - WAVE_COUNT)
+		boss = "boss" if n % 5 == 0 else ""
+	hp *= (1.0 + 0.15 * (p - 1)) * df.hp * (1.3 if "gold" in mods else 1.0) * (0.75 if "swarm" in mods else 1.0)
+	return {"groups": groups, "hp_mult": hp,
+		"dmg_mult": (1.0 + 0.06 * (n - 1)) * (1.0 + 0.05 * (p - 1)) * df.dmg, "boss": boss,
+		"boss_hp": 1.0 + 0.5 * (p - 1), "mods": mods, # boss tek gelir: sayı çarpanı yerine canı büyür (4 oyuncu: x2,5 x1,45)
+		"speed_mult": 1.2 if "fast" in mods else 1.0, "armor_add": 3 if "armored" in mods else 0,
+		"money_mult": (1.25 if "fast" in mods else 1.0) * (2.0 if "gold" in mods else 1.0), "elite": "elite" in mods}
+
+
+## Modifikatörlü yaratık hızı: oyuncuyu (7) geçmesin diye SPEED_CAP'te kesilir (taban zaten üstteyse düşmez).
+static func enemy_speed(type: String, w: Dictionary) -> float:
+	var base: float = ENEMIES[type].speed
+	return minf(base * w.get("speed_mult", 1.0), maxf(base, SPEED_CAP))
+
+
+## Düşme: r = [0,1) rastgele sayı; elit hep sandık. Boş dize = düşmez.
+static func roll_drop(r: float, elite: bool) -> String:
+	if elite:
+		return "chest"
+	var acc := 0.0
+	for id in DROPS:
+		acc += DROPS[id]
+		if r < acc:
+			return id
+	return ""
+
+
+## Dalga n'nin modifikatörleri; aynı tohum aynı listeyi verir (host seçer, _state ile yayılır).
+## Dalga 3'ten: 1 adet; Kabus +DIFFS.mods; sonsuzda her 5 dalgada +1.
+static func roll_mods(n: int, diff: String, seed: int) -> Array:
+	if n < 3:
+		return []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + n * 7919
+	var pool: Array = MODS.keys()
+	var out := []
+	var k := 1 + int(DIFFS.get(diff, DIFFS.normal).mods) + maxi(n - WAVE_COUNT, 0) / 5
+	while out.size() < k and not pool.is_empty():
+		out.append(pool.pop_at(rng.randi() % pool.size()))
+	return out
 
 
 ## O seviyeden sonrakine gereken havuz XP'si: 25, 40, 55... (doğrusal). Tek oyuncu 10 dalgada ~1500 XP
 ## toplar -> ~13 seviye (dalga başına 1–2 kart). Havuz ortak olduğu için eşik oyuncu sayısıyla aynı
 ## oranda büyür (crowd): kaç kişi olursa olsun herkes aynı sayıda seviye atlar.
-## Dalga n'nin modifikatörleri; aynı tohum aynı listeyi verir (host seçer, _state ile yayılır).
-static func roll_mods(n: int, diff: String, seed: int) -> Array:
-	return []
-
-
 static func xp_for(level: int, players := 1) -> int:
 	return roundi((25 + 15 * (maxi(level, 1) - 1)) * crowd(players))
 
