@@ -39,6 +39,8 @@ var weapon_sel := 0 # Net.my_weapon yoksa yerel seçim
 var info: Label
 var members: Label
 var start_btn: Button
+var crosshair: Label
+var letterbox: Array[ColorRect] = [] # sinematik şeritler: yalnız giriş ekranında
 var friends_box: VBoxContainer
 var invite_box: VBoxContainer
 var dmg_rect: ColorRect
@@ -166,10 +168,14 @@ func _make_theme() -> Theme:
 	t.set_stylebox("hover", "Button", _sb(Color(0.85, 0.42, 0.12)))
 	t.set_stylebox("pressed", "Button", _sb(Color(0.6, 0.28, 0.08)))
 	t.set_stylebox("disabled", "Button", _sb(Color(0.12, 0.12, 0.16, 0.6)))
-	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	var focus := _sb(Color(0, 0, 0, 0), 8, 10) # klavye / gamepad odağı görünsün (fare odağı çizilmez)
+	focus.draw_center = false
+	focus.set_border_width_all(3)
+	focus.border_color = Color(1.0, 0.62, 0.18)
+	t.set_stylebox("focus", "Button", focus)
 	t.set_color("font_color", "Button", Color(0.92, 0.94, 1.0))
 	t.set_color("font_hover_color", "Button", Color.WHITE)
-	t.set_color("font_disabled_color", "Button", Color(0.5, 0.5, 0.55))
+	t.set_color("font_disabled_color", "Button", Color(0.65, 0.65, 0.7))
 	for k in ["normal", "hover", "pressed"]:
 		t.set_stylebox(k, "OptionButton", t.get_stylebox(k, "Button"))
 	var p := _sb(Color(0.06, 0.07, 0.11, 0.93), 14, 26)
@@ -186,6 +192,7 @@ func _make_theme() -> Theme:
 	mh.border_color = Color(1.0, 0.85, 0.4)
 	for k in ["normal", "hover", "pressed", "disabled"]:
 		t.set_stylebox(k, "BigButton", mh if k != "normal" and k != "disabled" else mn)
+	t.set_stylebox("focus", "BigButton", mh)
 	t.set_font_size("font_size", "BigButton", 30)
 	t.set_constant("outline_size", "BigButton", 6)
 	t.set_color("font_outline_color", "BigButton", Color(0, 0, 0, 0.7))
@@ -240,7 +247,8 @@ func _build_ui() -> void:
 	blind_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	blind_rect.color = Color(1, 1, 0.95, 0)
 	hud.add_child(blind_rect)
-	_full_label(28, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER).text = "+"
+	crosshair = _full_label(28, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
+	crosshair.text = "+"
 	_build_hp_bar()
 	score_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_RIGHT, VERTICAL_ALIGNMENT_TOP)
 	center_lbl = _full_label(52, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
@@ -384,6 +392,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 			bar.offset_top = -34
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ui.add_child(bar)
+		letterbox.append(bar)
 
 	# Giriş ekranı
 	var intro := _page("intro")
@@ -580,10 +589,16 @@ func _show_page(n: String) -> void:
 	p.modulate.a = 0.0
 	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(p, "modulate:a", 1.0, 0.35)
+	for b in letterbox:
+		tw.tween_property(b, "modulate:a", 1.0 if n == "intro" else 0.0, 0.4)
 	tw.tween_property(shade, "modulate:a", 0.25 if n == "intro" else (0.75 if n == "modes" else 1.0), 0.6)
 	tw.tween_property(self, "cam_k", 0.0 if n == "intro" else 1.0, 1.4)
 	var first := p.get_child(0) as Control # içerik soldan kayarak gelsin
 	tw.tween_property(first, "position:x", first.position.x, 0.4).from(first.position.x - 50)
+	for b: Button in p.find_children("*", "Button", true, false): # klavye / gamepad ile gezilebilsin
+		if b.visible and not b.disabled and b.focus_mode != Control.FOCUS_NONE:
+			b.grab_focus.call_deferred()
+			break
 
 
 ## Menüdeki canlı sahne: orman, seçili karakter ve ekibi, arkada ara ara patlamalar.
@@ -812,11 +827,15 @@ func _build_weapons(layer: CanvasLayer, theme: Theme) -> void:
 	weapon_wrap.add_child(v)
 	_logo(v, "SİLAHINI SEÇ", 50).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_txt(v, "Tower Defense'e bu silahla girersin. Yenileri seviye kartlarından gelir.", 17, 0.7).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var scroll := ScrollContainer.new() # 720p'de 3. satır ve Kapat ekrana sığsın
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(scroll)
 	weapon_grid = GridContainer.new()
-	weapon_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	weapon_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER | Control.SIZE_EXPAND
 	weapon_grid.add_theme_constant_override("h_separation", 12)
 	weapon_grid.add_theme_constant_override("v_separation", 12)
-	v.add_child(weapon_grid)
+	scroll.add_child(weapon_grid)
 	var close := _btn(v, "Kapat", weapon_wrap.hide)
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close.custom_minimum_size.x = 220
@@ -888,7 +907,7 @@ func _open_weapons() -> void:
 		var r: Dictionary = rar.get(w.get("rarity", ""), {})
 		var c: Color = r.get("color", Color(0.75, 0.78, 0.85))
 		var b := Button.new() # tıklanabilir kart: içindekiler fareyi yutmaz
-		b.custom_minimum_size = Vector2(290, 318)
+		b.custom_minimum_size = Vector2(290, 280)
 		var sb := _sb(Color(c.darkened(0.8), 0.95), 12, 0)
 		sb.set_border_width_all(4 if i == _my_weapon() else 2)
 		sb.border_color = Color(1, 0.85, 0.2) if i == _my_weapon() else Color(c, 0.7)
@@ -907,7 +926,7 @@ func _open_weapons() -> void:
 		var cv := VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 4)
 		m.add_child(cv)
-		_logo(cv, str(w.get("name", "?")).to_upper(), 25, c.lightened(0.25)).clip_text = true
+		_logo(cv, str(w.get("name", "?")).to_upper(), 22, c.lightened(0.25)).clip_text = true
 		var tag := _lbl(cv, str(r.get("name", "")).to_upper() + ("   ✔ SEÇİLİ" if i == _my_weapon() else ""), 13)
 		tag.add_theme_color_override("font_color", c)
 		var pic := TextureRect.new()
@@ -1005,6 +1024,25 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 	res_opt.disabled = Settings.mode != 0
 	res_opt.item_selected.connect(_on_res)
 	v.add_child(res_opt)
+	_lbl(v, "Grafik kalitesi", 17)
+	var q := OptionButton.new()
+	for n in Settings.QUALITIES:
+		q.add_item(n)
+	q.selected = Settings.quality
+	q.item_selected.connect(func(i: int) -> void:
+		Settings.quality = i
+		Settings.apply_quality()
+		Settings.save())
+	v.add_child(q)
+	var shake_lbl := _lbl(v, "", 17)
+	var shake := HSlider.new()
+	shake.min_value = 0.0; shake.max_value = 1.0; shake.step = 0.1
+	shake.value_changed.connect(func(x: float) -> void:
+		Settings.shake = x
+		shake_lbl.text = "Kamera sarsıntısı: %d%%" % roundi(x * 100.0))
+	shake.value = Settings.shake
+	shake.value_changed.emit(shake.value)
+	v.add_child(shake)
 
 	v.add_child(HSeparator.new())
 	ingame_box = VBoxContainer.new()
@@ -1090,6 +1128,12 @@ func _refresh() -> void:
 		lines.append(line)
 	members.text = "Lobidekiler:\n" + "\n".join(lines) if Net.online() else ""
 	start_btn.disabled = not (Net.online() and multiplayer.is_server())
+	if not Net.online():
+		start_btn.text = "Önce lobi kur ya da Yerel Host"
+	elif not multiplayer.is_server():
+		start_btn.text = "Host'un başlatması bekleniyor…"
+	else:
+		start_btn.text = MODES.get(mode, MODES.arena)[2]
 	if Net.online() and world == null and page in ["intro", "main", "modes"]:
 		_show_page("lobby")
 
@@ -1103,6 +1147,7 @@ func _process(dt: float) -> void:
 	if me:
 		_update_hp_bar(me, dt)
 		dmg_rect.color.a = me.flash * 1.2
+		crosshair.visible = me.hp > 0
 		blind_rect.color.a = clampf(me.bt("blind") * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
 		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
 		var texts := ["1\nBAZUKA", "2\nKALKAN\n" + sh, "3\nDUVAR\n" + _cd_text(me.wall_cd), "4\nKILIÇ",

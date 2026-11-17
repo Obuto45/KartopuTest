@@ -52,6 +52,7 @@ var stat_rows := [] # {def, bar, val, btn}
 var weap_box: VBoxContainer
 var cards_box: VBoxContainer
 var cards_hint: Label
+var hint_lbl: Label # kısayollar; yalnız molada
 var cards_row: HBoxContainer
 var shop_wrap: ColorRect
 var shop_money: Label
@@ -188,7 +189,7 @@ func _build_top() -> void:
 	_rect(bar, Color(0, 0, 0, 0.7))
 	tower_fill = _rect(bar, Color(0.3, 0.9, 0.35))
 	tower_fill.offset_left = 3; tower_fill.offset_top = 3; tower_fill.offset_bottom = -3
-	tower_txt = _t(bar, "", 15)
+	tower_txt = _t(bar, "", 18)
 	tower_txt.set_anchors_preset(PRESET_FULL_RECT)
 	tower_txt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tower_txt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -202,7 +203,7 @@ func _build_top() -> void:
 	money_lbl = _t(row, "", 22, GOLD)
 	break_lbl = _t(top, "", 19, Color(0.7, 0.95, 1.0))
 	break_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ready_lbl = _t(top, "", 15)
+	ready_lbl = _t(top, "", 18)
 	ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ready_lbl.modulate.a = 0.85
 
@@ -243,10 +244,12 @@ func _build_bottom() -> void:
 	add_child(lvl_badge)
 	lvl_lbl = _t(lvl_badge, "", 21, Color.WHITE, true)
 	lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var hint := _t(self, "TAB statlar   •   B mağaza (molada)   •   G hazır   •   1–5 envanter   •   Q yetenek   •   ESC menü", 13)
-	hint.set_anchors_preset(PRESET_BOTTOM_LEFT)
-	hint.offset_left = 12; hint.offset_top = -64; hint.offset_bottom = -40
-	hint.modulate.a = 0.55
+	hint_lbl = _t(self, "TAB statlar   •   B mağaza   •   G hazır   •   1–5 envanter   •   Q yetenek   •   ESC menü", 17)
+	hint_lbl.set_anchors_preset(PRESET_BOTTOM_WIDE) # ekran genişliğinde, ortalı, envanterin üstünde: rozet ve slotlarla çakışmaz
+	hint_lbl.offset_left = 0; hint_lbl.offset_right = 0
+	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint_lbl.offset_top = -196; hint_lbl.offset_bottom = -172
+	hint_lbl.modulate.a = 0.7
 
 	# Envanter: 1-3 silah/ekipman, 4-5 yapı/eşya, sonra Q yeteneği; gruplar başlıkla ayrılır.
 	var inv := HBoxContainer.new()
@@ -263,7 +266,7 @@ func _build_bottom() -> void:
 		gv.mouse_filter = MOUSE_FILTER_IGNORE
 		gv.add_theme_constant_override("separation", 2)
 		inv.add_child(gv)
-		var cap := _t(gv, g[0], 12)
+		var cap := _t(gv, g[0], 16)
 		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cap.modulate.a = 0.6
 		var gh := HBoxContainer.new()
@@ -293,7 +296,7 @@ func _build_bottom() -> void:
 			var cnt := _t(cell, "", 16, GOLD)
 			cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			cnt.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-			var pips := _t(cell, "", 10, GOLD)
+			var pips := _t(cell, "", 14, GOLD)
 			pips.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 			pips.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			pips.size_flags_vertical = SIZE_SHRINK_BEGIN
@@ -402,6 +405,7 @@ func _process(dt: float) -> void:
 	if scope:
 		_update_aim()
 	var st: String = _g(td, "state", "break")
+	hint_lbl.visible = st == "break"
 	var wave: int = _g(td, "wave", 0)
 	var money: int = _g(td, "money", 0)
 	var ended := st == "won" or st == "lost"
