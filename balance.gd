@@ -46,7 +46,7 @@ const ENEMIES := {
 # Tek oyunculu taban sayılar. Her dalga bir şey öğretir: 1–2 temel, 3 uzaktan vuran, 4 patlayan (duvar yıkar),
 # 5 ara boss, 6 zırhlı, 7 oyuncu avı, 8 kule baskını, 9 hepsi, 10 boss + kalabalık.
 const WAVES := [
-	{"grunt": 6, "runner": 2},
+	{"grunt": 4, "runner": 3}, # ilk dalga hafif (kule ~1 dk dayanır) ama 25 XP: dalga sonunda seviye atlanır
 	{"grunt": 8, "runner": 4},
 	{"grunt": 8, "runner": 6, "spitter": 2},
 	{"grunt": 10, "runner": 6, "bomber": 4, "spitter": 2},
