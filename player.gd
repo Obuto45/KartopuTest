@@ -153,6 +153,7 @@ var pending := 0 # kartı seçilmemiş seviye sayısı
 var respawn_t := 0.0
 var burns := {} # yaratık adı -> [yaratık, hasar/sn, kalan sn]
 var hand: Node3D # koddan üretilen silah modellerinin tutucusu
+var vm: Node3D # kendi gözünden eller + silah (yalnız yerel oyuncuda; viewmodel.gd)
 var hand_p := Vector3.ZERO
 var props := {} # silah id -> model
 var hold: Node3D # elde görünen silah: sağ kol ona uzanır
@@ -235,6 +236,10 @@ func _ready() -> void:
 		cam.near = 0.05
 		look.add_child(cam)
 		cam.current = true
+		cam.cull_mask &= ~2 # katman 2 viewmodel'in, onu kendi görüntü alanı çizer
+		vm = preload("res://viewmodel.gd").new()
+		add_child(vm)
+		vm.setup(ch.color)
 		# Kendi gözünden: silahlar küçük ve uzakta, ekranın sağ altında dursun.
 		gun.scale = Vector3.ONE * 0.45
 		gun.position = Vector3(0.27, -0.26, -0.7)
@@ -981,6 +986,13 @@ func _animate(dt: float) -> void:
 				props[held] = Weapons.make_prop(Weapons.find(held))
 				hand.add_child(props[held])
 			hold = props[held]
+	if vm: # kendi gözünde 3. şahıs silahı yerine viewmodel (kol IK'sı gölge için hold'u yine kullanır)
+		gun.visible = false
+		sword.visible = false
+		for k in props:
+			props[k].visible = false
+		if held != vm.current():
+			vm.equip(held)
 	shield_mesh.visible = shield_on and not hidden
 	flash = max(flash - dt, 0.0)
 	if flash > 0.0:
@@ -1089,6 +1101,9 @@ func _feel(dt: float, mine: bool, spd: float, air: bool, hidden: bool) -> void:
 	if hand:
 		hand.position = hand_p + off
 		hand.rotation = tilt
+	if vm:
+		vm.sway_offset = off
+		vm.sway_tilt = tilt
 	sword.position = sword_p + off * 0.6 + Vector3(0, 0, -sin((1.0 - swing_t / SWING_T) * PI) * 0.12)
 
 
@@ -1345,6 +1360,8 @@ func _td_ghost(alive: bool) -> void:
 
 
 func _muzzle() -> Vector3:
+	if vm and vm.visible:
+		return vm.muzzle()
 	return look.global_position + look.global_basis * Vector3(0.25, -0.2, -0.8)
 
 

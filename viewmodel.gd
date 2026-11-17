@@ -1,0 +1,200 @@
+## Kendi gözünden eller + silah. Ana dünyada kameranın önünde durur ama yalnız kendi SubViewport'unda
+## (katman 2) çizilir; o görüntü tam ekran TextureRect olarak ana görüntünün üstüne biner (duvara girmez,
+## görüş açısı koşarken genişlemez). Klipler weapon_anims.gd'den; kök "Base", yollar "Rig", "HandL"...
+extends Node3D
+
+signal event(name: String)
+
+const Hands := preload("res://hands.gd")
+const WA := preload("res://weapon_anims.gd")
+const Weapons := preload("res://weapons.gd")
+const LAYER := 2
+const FOV := 62.0
+const ITEM_VIEW := {"item:potion": [Vector3(0.16, -0.2, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
+
+var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
+var sway_tilt := Vector3.ZERO
+var base: Node3D # silah duruşu (view) + salınım; animasyon kökü
+var rig: Node3D
+var weapon: Node3D
+var hand_r: Node3D
+var hand_l: Node3D
+var ap: AnimationPlayer
+var vp: SubViewport
+var vcam: Camera3D
+var id := ""
+var view: Array = [Vector3.ZERO, Vector3.ZERO]
+
+
+func setup(color: Color) -> void:
+	top_level = true
+	base = Node3D.new()
+	base.name = "Base"
+	add_child(base)
+	rig = Node3D.new()
+	rig.name = "Rig"
+	base.add_child(rig)
+	hand_r = Hands.make(color, false)
+	hand_r.name = "HandR"
+	rig.add_child(hand_r)
+	hand_l = Hands.make(color, true)
+	hand_l.name = "HandL"
+	base.add_child(hand_l)
+	ap = AnimationPlayer.new()
+	base.add_child(ap)
+	ap.root_node = NodePath("..")
+	vp = SubViewport.new()
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+	vcam = Camera3D.new()
+	vcam.fov = FOV
+	vcam.near = 0.01
+	vcam.cull_mask = 1 << (LAYER - 1)
+	vp.add_child(vcam)
+	var key := DirectionalLight3D.new() # güneşe karşı bakınca silah kapkara kalmasın: yalnız katman 2'yi aydınlatır
+	key.light_cull_mask = 1 << (LAYER - 1)
+	key.light_energy = 0.6
+	key.rotation = Vector3(-0.6, 0.5, 0)
+	key.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	add_child(key)
+	var cl := CanvasLayer.new()
+	cl.layer = -1
+	add_child(cl)
+	var tr := TextureRect.new()
+	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.texture = vp.get_texture()
+	cl.add_child(tr)
+	visible = false
+
+
+## Silahı değiştirir ve çıkarma klibini oynatır; "" = eller iner (görünmez).
+func equip(new_id: String) -> void:
+	id = new_id
+	if weapon:
+		weapon.free()
+		weapon = null
+	visible = id != ""
+	if id == "":
+		ap.stop()
+		return
+	var mid := WA.model_id(id)
+	weapon = Weapons.make_prop({"id": mid}) if mid != "" else _potion()
+	weapon.name = "Weapon"
+	rig.add_child(weapon)
+	var w := Weapons.find(id)
+	view = w.get("view", ITEM_VIEW.get(id, [Vector3(0.16, -0.17, -0.38), Vector3.ZERO]))
+	for path in WA.rest(id): # dinlenme duruşu (klipler bunun üstüne fark ekler)
+		var n := base.get_node_or_null(path) as Node3D
+		if n:
+			n.position = WA.rest(id)[path][0]
+			n.rotation = WA.rest(id)[path][1]
+	for mi: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+		mi.layers = 1 << (LAYER - 1)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_no_shadow(mi) # kameranın içindeyiz: oyuncunun kendi kafasının gölgesi silahı karartmasın
+	var lib := AnimationLibrary.new()
+	for c in WA.clips(id):
+		var a := WA.build(id, c)
+		for t in a.get_track_count():
+			if a.track_get_type(t) == Animation.TYPE_METHOD:
+				a.track_set_path(t, "..") # yöntemler bu düğümde (_ev, _pose)
+		lib.add_animation(c, a)
+	if ap.has_animation_library(""):
+		ap.remove_animation_library("")
+	ap.add_animation_library("", lib)
+	ap.play("draw")
+	ap.advance(0.0)
+
+
+## Klip yoksa sessizce boşta duruşa geçer.
+func play(clip: String, speed := 1.0) -> void:
+	if id == "":
+		return
+	if not ap.has_animation(clip):
+		clip = "idle"
+	ap.play(clip, 0.05, speed)
+	if ap.current_animation == clip:
+		ap.seek(0.0, true)
+
+
+func current() -> String:
+	return id
+
+
+func clip() -> String:
+	return ap.current_animation if ap and ap.is_playing() else ""
+
+
+func muzzle() -> Vector3:
+	var m := weapon.find_child("muzzle", true, false) as Node3D if weapon else null
+	return m.global_position if m else global_position
+
+
+func show_part(name: String, on: bool) -> void:
+	var n := weapon.find_child(name, true, false) as Node3D if weapon else null
+	if n:
+		n.visible = on
+
+
+func _process(_dt: float) -> void:
+	if base == null:
+		return
+	var main := get_viewport().get_camera_3d()
+	if main and main != vcam:
+		global_transform = main.global_transform
+		vcam.global_transform = main.global_transform
+		vp.size = get_viewport().get_visible_rect().size
+		vp.msaa_3d = get_viewport().msaa_3d
+	base.position = view[0] + sway_offset
+	base.rotation = view[1] + sway_tilt
+
+
+func _ev(name: String) -> void:
+	event.emit(name)
+
+
+func _pose(side: String, name: String) -> void:
+	Hands.pose(hand_l if side == "L" else hand_r, name)
+
+
+func _no_shadow(mi: MeshInstance3D) -> void:
+	if mi.has_meta("ns"):
+		return
+	mi.set_meta("ns", true)
+	if mi.material_override is BaseMaterial3D:
+		mi.material_override.disable_receive_shadows = true
+		return
+	for s in mi.mesh.get_surface_count():
+		var m := mi.get_active_material(s)
+		if m is BaseMaterial3D:
+			m = m.duplicate()
+			m.disable_receive_shadows = true
+			mi.set_surface_override_material(s, m)
+
+
+## İksir şişesi (modeli yok): kırmızı ışıyan gövde, boyun, mantar tıpa.
+func _potion() -> Node3D:
+	var root := Node3D.new()
+	for d in [[0.038, 0.09, 0.0, Color(0.9, 0.15, 0.2), 1.2], [0.014, 0.04, 0.065, Color(0.85, 0.9, 1.0), 0.0], [0.016, 0.02, 0.095, Color(0.55, 0.35, 0.2), 0.0]]:
+		var mi := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = d[0]
+		cm.bottom_radius = d[0]
+		cm.height = d[1]
+		mi.mesh = cm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = d[3]
+		if d[4] > 0.0:
+			m.emission_enabled = true
+			m.emission = d[3]
+			m.emission_energy_multiplier = d[4]
+		mi.material_override = m
+		mi.position.y = d[2]
+		root.add_child(mi)
+	var mk := Marker3D.new()
+	mk.name = "muzzle"
+	mk.position.y = 0.11
+	root.add_child(mk)
+	return root

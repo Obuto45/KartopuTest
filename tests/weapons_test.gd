@@ -378,6 +378,18 @@ func _ready() -> void:
 	for id in NEED:
 		chk("%s klipleri" % id, NEED[id].all(func(c): return WA.has(id, c) and WA.build(id, c).length > 0.0), NEED[id])
 
+	var vm: Node3D = load("res://viewmodel.gd").new()
+	add_child(vm)
+	vm.setup(Color.BLUE)
+	var got := []
+	vm.event.connect(func(n): got.append(n))
+	vm.equip("pistol")
+	await _wait(0.5)
+	chk("viewmodel çıkarma bitti -> ready", got.has("ready") and vm.current() == "pistol", got)
+	chk("namlu ileride", vm.to_local(vm.muzzle()).z < -0.2, vm.to_local(vm.muzzle()))
+	vm.queue_free()
+	chk("yerel oyuncuda viewmodel, 3. şahıs silahı gizli", me.vm != null and not me.gun.visible and me.cam.cull_mask & 2 == 0)
+
 	Net.set_weapon(3)
 	chk("Net.set_weapon", Net.my_weapon == 3 and Net.weapons.get(1) == 1)
 	print("WEAPONS_TEST: %d/%d" % [good, total])

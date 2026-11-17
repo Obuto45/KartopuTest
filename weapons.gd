@@ -47,32 +47,32 @@ const ARENA_DMG := 20.0 # karakter pasifleri (rocket_dmg, power) bu tabana göre
 ## Silah alanları (yoksa DEF): kind shot (anında isabet) | rocket (mermi; grav ile kavisli, blast ile patlar) |
 ## homing (güdümlü, döner) | cone (kısa yay) | melee. rate: atış arası sn; speed: mermi hızı; n: mermi adedi;
 ## spread: yelpaze/saçılma (rad); range; pierce: delip geçtiği yaratık; bounce; fire: yanık hasarı/sn;
-## knock; cone: yay eşiği (dot, küçük = geniş); kick: geri tepme. Model: models/<id>.glb (bazuka ve kılıç hariç
+## knock; cone: yay eşiği (dot, küçük = geniş); kick: geri tepme; view: kendi gözünden [konum, dönüş] (viewmodel). Model: models/<id>.glb (bazuka ve kılıç hariç
 ## tools/weapon_models.gd üretir; namlu -Z, kabza başlangıç noktasında).
 const DEF := {"dmg": 0, "rate": 1.0, "n": 1, "spread": 0.0, "range": 60.0, "pierce": 0, "blast": 0.0, "grav": 0.0, "bounce": 0, "fire": 0.0,
 	"knock": 0.0, "cone": 0.5, "speed": 0.0, "kick": 0.5, "color": Color(1.0, 0.9, 0.5),
 	"mag": 0, "reload": 0.0} # mag 0 = şarjörsüz; reload: doldurma sn (saldırı hızına bölünür)
 const LIST := [
 	{"id": "bazooka", "name": "Bazuka", "desc": "Patlayan roket: 2,5 m alan hasarı.", "rarity": "rare",
-		"dmg": 28, "rate": 0.8, "speed": 30.0, "kind": "rocket", "blast": 2.5, "knock": 6.0, "kick": 1.0, "model": "bazooka", "mag": 1, "reload": 2.0},
+		"dmg": 28, "rate": 0.8, "speed": 30.0, "kind": "rocket", "blast": 2.5, "knock": 6.0, "kick": 1.0, "model": "bazooka", "mag": 1, "reload": 2.0, "view": [Vector3(0.25, -0.2, -0.3), Vector3(0, 0.06, 0)]},
 	{"id": "pistol", "name": "Tabanca", "desc": "Hızlı, isabetli tek atış.", "rarity": "common",
-		"dmg": 9, "rate": 0.25, "kind": "shot", "range": 60.0, "kick": 0.35, "mag": 12, "reload": 1.3, "reload_empty": 1.6},
+		"dmg": 9, "rate": 0.25, "kind": "shot", "range": 60.0, "kick": 0.35, "mag": 12, "reload": 1.3, "reload_empty": 1.6, "view": [Vector3(0.16, -0.17, -0.38), Vector3.ZERO]},
 	{"id": "shotgun", "name": "Pompalı", "desc": "7 saçma birden: yakında ezer, uzakta dağılır.", "rarity": "common",
-		"dmg": 5, "rate": 0.85, "kind": "shot", "n": 7, "spread": 0.085, "range": 18.0, "knock": 3.0, "kick": 1.1, "mag": 6, "reload": 0.45, "per_shell": true},
+		"dmg": 5, "rate": 0.85, "kind": "shot", "n": 7, "spread": 0.085, "range": 18.0, "knock": 3.0, "kick": 1.1, "mag": 6, "reload": 0.45, "per_shell": true, "view": [Vector3(0.17, -0.2, -0.3), Vector3.ZERO]},
 	{"id": "smg", "name": "Makineli", "desc": "Çok seri, düşük hasar, hafif saçılır.", "rarity": "common",
-		"dmg": 4, "rate": 0.09, "kind": "shot", "spread": 0.035, "range": 40.0, "kick": 0.25, "mag": 30, "reload": 1.8},
+		"dmg": 4, "rate": 0.09, "kind": "shot", "spread": 0.035, "range": 40.0, "kick": 0.25, "mag": 30, "reload": 1.8, "view": [Vector3(0.16, -0.19, -0.33), Vector3.ZERO]},
 	{"id": "sniper", "name": "Keskin Nişancı", "desc": "Yavaş ama dev hasar; 3 yaratığı delip geçer.", "rarity": "legendary",
-		"dmg": 60, "rate": 1.5, "kind": "shot", "range": 120.0, "pierce": 3, "knock": 5.0, "kick": 1.4, "color": Color(0.6, 0.9, 1.0), "mag": 5, "reload": 2.4},
+		"dmg": 60, "rate": 1.5, "kind": "shot", "range": 120.0, "pierce": 3, "knock": 5.0, "kick": 1.4, "color": Color(0.6, 0.9, 1.0), "mag": 5, "reload": 2.4, "view": [Vector3(0.16, -0.19, -0.26), Vector3.ZERO]},
 	{"id": "bow", "name": "Yay", "desc": "Kavisli uçan ok: bir yaratığı deler, sessiz ve güçlü.", "rarity": "rare",
-		"dmg": 30, "rate": 0.7, "speed": 42.0, "kind": "rocket", "look": "arrow", "grav": 9.0, "pierce": 1, "kick": 0.3, "mag": 1, "reload": 0.35, "charge": 0.6},
+		"dmg": 30, "rate": 0.7, "speed": 42.0, "kind": "rocket", "look": "arrow", "grav": 9.0, "pierce": 1, "kick": 0.3, "mag": 1, "reload": 0.35, "charge": 0.6, "view": [Vector3(-0.02, -0.07, -0.3), Vector3(0, 0, 0.25)]},
 	{"id": "boomerang", "name": "Bumerang", "desc": "Yaratığı kovalar, 2 kez seker, sonra sana döner.", "rarity": "rare",
-		"dmg": 16, "rate": 1.0, "speed": 20.0, "kind": "homing", "bounce": 2, "knock": 4.0, "range": 30.0, "kick": 0.3},
+		"dmg": 16, "rate": 1.0, "speed": 20.0, "kind": "homing", "bounce": 2, "knock": 4.0, "range": 30.0, "kick": 0.3, "view": [Vector3(0.1, -0.2, -0.32), Vector3(0.35, 0, 0)]},
 	{"id": "flame", "name": "Alev Püskürtücü", "desc": "Kısa menzilli alev yayı: önündeki herkesi yakar.", "rarity": "epic",
-		"dmg": 3, "rate": 0.1, "kind": "cone", "range": 6.5, "cone": 0.8, "fire": 4.0, "kick": 0.12, "color": Color(1.0, 0.5, 0.1), "mag": 100, "reload": 2.2},
+		"dmg": 3, "rate": 0.1, "kind": "cone", "range": 6.5, "cone": 0.8, "fire": 4.0, "kick": 0.12, "color": Color(1.0, 0.5, 0.1), "mag": 100, "reload": 2.2, "view": [Vector3(0.17, -0.18, -0.3), Vector3.ZERO]},
 	{"id": "sword", "name": "Kılıç", "desc": "Yakın dövüş: önündeki yaydaki herkese vurur, savurur.", "rarity": "common",
-		"dmg": 24, "rate": 0.45, "kind": "melee", "range": 2.7, "cone": 0.4, "knock": 7.0, "kick": 0.0, "model": "sword"},
+		"dmg": 24, "rate": 0.45, "kind": "melee", "range": 2.7, "cone": 0.4, "knock": 7.0, "kick": 0.0, "model": "sword", "view": [Vector3(0.2, -0.24, -0.35), Vector3(0.9, 0.2, 0)]},
 	{"id": "grenade", "name": "El Bombası", "desc": "Havadan atılır: 4 m'lik büyük patlama.", "rarity": "epic",
-		"dmg": 42, "rate": 1.3, "speed": 17.0, "kind": "rocket", "look": "ball", "grav": 14.0, "blast": 4.0, "knock": 9.0, "kick": 0.4, "mag": 1, "reload": 0.8, "fuse": 3.0},
+		"dmg": 42, "rate": 1.3, "speed": 17.0, "kind": "rocket", "look": "ball", "grav": 14.0, "blast": 4.0, "knock": 9.0, "kick": 0.4, "mag": 1, "reload": 0.8, "fuse": 3.0, "view": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]},
 ]
 ## Silaha özel yükseltmeler: add toplanır, mul çarpılır (seviye başına). Kart: "up:<silah>:<id>".
 const UPS := {
