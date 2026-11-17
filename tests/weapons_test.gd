@@ -4,6 +4,7 @@ extends Node
 
 const Weapons := preload("res://weapons.gd")
 const PlayerScript := preload("res://player.gd")
+const WA := preload("res://weapon_anims.gd")
 
 
 class FakeTD extends Node:
@@ -355,6 +356,27 @@ func _ready() -> void:
 	load("res://hands.gd").pose(hR, "open")
 	chk("kavrama parmakları büker, açık düzeltir", fa < -0.8 and absf(hR.find_child("f1", true, false).rotation.x) < 0.2, fa)
 	hR.free()
+	for id in ["pistol", "shotgun", "smg", "sniper", "bazooka", "flame", "bow", "grenade", "boomerang", "sword", "item:potion", "item:bomb"]:
+		chk("%s draw" % id, WA.has(id, "draw"))
+	var an := WA.build("pistol", "reload")
+	chk("tabanca reload süresi 1.3", is_equal_approx(an.length, 1.3), an.length)
+	var ev := []
+	for t in an.get_track_count():
+		if an.track_get_type(t) == Animation.TYPE_METHOD:
+			for k in an.track_get_key_count(t):
+				var v: Dictionary = an.track_get_key_value(t, k)
+				if v.method == "_ev":
+					ev.append([an.track_get_key_time(t, k), v.args[0]])
+	chk("mag_in %85'te", ev.any(func(e): return e[1] == "mag_in" and is_equal_approx(e[0], 1.3 * 0.85)), ev)
+	chk("iksir gulp", WA.has("item:potion", "drink"))
+	var po := WA.build("pistol", "reload", true)
+	chk("parts_only: yalnız parça izleri", range(po.get_track_count()).all(func(t): return po.track_get_type(t) == Animation.TYPE_METHOD or not str(po.track_get_path(t)).begins_with("HandL")))
+	const NEED := {"pistol": ["fire", "dry", "reload", "reload_empty"], "smg": ["fire", "dry", "reload"], "sniper": ["fire", "dry", "reload"],
+		"bazooka": ["fire", "dry", "reload"], "flame": ["fire", "dry", "reload"], "shotgun": ["fire", "dry", "reload_start", "shell", "reload_end"],
+		"bow": ["draw_string", "release", "reload"], "grenade": ["prime", "throw", "reload"], "item:bomb": ["prime", "throw", "reload"],
+		"boomerang": ["throw", "catch"], "sword": ["swing1", "swing2", "swing3"], "item:potion": ["drink"]}
+	for id in NEED:
+		chk("%s klipleri" % id, NEED[id].all(func(c): return WA.has(id, c) and WA.build(id, c).length > 0.0), NEED[id])
 
 	Net.set_weapon(3)
 	chk("Net.set_weapon", Net.my_weapon == 3 and Net.weapons.get(1) == 1)
