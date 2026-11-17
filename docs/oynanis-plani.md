@@ -4,19 +4,39 @@ Hedef: Steam çıkışında oyuncu çekecek ve tutacak bir oynanış güncelleme
 
 Bu dosya, oturum kullanım sınırına takılıp yenilendiğinde işe kaldığı yerden devam etmek için de kullanılıyor. Her aşama bitince **Durum** bölümü güncellenir.
 
-## Aşamalar
+## Tasarım denetiminin bulguları (özet)
 
-1. **İnceleme (paralel alt ajanlar)**
-   - Oyun tasarımı denetimi: ilk 10 dakika, çekirdek döngü, öncelikli özellik listesi.
-   - Steam çıkış paketi: `docs/steam/`.
-   - Denge simülasyonu: `tests/balance_sim.gd`.
-2. **Uygulama (paralel alt ajanlar, ayrı git worktree'lerinde, dosya sahipliğiyle bölünmüş)**: özellik listesi aşama 1'den sonra burada sabitlenir.
-3. **Birleştirme ve doğrulama**: tüm testler, ekran görüntüleri (Vulkan + OpenGL), iki süreçli ağ testi.
-4. **Teslim**: commit, push, kullanıcıya rapor.
+- Tek başına oynamak "Yerel Host" adlı geliştirici düğmesinin arkasında gizli; herkese açık lobi yok.
+- İlk molada ne yapılacağı öğretilmiyor; maç sonu ekranı sadece 3 sayı gösteriyor.
+- Maçlar arası ilerleme (meta progression), zorluk seviyesi, sonsuz mod ve başarım yok.
+- Kart havuzunun yaklaşık yarısı düz stat kartı; "build kurdum" anı yok.
+- Dalga 5'teki ara boss tanıtılmıyor; boss can barı yok.
+
+## Özellikler
+
+| No | Özellik | Sahip ajan | Dosyalar |
+|---|---|---|---|
+| F1 | Tek tıkla oyna, açık lobi, lobi bul | Giriş | `main.gd`, `net.gd` |
+| F2 | İlk maç rehberi | Arayüz (Faz 2) | `td_ui.gd` |
+| F3 | Kalıcı ilerleme: Altın Saç, silah kilitleri, Kule Taşları | Profil + Giriş | `profile.gd`, `main.gd` |
+| F4 | Zorluk: Kolay / Normal / Zor / Kabus | Dalga + Giriş | `balance.gd`, `td.gd`, `main.gd` |
+| F5 | Boss davranışları ve dalga modifikatörleri | Dalga | `balance.gd`, `td.gd`, `enemy.gd` |
+| F6 | Yaratıktan düşen eşyalar ve sandık | Dalga | `td.gd`, `enemy.gd` |
+| F7 | Silah evrimleri ve sinerji | Silah | `weapons.gd`, `player.gd` (TD bölümü) |
+| F8 | Maç sonu özeti ve MVP | Dalga (sayaçlar) + Arayüz (ekran) | `td.gd`, `td_ui.gd` |
+| F9 | Sonsuz mod | Dalga | `balance.gd`, `td.gd` |
+| F10 | Başarımlar (yerel; gerçek App ID gelince Steam) | Profil (+ tetik satırları) | `profile.gd` |
+| — | Silah tutuşları ve silahın düz durması (kullanıcı isteği) | Tutuş | `hands.gd`, `weapon_anims.gd`, `viewmodel.gd` |
+
+Faz 0 sözleşmeleri (commit `a9bd3d7`): `start_td(ids, opts)`, `td.gd` durum dizisi indeks 11-14, `Balance.DIFFS` / `wave(n, players, diff, mods)` / `roll_mods`, `Weapons.EVOS`, `profile.gd` iskeleti.
 
 ## Durum
 
-- [ ] Aşama 1: başladı (3 ajan çalışıyor)
-- [ ] Aşama 2
-- [ ] Aşama 3
-- [ ] Aşama 4
+- [x] Aşama 1: tasarım denetimi bitti; Steam paketi ve denge simülasyonu ajanları çalışıyor (`docs/steam/`, `tests/balance_sim.gd`)
+- [x] Faz 0: sözleşmeler commit'lendi ve push'landı
+- [ ] Faz 1 (worktree'lerde, paralel): Dalga (F4/F5/F6/F8 sayaç/F9), Silah (F7), Profil (F3/F10), Giriş (F1/F3 menü/F4 seçim), Tutuş
+- [ ] Faz 2: Arayüz ajanı (`td_ui.gd`): F2 rehber, F8 ekranı, boss barı, modifikatör afişi; başarım tetik satırları; denge simülasyonuna göre ayar
+- [ ] Aşama 3: worktree dallarını birleştir; tüm testler, ekran görüntüleri, iki süreçli ağ testi
+- [ ] Aşama 4: commit, push, rapor
+
+Devam ederken: `git worktree list` ve `git branch` ile ajan dallarını gör. Bitmiş dalları sırayla birleştir: profil, dalga, silah, giriş, tutuş. Yarım kalan ajanların işini aynı sahiplik kurallarıyla yeniden başlat.
