@@ -307,6 +307,7 @@ func _sync(ids: PackedInt32Array, pos: PackedVector3Array, yaw: PackedByteArray)
 	for i in ids.size():
 		var e: Node3D = _by_id.get(ids[i])
 		if e:
+			e.net_vel = ((pos[i] - e.net_pos) / SYNC_DT).limit_length(12.0) if e.net_pos != Vector3.ZERO else Vector3.ZERO
 			e.net_pos = pos[i]
 			e.net_yaw = (yaw[i] & 127) / 128.0 * TAU
 			e.moving = yaw[i] >= 128
@@ -347,7 +348,7 @@ func damage(e: Node3D, dmg: int, crit: bool, n := 0) -> void:
 	if e.hp <= 0 or state != "fight":
 		return
 	if n == 0:
-		n = clampi(dmg - e.armor, 1, 99999)
+		n = maxi(dmg - e.armor, ceili(dmg * 0.4)) # zırh hasarın en fazla %60'ını keser: hızlı silahlar geç dalgada da işe yarar
 	var hp := maxi(e.hp - maxi(n, 0), 0) if n > 0 else 0
 	_hit.rpc(e.eid, hp, n, crit)
 	if hp > 0:

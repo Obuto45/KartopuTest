@@ -19,6 +19,8 @@ const FRICTION := 45.0 # yerde tuş yokken yavaşlama
 const AIR_ACCEL := 16.0 # havada kontrol (momentum korunur)
 const JUMP := 8.5 # ~1.4 m zıplama
 const AIR_JUMP := 7.5 # çift zıplama
+const COYOTE := 0.1 # kenardan düştükten sonra yerden zıplama payı (sn)
+const JUMP_BUFFER := 0.12 # inişten önce basılan zıplama bu kadar beklenir (sn)
 const GRAVITY := 26.0
 const FALL_MULT := 1.6 # düşerken daha hızlı (oyun hissi)
 const MAX_FALL := 45.0
@@ -94,6 +96,10 @@ var shield_cd := 0.0
 var shield_mesh: MeshInstance3D
 var gun: Node3D
 var air_jumps := 1
+var coyote := 0.0
+var hit_ms := -10000 # son isabetin zamanı (isabet işareti)
+var hit_kill := false
+var jump_buf := 0.0
 var dash_t := 0.0
 var dash_cd := 0.0
 
@@ -504,6 +510,10 @@ func _local(dt: float) -> void:
 		_spectate(dt)
 	if on_floor:
 		air_jumps = ch.get("air_jumps", 1)
+		coyote = COYOTE
+	else:
+		coyote -= dt
+	jump_buf -= dt
 	cd -= dt
 	dash_cd -= dt
 	shield_cd -= dt
@@ -520,9 +530,14 @@ func _local(dt: float) -> void:
 			iv = -iv # kafası karışık: yönler ters
 		dir = (transform.basis * Vector3(iv.x, 0, iv.y)).normalized()
 		if Input.is_action_just_pressed("jump"):
-			if on_floor:
+			jump_buf = JUMP_BUFFER
+		if jump_buf > 0.0:
+			if on_floor or coyote > 0.0: # kenardan yeni düştüysen ya da inişten hemen önce bastıysan da yerden zıplar
 				velocity.y = JUMP * ch.get("jump", 1.0) * st("jump")
-			elif air_jumps > 0: # çift zıplama
+				jump_buf = 0.0
+				coyote = 0.0
+			elif Input.is_action_just_pressed("jump") and air_jumps > 0: # çift zıplama
+				jump_buf = 0.0
 				air_jumps -= 1
 				velocity.y = AIR_JUMP * ch.get("jump", 1.0) * st("jump")
 		if Input.is_action_just_pressed("dash") and dash_cd <= 0.0: # yerde ve havada
@@ -1887,7 +1902,12 @@ func td_dmg(e: Node, dmg: float, can_crit := true) -> void:
 		_hunt(e)
 		return
 	var crit := can_crit and randf() < st("crit", 0.0)
-	_host("damage_enemy", [str(e.name), maxi(roundi(dmg * (2.0 if crit else 1.0)), 1), crit])
+	var n := maxi(roundi(dmg * (2.0 if crit else 1.0)), 1)
+	# isabet işareti ve tık hemen, host'un cevabını beklemeden (öldürme tahmini: istemcinin bildiği son can)
+	hit_ms = Time.get_ticks_msec()
+	hit_kill = "hp" in e and "armor" in e and e.hp > 0 and maxi(n - e.armor, ceili(n * 0.4)) >= e.hp
+	Sfx.play2d(Sfx.tick, -6.0 if hit_kill else -12.0)
+	_host("damage_enemy", [str(e.name), n, crit])
 
 
 ## Tavuğu vuran makine: ölümü herkese yayar, ödülü alır (TD'de can iksiri, yer yoksa ya da arenada 25 can).

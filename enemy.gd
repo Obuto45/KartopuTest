@@ -48,6 +48,7 @@ var flash_t := 0.0
 var swing_t := 0.0 # > 0: vuruş animasyonu oynuyor
 var moving := false
 var net_pos := Vector3.ZERO
+var net_vel := Vector3.ZERO # istemci: son iki eşitlemeden hız (ileri tahmin)
 var net_yaw := 0.0
 # Yalnızca host:
 var tick_t := 0.0
@@ -173,7 +174,7 @@ func _physics_process(dt: float) -> void:
 	if host:
 		_host(dt)
 	else:
-		global_position = net_pos if global_position.distance_squared_to(net_pos) > 36.0 else global_position.lerp(net_pos, minf(1.0, dt * 12.0))
+		global_position = net_pos if global_position.distance_squared_to(net_pos) > 36.0 else global_position.lerp(net_pos + net_vel * 0.1, minf(1.0, dt * 12.0))
 		rotation.y = lerp_angle(rotation.y, net_yaw, minf(1.0, dt * 10.0))
 	var want := "Idle"
 	if td.state == "lost":
@@ -337,7 +338,7 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 	if n > 0:
 		float_text(world, global_position + Vector3(randf_range(-0.3, 0.3), height + 0.3, randf_range(-0.3, 0.3)),
 			str(n), Color(1.0, 0.85, 0.15) if crit else Color.WHITE, 0.013 if crit else 0.008)
-		flash_t = 0.09
+		flash_t = 0.12
 		_overlay(shared("flash", func() -> Resource:
 			var m := StandardMaterial3D.new()
 			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -373,7 +374,7 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 	p.emitting = true
 	p.create_tween().tween_callback(p.queue_free).set_delay(1.0)
 	float_text(world, c + Vector3.UP * 0.4, "+%d" % d.money, Color(1.0, 0.8, 0.2), 0.007)
-	Sfx.play3d(Sfx.hurt, c, -8.0)
+	Sfx.play3d(Sfx.kill, c, -6.0)
 	var tw := create_tween()
 	tw.tween_interval(1.3)
 	tw.tween_property(self, "position:y", position.y - height * 0.6, 0.6)

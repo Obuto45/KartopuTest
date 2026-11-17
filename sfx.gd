@@ -11,6 +11,8 @@ var shield_up: AudioStreamWAV
 var shield_break: AudioStreamWAV
 var thunder: AudioStreamWAV
 var rumble: AudioStreamWAV
+var tick: AudioStreamWAV # isabet
+var kill: AudioStreamWAV # yaratık öldü
 
 
 func _ready() -> void:
@@ -21,6 +23,8 @@ func _ready() -> void:
 	shield_up = _gen(0.35, func(t, _n): return sin(TAU * (300.0 + 900.0 * t) * t) * 0.35 * sin(PI * t / 0.35), 1.0)
 	thunder = _gen(1.6, func(t, n): return n * (1.6 * exp(-t * 16.0) + 0.7 * exp(-t * 2.2)), 0.3)
 	rumble = _gen(0.5, func(t, n): return n * 1.2 * exp(-t * 5.0) + sin(TAU * 70.0 * t) * 0.4 * exp(-t * 6.0), 0.05)
+	tick = _gen(0.05, func(t, _n): return sin(TAU * 1800.0 * t) * 0.35 * exp(-t * 70.0), 1.0)
+	kill = _gen(0.25, func(t, n): return ((1.0 if fmod(t * (400.0 + 2000.0 * t), 1.0) < 0.5 else -1.0) * 0.22 + n * 0.25) * exp(-t * 10.0), 0.5)
 	shield_break = _gen(0.4, func(t, n): return (n * 0.7 + sin(TAU * 1400.0 * t) * 0.3) * exp(-t * 9.0), 0.9)
 
 

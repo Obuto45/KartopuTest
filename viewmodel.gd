@@ -139,8 +139,8 @@ static func skin_color(model: Node, fallback: Color) -> Color:
 ## Silahı değiştirir ve çıkarma klibini oynatır; "" = eller iner (görünmez).
 func equip(new_id: String) -> void:
 	id = new_id
-	ap.stop()
-	if ap.has_animation_library(""):
+	if ap.has_animation_library(""): # kütüphanesiz stop(), silinmiş "draw" klibini arayıp hata verir
+		ap.stop()
 		ap.remove_animation_library("") # model silinmeden önce: eski klipler "Rig/Weapon" arayıp uyarmasın
 	if weapon:
 		weapon.free()

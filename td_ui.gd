@@ -117,6 +117,14 @@ void fragment() {
 	ring.mouse_filter = MOUSE_FILTER_IGNORE
 	ring.set_anchors_preset(PRESET_CENTER)
 	ring.draw.connect(func():
+		var age := (Time.get_ticks_msec() - int(_g(player, "hit_ms", -10000))) / 1000.0
+		if age < 0.16: # isabet işareti: 4 çapraz çizgi; öldürücü vuruşta kırmızı ve büyük
+			var kill: bool = _g(player, "hit_kill", false)
+			var hc := Color(1.0, 0.25, 0.2) if kill else Color(1, 1, 1, 0.95)
+			var r0 := 9.0 if kill else 7.0
+			var r1 := r0 + (9.0 if kill else 6.0) * (1.0 - age / 0.16 * 0.4)
+			for d in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+				ring.draw_line(d.normalized() * r0, d.normalized() * r1, hc, 2.5 if kill else 2.0, true)
 		var k: float = _g(player, "draw_k", 0.0)
 		if _g(player, "busy", "") == "charge":
 			var c := Color.WHITE if k >= 1.0 else Color(1, 1, 1, 0.55)
