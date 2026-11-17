@@ -43,6 +43,11 @@ func _ready() -> void:
 		_ok("HOST", "iki oy -> dalga başladı", await _until(func(): return td.state == "fight", 8.0), "oylar %s" % [td.ready_votes])
 		_ok("HOST", "istemcinin silahı eşitlendi (tabanca)", await _until(func(): return not other.inv.is_empty() and other.inv[0].get("id", "") == "pistol", 5.0), other.inv)
 		_ok("HOST", "istemci yaratığa hasar verdi", await _until(func(): return td.elist.any(func(e): return e.hp < e.max_hp) or td.kills > 0, 25.0))
+		var ap_of := func() -> String: # istemcinin elindeki tabancanın parça klibi (bu makinede)
+			var prop: Node3D = other.props.get("pistol")
+			var ap: AnimationPlayer = prop.find_child("AnimationPlayer", true, false) if prop else null
+			return ap.current_animation if ap else "-"
+		_ok("HOST", "istemcinin doldurması host'ta oynuyor", await _until(func(): return ap_of.call() == "reload", 10.0), ap_of.call())
 		_ok("HOST", "istemci duvar aldı: para düştü", await _until(func(): return td.money < 200, 10.0), "para %d" % td.money)
 		_ok("HOST", "istemci yapıyı kurdu", await _until(func(): return td.builds.get_child_count() >= 1, 10.0))
 		var lv: int = td.level
@@ -84,6 +89,12 @@ func _ready() -> void:
 				hit = true
 				break
 		_ok("CLIENT", "ateş etti, yaratığın canı bu makinede de düştü", hit)
+		await _wait(0.5)
+		me.inv[0]["ammo"] = 3
+		me.busy = ""
+		me.start_reload()
+		_ok("CLIENT", "doldurma başladı", me.reloading)
+		await _wait(1.6)
 		var m0: int = td.money
 		td.buy("wall")
 		_ok("CLIENT", "duvar envantere geldi, para eşitlendi", await _until(func(): return me.inv[3].get("id", "") == "wall" and td.money < m0, 8.0), "%s para %d" % [me.inv[3], td.money])

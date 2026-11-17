@@ -80,6 +80,8 @@ var anim: AnimationPlayer
 var cur_anim := ""
 var b_arm := -1
 var b_fore := -1
+var b_larm := -1
+var b_lfore := -1
 var b_head := -1
 var quote_lbl: Label3D
 var quote_t := 0.0
@@ -364,6 +366,8 @@ func _load_model() -> void:
 	var skel: Skeleton3D = model.find_children("*", "Skeleton3D", true, false)[0]
 	b_arm = skel.find_bone("UpperArm.R")
 	b_fore = skel.find_bone("LowerArm.R")
+	b_larm = skel.find_bone("UpperArm.L")
+	b_lfore = skel.find_bone("LowerArm.L")
 	b_head = skel.find_bone("Head")
 	var aim := ArmAim.new()
 	aim.p = self
@@ -403,6 +407,11 @@ func _pose(s: Skeleton3D) -> void:
 		var grip: Vector3 = s.global_transform.affine_inverse() * hold.global_position
 		_aim_bone(s, b_arm, (grip - s.get_bone_global_pose(b_arm).origin).normalized() + Vector3.DOWN * 0.45)
 		_aim_bone(s, b_fore, grip - s.get_bone_global_pose(b_fore).origin)
+	var gl := hold.find_child("grip_l", true, false) as Node3D if hold and b_larm >= 0 and b_lfore >= 0 and _held() not in WeaponAnims.ONE_HAND else null
+	if gl: # iki elli silah: sol el önden destekler
+		var g2: Vector3 = s.global_transform.affine_inverse() * gl.global_position
+		_aim_bone(s, b_larm, (g2 - s.get_bone_global_pose(b_larm).origin).normalized() + Vector3.DOWN * 0.45)
+		_aim_bone(s, b_lfore, g2 - s.get_bone_global_pose(b_lfore).origin)
 
 
 func _aim_bone(s: Skeleton3D, i: int, dir: Vector3) -> void:
@@ -1006,11 +1015,16 @@ func _animate(dt: float) -> void:
 	sword.visible = held == "sword"
 	hold = gun if gun.visible else sword if sword.visible else null
 	if td: # diğer silahlar: koddan model, ilk gerektiğinde üretilir
-		for k in props:
-			props[k].visible = k == held
+		for k in props: # bumerang havadayken elde görünmez
+			props[k].visible = k == held and not (k == "boomerang" and thrown > 0)
 		if held != "" and hold == null:
 			if not props.has(held):
-				props[held] = Weapons.make_prop(Weapons.find(held))
+				props[held] = Weapons.make_prop({"id": WeaponAnims.model_id(held)})
+				var ap := AnimationPlayer.new() # td_anim parça kliplerini oynatır
+				ap.name = "AnimationPlayer"
+				props[held].add_child(ap)
+				ap.root_node = NodePath("..")
+				ap.add_animation_library("", AnimationLibrary.new())
 				hand.add_child(props[held])
 			hold = props[held]
 	if vm: # kendi gözünde 3. şahıs silahı yerine viewmodel (kol IK'sı gölge için hold'u yine kullanır)
@@ -1653,10 +1667,17 @@ func _spent(id: String) -> void:
 			inv[i]["ammo"] = 0
 
 
-## Diğer makinelerde elde tutulan modelin parça klibi (Görev 10 doldurur).
+## Diğer makinelerde elde tutulan modelin parça klibi (sürgü, şarjör, pim...); klip ilk kullanımda kurulur.
 @rpc("authority", "call_remote", "unreliable_ordered")
-func td_anim(_clip: String) -> void:
-	pass
+func td_anim(clip: String) -> void:
+	var id := _held()
+	var ap := props[id].find_child("AnimationPlayer", false, false) as AnimationPlayer if props.has(id) else null
+	if ap == null or not WeaponAnims.has(id, clip):
+		return
+	if not ap.has_animation(clip):
+		ap.get_animation_library("").add_animation(clip, WeaponAnims.build(id, clip, true))
+	ap.play(clip)
+	ap.seek(0.0, true)
 
 
 func _take(i: int) -> void:
