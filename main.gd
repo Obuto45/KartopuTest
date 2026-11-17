@@ -809,6 +809,56 @@ func _build_weapons(layer: CanvasLayer, theme: Theme) -> void:
 	weapon_wrap.hide()
 
 
+## Silahın 3B modelinden simge: tek kare çizilen küçük bir görüntü alanı, id başına bir kez kurulur.
+var _icons := {}
+func weapon_icon(id: String) -> Texture2D:
+	if _icons.has(id):
+		return _icons[id]
+	var W = load("res://weapons.gd")
+	var w: Dictionary = W.find(id)
+	var model: Node3D
+	if not w.get("prop", []).is_empty():
+		model = W.make_prop(w)
+	elif ResourceLoader.exists("res://models/%s.glb" % id):
+		model = load("res://models/%s.glb" % id).instantiate()
+		if id == "bazooka":
+			model.rotation.y = -PI / 2 # namlu -Z'ye
+		else:
+			model.rotation.x = -PI / 2
+	else:
+		return null
+	var vp := SubViewport.new()
+	vp.size = Vector2i(256, 160)
+	vp.transparent_bg = true
+	vp.own_world_3d = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(vp)
+	vp.add_child(model)
+	var box := AABB()
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var b: AABB = mi.global_transform * mi.get_aabb()
+		box = b if box.size == Vector3.ZERO else box.merge(b)
+	var sun := DirectionalLight3D.new()
+	sun.rotation = Vector3(-0.7, 0.9, 0)
+	sun.light_energy = 2.2 # koyu silahlar koyu kartta kaybolmasın
+	vp.add_child(sun)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_CLEAR_COLOR
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.75, 0.78, 0.9)
+	env.environment.ambient_light_energy = 2.5
+	vp.add_child(env)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = maxf(box.get_longest_axis_size() * 0.72, 0.2) # yandan, hafif üstten: namlu sola bakar
+	vp.add_child(cam)
+	var c := box.get_center()
+	cam.look_at_from_position(c + Vector3(3.0, 0.9, 1.1), c)
+	_icons[id] = vp.get_texture()
+	return _icons[id]
+
+
 func _my_weapon() -> int:
 	var w = Net.get("my_weapon")
 	return weapon_sel if w == null else int(w)
@@ -820,16 +870,18 @@ func _open_weapons() -> void:
 		c.queue_free()
 	var rar: Dictionary = TdUi.consts("res://weapons.gd").get("RARITY", {})
 	# Çubuklar en iyi silaha göre dolar. rate atış arası süre olduğu için tersi alınır.
-	var bars := [["Hasar", func(w): return float(w.get("dmg", 0)) * w.get("n", 1)],
-		["Atış hızı", func(w): return 1.0 / maxf(w.get("rate", 1.0), 0.05)], ["Menzil", func(w): return float(w.get("range", 60.0))]]
+	var bars := [["Hasar", func(w): return float(w.get("dmg", 0)) * w.get("n", 1), "%d"],
+		["Atış hızı", func(w): return 1.0 / maxf(w.get("rate", 1.0), 0.05), "%.1f/sn"], ["Menzil", func(w): return float(w.get("range", 60.0)), "%d m"]]
 	var wide := get_viewport().get_visible_rect().size.x >= 1560.0
 	weapon_grid.columns = 5 if wide else 4 # dar pencerede taşmasın
-	for i in weapon_list.size():
+	var order := range(weapon_list.size()) # nadirliğe göre: sıradan -> efsanevi (seçim numarası değişmez)
+	order.sort_custom(func(a, b): return [rar.keys().find(weapon_list[a].get("rarity", "")), a] < [rar.keys().find(weapon_list[b].get("rarity", "")), b])
+	for i in order:
 		var w: Dictionary = weapon_list[i]
 		var r: Dictionary = rar.get(w.get("rarity", ""), {})
 		var c: Color = r.get("color", Color(0.75, 0.78, 0.85))
 		var b := Button.new() # tıklanabilir kart: içindekiler fareyi yutmaz
-		b.custom_minimum_size = Vector2(290, 250)
+		b.custom_minimum_size = Vector2(290, 318)
 		var sb := _sb(Color(c.darkened(0.8), 0.95), 12, 0)
 		sb.set_border_width_all(4 if i == _my_weapon() else 2)
 		sb.border_color = Color(1, 0.85, 0.2) if i == _my_weapon() else Color(c, 0.7)
@@ -851,6 +903,12 @@ func _open_weapons() -> void:
 		_logo(cv, str(w.get("name", "?")).to_upper(), 25, c.lightened(0.25)).clip_text = true
 		var tag := _lbl(cv, str(r.get("name", "")).to_upper() + ("   ✔ SEÇİLİ" if i == _my_weapon() else ""), 13)
 		tag.add_theme_color_override("font_color", c)
+		var pic := TextureRect.new()
+		pic.texture = weapon_icon(str(w.get("id", "")))
+		pic.custom_minimum_size.y = 84
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cv.add_child(pic)
 		var d := _lbl(cv, str(w.get("desc", "")), 15)
 		d.modulate.a = 0.85
 		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -872,6 +930,10 @@ func _open_weapons() -> void:
 			pb.max_value = weapon_list.map(st[1]).max()
 			pb.value = st[1].call(w)
 			row.add_child(pb)
+			var num := _lbl(row, st[2] % st[1].call(w), 13)
+			num.autowrap_mode = TextServer.AUTOWRAP_OFF
+			num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			num.custom_minimum_size.x = 58
 		for n in m.find_children("*", "Control", true, false) + [m]:
 			n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if weapon_list.is_empty():

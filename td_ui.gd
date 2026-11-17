@@ -228,6 +228,11 @@ func _build_bottom() -> void:
 			sb.set_border_width_all(3)
 			cell.add_theme_stylebox_override("panel", sb)
 			gh.add_child(cell)
+			var icon := TextureRect.new() # silah simgesi (yalnız silah slotunda dolu)
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.mouse_filter = MOUSE_FILTER_IGNORE
+			cell.add_child(icon)
 			var k := _t(cell, str(key) if key <= 5 else "Q", 14)
 			k.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 			k.modulate.a = 0.75
@@ -240,7 +245,18 @@ func _build_bottom() -> void:
 			cnt.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 			var pips := _t(cell, "", 10, GOLD)
 			pips.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-			cells.append({"sb": sb, "name": n, "count": cnt, "pips": pips})
+			pips.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			pips.size_flags_vertical = SIZE_SHRINK_BEGIN
+			var cdb := ProgressBar.new() # bekleme süresi: dolu = yeni kullanıldı, boşalınca hazır
+			cdb.show_percentage = false
+			cdb.max_value = 1.0
+			cdb.custom_minimum_size.y = 5
+			cdb.size_flags_vertical = SIZE_SHRINK_END
+			cdb.mouse_filter = MOUSE_FILTER_IGNORE
+			cdb.add_theme_stylebox_override("background", StyleBoxEmpty.new())
+			cdb.add_theme_stylebox_override("fill", main._sb(Color(1, 1, 1, 0.85), 2, 0))
+			cell.add_child(cdb)
+			cells.append({"sb": sb, "name": n, "count": cnt, "pips": pips, "icon": icon, "cd": cdb, "cd_max": 0.0})
 			key += 1
 
 
@@ -501,6 +517,14 @@ func _update_inv() -> void:
 		var c: Dictionary = cells[i]
 		var it := _item(d) if not d.is_empty() else {"name": "", "color": Color(GREY, 0.5)}
 		c.name.text = it.name
+		var tex: Texture2D = main.weapon_icon(str(d.id)) if d.get("kind", "") == "weapon" else null
+		c.icon.texture = tex
+		c.name.size_flags_vertical = SIZE_SHRINK_END if tex else SIZE_FILL # simge varken ad alta iner
+		c.name.add_theme_font_size_override("font_size", 12 if tex else 15)
+		# Bekleme: silahlar ortak cd'yi (yalnız seçili slotta), kalkan ve duvar kendi süresini gösterir.
+		var left: float = _g(player, "shield_cd", 0.0) if d.get("id", "") == "shield" else _g(player, "wall_cd", 0.0) if d.get("id", "") == "wall" 			else _g(player, "cd", 0.0) if d.get("kind", "") == "weapon" and sel == i + 1 else 0.0
+		c.cd_max = maxf(c.cd_max, left) if left > 0.0 else 0.0
+		c.cd.value = left / c.cd_max if c.cd_max > 0.0 else 0.0
 		c.count.text = "x%d" % d.count if int(d.get("count", 1)) > 1 else ""
 		c.pips.text = "●".repeat(clampi(int(d.get("lvl", 0)), 0, 8))
 		c.sb.border_color = it.color
