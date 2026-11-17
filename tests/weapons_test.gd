@@ -341,6 +341,13 @@ func _ready() -> void:
 	chk("bazuka hızlı dolum 2 seviye", is_equal_approx(Weapons.tuned("bazooka", {"bazooka:reload": 2}).reload, 2.0 * 0.85 * 0.85))
 	chk("kılıç ve bumerang şarjörsüz", Weapons.mag_of(Weapons.tuned("sword", {})) == 0 and Weapons.mag_of(Weapons.tuned("boomerang", {})) == 0)
 	chk("yeni silahın şarjörü dolu", Weapons.full_ammo("smg") == 30 and Weapons.full_ammo("sword") == 0)
+	const PARTS := {"pistol": ["slide", "mag"], "shotgun": ["pump"], "smg": ["mag"], "sniper": ["bolt", "mag"], "bazooka": ["rocket"],
+		"flame": ["tank"], "bow": ["string_top", "string_bot", "arrow"], "grenade": ["pin", "ring", "spoon"]}
+	for w in Weapons.LIST:
+		var m := Weapons.make_prop(w)
+		var need: Array = ["body", "muzzle", "grip_l"] + PARTS.get(w.id, [])
+		chk("%s parçaları" % w.id, need.all(func(n): return m.find_child(n, true, false) != null), need)
+		m.free()
 
 	Net.set_weapon(3)
 	chk("Net.set_weapon", Net.my_weapon == 3 and Net.weapons.get(1) == 1)

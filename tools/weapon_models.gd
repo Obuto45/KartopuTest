@@ -30,7 +30,10 @@ const MATS := { # renk, metalik, pürüzlülük, [ışıma gücü]
 }
 const IDS := ["pistol", "shotgun", "smg", "sniper", "bow", "boomerang", "flame", "grenade", "bazooka", "sword"]
 
-var surf := {} # malzeme -> üçgen köşeleri
+var surf := {} # parça düğümü -> malzeme -> üçgen köşeleri (model koordinatında)
+var node := "body" # tri() bu parçaya yazar
+var pivots := {} # parça -> dönme noktası (MeshInstance3D konumu)
+var markers := {} # Marker3D adı -> konum
 var org := Vector3.ZERO # sonraki parçaların kaydırması (başlangıç noktası etrafında çizilen profiller için)
 var godot_sign := 1.0 # Godot'nun ön yüz sarımı: kenar çarpımı normalle aynı yönde mi (+1) ters mi (-1)
 
@@ -44,21 +47,50 @@ func _init() -> void:
 	for id in IDS:
 		if only.is_empty() or id in only:
 			surf = {}
+			markers = {}
+			pivots = {}
+			part("body", Vector3.ZERO)
 			call("_" + id)
 			_save(id)
 	quit()
 
 
 func _save(id: String) -> void:
+	var root := Node3D.new()
+	root.name = id
+	var tris := 0
+	for n in surf:
+		var mi := MeshInstance3D.new()
+		mi.name = n
+		mi.position = pivots[n]
+		mi.mesh = _mesh(surf[n], pivots[n])
+		root.add_child(mi)
+		for m in surf[n]:
+			tris += surf[n][m].size() / 3
+	for k in markers:
+		var mk := Marker3D.new()
+		mk.name = k
+		mk.position = markers[k]
+		root.add_child(mk)
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	var err := doc.append_from_scene(root, state)
+	if err == OK:
+		err = doc.write_to_filesystem(state, "res://models/%s.glb" % id)
+	print("%s: %d üçgen, %d parça, %s" % [id, tris, surf.size(), error_string(err)])
+	root.free()
+
+
+func _mesh(mats: Dictionary, pv: Vector3) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
-	for m in surf:
+	for m in mats:
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		var p: PackedVector3Array = surf[m]
+		var p: PackedVector3Array = mats[m]
 		for i in range(0, p.size(), 3):
 			st.set_normal(((p[i + 1] - p[i]).cross(p[i + 2] - p[i]) * godot_sign).normalized())
 			for k in 3:
-				st.add_vertex(p[i + k])
+				st.add_vertex(p[i + k] - pv)
 		var d: Array = MATS[m]
 		var mat := StandardMaterial3D.new()
 		mat.resource_name = m
@@ -71,22 +103,17 @@ func _save(id: String) -> void:
 			mat.emission_energy_multiplier = d[3]
 		st.set_material(mat)
 		st.commit(mesh)
-	var root := Node3D.new()
-	root.name = id
-	var mi := MeshInstance3D.new()
-	mi.name = id
-	mi.mesh = mesh
-	root.add_child(mi)
-	var doc := GLTFDocument.new()
-	var state := GLTFState.new()
-	var err := doc.append_from_scene(root, state)
-	if err == OK:
-		err = doc.write_to_filesystem(state, "res://models/%s.glb" % id)
-	var tris := 0
-	for m in surf:
-		tris += surf[m].size() / 3
-	print("%s: %d üçgen, %d malzeme, %s" % [id, tris, surf.size(), error_string(err)])
-	root.free()
+	return mesh
+
+
+## Sonraki çizimler bu adlı hareketli parçaya gider; pivot dönme/kayma noktasıdır. part("body") gövdeye döner.
+func part(name: String, pivot := Vector3.ZERO) -> void:
+	node = name
+	pivots[name] = pivot
+
+
+func marker(name: String, pos: Vector3) -> void:
+	markers[name] = pos
 
 
 # ---------- Parçalar ----------
@@ -99,9 +126,10 @@ func tri(m: String, a: Vector3, b: Vector3, c: Vector3, n: Vector3) -> void:
 		var t := b
 		b = c
 		c = t
-	if not surf.has(m):
-		surf[m] = PackedVector3Array()
-	surf[m].append_array([a + org, b + org, c + org])
+	var d: Dictionary = surf.get_or_add(node, {})
+	if not d.has(m):
+		d[m] = PackedVector3Array()
+	d[m].append_array([a + org, b + org, c + org])
 
 
 func quad(m: String, a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3) -> void:
@@ -234,8 +262,11 @@ func screws(m: String, x: float, pts: Array, r := 0.004) -> void:
 func guard(m: String, z0: float, z1: float, y0: float, h: float, th := 0.007) -> void:
 	ext(m, [z0, y0, z0, y0 - h * 0.6, z0 + 0.012, y0 - h, z1, y0 - h, z1, y0 - h + th,
 		z0 + 0.012 + th * 0.5, y0 - h + th, z0 + th, y0 - h * 0.6, z0 + th, y0], -0.006, 0.006, 0.002)
+	var prev := node
+	part("trigger", Vector3(0, y0, z0 + 0.033))
 	ext("steel", [z0 + 0.03, y0, z0 + 0.036, y0, z0 + 0.032, y0 - h * 0.5, z0 + 0.024, y0 - h * 0.8,
 		z0 + 0.019, y0 - h * 0.78, z0 + 0.025, y0 - h * 0.5], -0.0035, 0.0035)
+	part(prev, pivots[prev])
 
 
 ## Ray dişleri (üst ray): merkez c, uzunluk L.
@@ -249,6 +280,9 @@ func rail(c: Vector3, L: float, w := 0.022) -> void:
 # ---------- Silahlar ----------
 
 func _pistol() -> void:
+	part("slide", Vector3(0, 0.03, -0.07))
+	marker("muzzle", Vector3(0, 0.024, -0.194))
+	marker("grip_l", Vector3(0, -0.07, 0.02))
 	ext("dark", [0.05, 0.002, 0.05, 0.048, 0.045, 0.054, -0.165, 0.054, -0.19, 0.037, -0.19, 0.002], -0.021, 0.021, 0.004) # sürgü
 	box("black", Vector3(0.007, 0.0535, -0.02), Vector3(0.02, 0.004, 0.042)) # fişek çıkış
 	for i in 5:
@@ -257,6 +291,7 @@ func _pistol() -> void:
 		box("dark2", Vector3(0, 0.028, -0.13 - i * 0.008), Vector3(0.0435, 0.03, 0.004))
 	cyl("steel", 0.0095, 0.0095, Vector3(0, 0.024, -0.185), Vector3(0, 0.024, -0.193), 12)
 	cyl("black", 0.006, 0.006, Vector3(0, 0.024, -0.19), Vector3(0, 0.024, -0.1935), 8)
+	part("body")
 	ext("dark2", [0.045, 0.002, -0.15, 0.002, -0.155, -0.012, -0.15, -0.024, -0.08, -0.024, -0.075, -0.016, 0.045, -0.016],
 		-0.019, 0.019, 0.003) # gövde
 	cyl("steel", 0.007, 0.007, Vector3(0, -0.006, -0.15), Vector3(0, -0.006, -0.157), 8)
@@ -270,14 +305,19 @@ func _pistol() -> void:
 			var y := -0.055 - i * 0.017
 			box("wooddk", Vector3(0.0213 * s, y, 0.019 - i * 0.0035), Vector3(0.0012, 0.003, 0.034))
 	screws("steel", 0.0215, [Vector2(0.024, -0.042), Vector2(0.006, -0.112)], 0.0035)
+	part("mag", Vector3(0, -0.141, 0.012))
 	box("dark", Vector3(0, -0.141, 0.012), Vector3(0.042, 0.008, 0.05), 0.002) # şarjör tabanı
+	part("body")
 	guard("dark2", -0.077, -0.002, -0.016, 0.036)
+	part("slide", Vector3(0, 0.03, -0.07))
 	ext("dark", [-0.172, 0.054, -0.164, 0.054, -0.165, 0.064, -0.171, 0.064], -0.003, 0.003) # arpacık
 	box("white", Vector3(0, 0.06, -0.1638), Vector3(0.003, 0.003, 0.001))
 	for s in [-1.0, 1.0]: # gez
 		box("dark", Vector3(0.0075 * s, 0.061, 0.04), Vector3(0.006, 0.014, 0.014), 0.001)
 		box("white", Vector3(0.0075 * s, 0.062, 0.0472), Vector3(0.002, 0.002, 0.001))
+	part("hammer", Vector3(0, 0.034, 0.054))
 	ext("dark", [0.05, 0.032, 0.058, 0.032, 0.064, 0.05, 0.059, 0.053, 0.052, 0.043], -0.005, 0.005) # horoz
+	part("body")
 	box("dark", Vector3(-0.0205, 0.002, -0.03), Vector3(0.003, 0.008, 0.032)) # sürgü kilidi
 	box("dark", Vector3(-0.0205, 0.006, 0.04), Vector3(0.004, 0.01, 0.018)) # emniyet
 	cyl("steel", 0.003, 0.003, Vector3(-0.0205, -0.008, -0.055), Vector3(0.0205, -0.008, -0.055), 6)
@@ -294,12 +334,14 @@ func _shotgun() -> void:
 	cyl("dark2", 0.018, 0.018, Vector3(0, -0.006, -0.56), Vector3(0, -0.006, -0.582), 12)
 	cyl("steel", 0.012, 0.012, Vector3(0, -0.006, -0.582), Vector3(0, -0.006, -0.586), 10)
 	torus("steel", Vector3(0, -0.03, -0.572), Vector3.RIGHT, 0.008, 0.0018, 8, 4)
+	part("pump", Vector3(0, -0.011, -0.32))
 	ext("wood", [-0.19, 0.014, -0.44, 0.014, -0.452, 0.004, -0.452, -0.022, -0.44, -0.036, -0.2, -0.036, -0.188, -0.022, -0.188, 0.004],
 		-0.031, 0.031, 0.006) # pompa
 	for i in 7:
 		box("wooddk", Vector3(0, -0.011, -0.225 - i * 0.031), Vector3(0.0635, 0.047, 0.006))
 	for s in [-1.0, 1.0]:
 		box("steel", Vector3(0.021 * s, 0.002, -0.12), Vector3(0.004, 0.008, 0.15))
+	part("body")
 	ext("dark", [0.13, 0.058, 0.0, 0.058, -0.03, 0.05, -0.04, 0.035, -0.04, -0.032, 0.13, -0.032], -0.028, 0.028, 0.004) # mekanizma
 	box("black", Vector3(0.0275, 0.025, 0.03), Vector3(0.004, 0.024, 0.056))
 	box("steel", Vector3(0.028, 0.025, 0.042), Vector3(0.004, 0.012, 0.022))
@@ -319,6 +361,12 @@ func _shotgun() -> void:
 		var z := 0.008 + i * 0.025
 		cyl("red", 0.0085, 0.0085, Vector3(-0.038, -0.012, z), Vector3(-0.038, 0.04, z), 8)
 		cyl("brass", 0.009, 0.009, Vector3(-0.038, -0.022, z), Vector3(-0.038, -0.012, z), 8)
+	part("shell", Vector3(0, -0.045, 0.0)) # sol eldeki yedek fişek (viewmodel gizler)
+	cyl("red", 0.0085, 0.0085, Vector3(0, -0.045, -0.026), Vector3(0, -0.045, 0.026), 8)
+	cyl("brass", 0.009, 0.009, Vector3(0, -0.045, 0.026), Vector3(0, -0.045, 0.036), 8)
+	part("body")
+	marker("muzzle", Vector3(0, 0.032, -0.666))
+	marker("grip_l", Vector3(0, -0.011, -0.32))
 
 
 func _smg() -> void:
@@ -336,15 +384,19 @@ func _smg() -> void:
 	box("black", Vector3(0, 0.035, -0.37), Vector3(0.004, 0.03, 0.02))
 	cyl("black", 0.007, 0.007, Vector3(0, 0.035, -0.385), Vector3(0, 0.035, -0.3855), 8)
 	ext("dark", [-0.055, -0.012, -0.125, -0.012, -0.128, -0.03, -0.052, -0.03], -0.02, 0.02, 0.003) # şarjör yuvası
+	part("mag", Vector3(0, -0.03, -0.09))
 	ext("dark2", [-0.06, -0.03, -0.12, -0.03, -0.14, -0.17, -0.083, -0.182], -0.016, 0.016, 0.003) # şarjör
 	ext("black", [-0.143, -0.168, -0.08, -0.18, -0.078, -0.192, -0.145, -0.18], -0.018, 0.018, 0.002)
 	for i in 3:
 		box("black", Vector3(0, -0.06 - i * 0.035, -0.096 - i * 0.006), Vector3(0.0325, 0.004, 0.04))
+	part("body")
 	ext("black", [0.0, -0.012, 0.048, -0.012, 0.064, -0.125, 0.06, -0.135, 0.018, -0.138, 0.012, -0.125], -0.02, 0.02, 0.004) # kabza
 	for s in [-1.0, 1.0]:
 		ext("dark2", [0.012, -0.03, 0.045, -0.03, 0.055, -0.11, 0.022, -0.115], 0.0195 * s, 0.0215 * s, 0.001)
 	guard("dark", -0.05, -0.002, -0.012, 0.034)
+	part("charging", Vector3(-0.033, 0.055, -0.13))
 	box("steel", Vector3(-0.033, 0.055, -0.13), Vector3(0.012, 0.012, 0.022), 0.002) # kurma kolu
+	part("body")
 	box("black", Vector3(-0.0275, 0.055, -0.08), Vector3(0.003, 0.006, 0.12))
 	box("black", Vector3(0.0275, 0.045, -0.03), Vector3(0.003, 0.016, 0.045)) # fişek çıkış
 	cyl("steel", 0.007, 0.007, Vector3(0.026, 0.0, 0.06), Vector3(0.031, 0.0, 0.06), 8) # seçici
@@ -359,6 +411,8 @@ func _smg() -> void:
 	cyl("dark", 0.008, 0.008, Vector3(-0.03, 0.045, 0.105), Vector3(0.03, 0.045, 0.105), 8)
 	ext("black", [0.30, 0.075, 0.325, 0.075, 0.325, -0.03, 0.30, -0.03], -0.026, 0.026, 0.005)
 	torus("steel", Vector3(0, -0.018, 0.09), Vector3.RIGHT, 0.008, 0.0018, 8, 4)
+	marker("muzzle", Vector3(0, 0.035, -0.386))
+	marker("grip_l", Vector3(0, 0.0, -0.2))
 
 
 func _sniper() -> void:
@@ -385,10 +439,14 @@ func _sniper() -> void:
 	ext("dark", [0.12, 0.072, -0.16, 0.072, -0.18, 0.06, -0.18, 0.028, 0.12, 0.028], -0.025, 0.025, 0.004) # mekanizma
 	rail(Vector3(0, 0.077, -0.02), 0.26, 0.02)
 	box("black", Vector3(0.025, 0.05, -0.02), Vector3(0.003, 0.018, 0.07))
+	part("bolt", Vector3(0, 0.052, 0.12))
 	cyl("steel", 0.01, 0.01, Vector3(0, 0.052, 0.12), Vector3(0, 0.052, 0.155), 10) # sürgü
 	cyl("steel", 0.005, 0.005, Vector3(0.02, 0.052, 0.11), Vector3(0.062, 0.034, 0.12), 6)
 	sph("dark", Vector3(0.066, 0.032, 0.12), 0.013, 8, 5)
+	part("body")
+	part("mag", Vector3(0, -0.04, -0.03))
 	ext("dark", [-0.06, -0.04, 0.0, -0.04, 0.0, -0.078, -0.06, -0.078], -0.022, 0.022, 0.003) # şarjör
+	part("body")
 	guard("dark", 0.0, 0.07, -0.06, 0.036)
 	cyl("dark", 0.0185, 0.0185, Vector3(0, 0.118, -0.16), Vector3(0, 0.118, 0.06), 12) # dürbün
 	cyl("dark", 0.0185, 0.031, Vector3(0, 0.118, -0.16), Vector3(0, 0.118, -0.2), 12)
@@ -412,6 +470,8 @@ func _sniper() -> void:
 		cyl("dark", 0.006, 0.006, Vector3(0.012 * s, -0.052, -0.4), Vector3(0.02 * s, -0.052, -0.62), 6)
 		sph("black", Vector3(0.02 * s, -0.052, -0.626), 0.009, 6, 4)
 	torus("steel", Vector3(0, -0.052, -0.3), Vector3.RIGHT, 0.008, 0.0018, 8, 4)
+	marker("muzzle", Vector3(0, 0.042, -0.921))
+	marker("grip_l", Vector3(0, -0.05, -0.3))
 
 
 func _bow() -> void:
@@ -438,13 +498,15 @@ func _bow() -> void:
 	for i in 5:
 		box("leatherdk", Vector3(0, 0.02 - i * 0.02, -0.229), Vector3(0.0385, 0.003, 0.026))
 	box("dark", Vector3(0.0185, 0.032, -0.236), Vector3(0.006, 0.004, 0.014)) # ok rafı
-	box("string", Vector3(0, 0, -0.178), Vector3(0.0025, 0.94, 0.0025)) # kiriş
-	box("black", Vector3(0, 0.0, -0.178), Vector3(0.004, 0.11, 0.004))
+	for sgn in [1.0, -1.0]: # kiriş: uç noktalarından dönen iki yarı, ortada (kiriş noktası) birleşir
+		part("string_top" if sgn > 0 else "string_bot", Vector3(0, 0.47 * sgn, -0.178))
+		box("string", Vector3(0, 0.235 * sgn, -0.178), Vector3(0.0025, 0.47, 0.0025))
+		box("black", Vector3(0, 0.0275 * sgn, -0.178), Vector3(0.004, 0.055, 0.004))
+		sph("leatherdk", Vector3(0, 0.3 * sgn, -0.178), 0.008, 6, 4, 1.4) # susturucu
 	cyl("brass", 0.003, 0.003, Vector3(0, 0.03, -0.1805), Vector3(0, 0.036, -0.1805), 6)
-	for sgn in [-1.0, 1.0]: # kiriş susturucuları
-		sph("leatherdk", Vector3(0, 0.3 * sgn, -0.178), 0.008, 6, 4, 1.4)
 	var ax := 0.021 # ok gövdenin yanından geçer, rafa oturur
 	var ay := 0.036
+	part("arrow", Vector3(ax, ay, -0.178))
 	cyl("birch", 0.0045, 0.0045, Vector3(ax, ay, -0.17), Vector3(ax, ay, -0.72), 6) # ok
 	cyl("red", 0.0055, 0.005, Vector3(ax, ay, -0.178), Vector3(ax, ay, -0.168), 6)
 	org = Vector3(ax, ay, 0)
@@ -459,6 +521,9 @@ func _bow() -> void:
 		var W := Vector3.RIGHT if k == 0 else Vector3.UP
 		ext("steel", [-0.715, 0.0, -0.735, 0.012, -0.785, 0.0, -0.735, -0.012], -0.0012, 0.0012, 0.0, Vector3.BACK, V, W)
 	org = Vector3.ZERO
+	part("body")
+	marker("muzzle", Vector3(ax, ay, -0.785))
+	marker("grip_l", Vector3(0, -0.02, -0.23))
 
 
 func _boomerang() -> void:
@@ -483,6 +548,8 @@ func _boomerang() -> void:
 			cyl("yellow", 0.005, 0.005, Vector3(c.x, 0.0088, c.y), Vector3(c.x, 0.0104, c.y), 6)
 	cyl("yellow", 0.022, 0.022, Vector3(0, 0.0088, -0.33), Vector3(0, 0.0104, -0.33), 12) # dirsek amblemi
 	cyl("red", 0.014, 0.014, Vector3(0, 0.0104, -0.33), Vector3(0, 0.0114, -0.33), 12)
+	marker("muzzle", Vector3(0, 0, -0.33))
+	marker("grip_l", Vector3(0, 0, -0.33))
 
 
 func _flame() -> void:
@@ -506,8 +573,12 @@ func _flame() -> void:
 	box("dark", Vector3(0, 0, -0.629), Vector3(0.004, 0.07, 0.002))
 	box("dark", Vector3(0, -0.047, -0.42), Vector3(0.022, 0.022, 0.04), 0.003) # ateşleyici
 	cyl("steel", 0.007, 0.007, Vector3(0, -0.047, -0.44), Vector3(0, -0.047, -0.61), 8)
+	part("pilot", Vector3(0, -0.047, -0.616))
 	sph("glow", Vector3(0, -0.047, -0.616), 0.009, 8, 5)
+	part("body")
 	cyl("red", 0.005, 0.005, Vector3(0.011, -0.047, -0.42), Vector3(0.016, -0.047, -0.42), 8)
+	tube("black", 0.007, [Vector3(-0.03, -0.12, -0.06), Vector3(-0.036, -0.11, -0.01), Vector3(-0.036, -0.06, 0.02), Vector3(-0.03, -0.02, 0.03)])
+	part("tank", Vector3(0, -0.09, -0.2))
 	var t := -0.09 # yakıt tankı
 	cyl("red", 0.052, 0.052, Vector3(0, t, -0.07), Vector3(0, t, -0.33), 14)
 	cyl("red", 0.052, 0.034, Vector3(0, t, -0.33), Vector3(0, t, -0.348), 14)
@@ -521,10 +592,12 @@ func _flame() -> void:
 	cyl("dark", 0.008, 0.008, Vector3(0, -0.04, -0.2), Vector3(0, -0.015, -0.2), 8)
 	cyl("brass", 0.008, 0.008, Vector3(0, -0.044, -0.09), Vector3(0, -0.026, -0.09), 8) # vana
 	torus("red", Vector3(0, -0.028, -0.09), Vector3.UP, 0.012, 0.0022, 10, 4)
-	tube("black", 0.007, [Vector3(-0.03, -0.12, -0.06), Vector3(-0.036, -0.11, -0.01), Vector3(-0.036, -0.06, 0.02), Vector3(-0.03, -0.02, 0.03)])
 	cyl("steel", 0.018, 0.018, Vector3(0.045, t, -0.19), Vector3(0.062, t, -0.19), 12) # basınç saati
 	cyl("white", 0.015, 0.015, Vector3(0.062, t, -0.19), Vector3(0.0625, t, -0.19), 12)
 	box("red", Vector3(0.0628, t + 0.005, -0.193), Vector3(0.001, 0.011, 0.002))
+	part("body")
+	marker("muzzle", Vector3(0, 0, -0.631))
+	marker("grip_l", Vector3(0, 0.07, -0.35))
 	ext("black", [0.0, -0.03, 0.045, -0.03, 0.06, -0.14, 0.054, -0.148, 0.018, -0.148, 0.012, -0.14], -0.02, 0.02, 0.004) # kabza
 	guard("dark", -0.05, 0.0, -0.03, 0.034)
 
@@ -545,12 +618,18 @@ func _grenade() -> void:
 	box("steel", c + Vector3(0, 0.08, 0.004), Vector3(0.022, 0.012, 0.03), 0.003)
 	cyl("dark", 0.011, 0.011, c + Vector3(0, 0.086, -0.004), c + Vector3(0, 0.094, -0.004), 10)
 	cyl("dark", 0.004, 0.004, c + Vector3(-0.013, 0.082, 0.014), c + Vector3(0.013, 0.082, 0.014), 6)
+	part("spoon", c + Vector3(0, 0.085, 0))
 	org = c
 	ext("steel", [0.0, 0.088, 0.035, 0.085, 0.06, 0.065, 0.068, 0.03, 0.066, 0.0, 0.06, -0.012, 0.056, -0.008,
 		0.06, 0.0, 0.062, 0.03, 0.054, 0.062, 0.033, 0.079, 0.0, 0.082], -0.009, 0.009, 0.002) # mandal (kaşık)
 	org = Vector3.ZERO
+	part("pin", c + Vector3(0, 0.07, -0.006))
 	cyl("steel", 0.0022, 0.0022, c + Vector3(-0.025, 0.07, -0.006), c + Vector3(0.03, 0.07, -0.006), 6) # pim
+	part("ring", c + Vector3(0.03, 0.054, -0.006))
 	torus("steel", c + Vector3(0.03, 0.054, -0.006), Vector3.RIGHT, 0.016, 0.0024, 12, 4)
+	part("body")
+	marker("muzzle", c)
+	marker("grip_l", c + Vector3(0.03, 0.054, -0.006))
 
 
 func _bazooka() -> void:
@@ -561,9 +640,11 @@ func _bazooka() -> void:
 	cyl("yellow", 0.0555, 0.0555, Vector3(0, 0, 0.29), Vector3(0, 0, 0.31), 14)
 	cyl("dark", 0.06, 0.068, Vector3(0, 0, -0.55), Vector3(0, 0, -0.6), 14) # ağız
 	cyl("black", 0.058, 0.058, Vector3(0, 0, -0.6), Vector3(0, 0, -0.601), 14)
+	part("rocket", Vector3(0, 0, -0.58))
 	cyl("red", 0.042, 0.042, Vector3(0, 0, -0.56), Vector3(0, 0, -0.62), 12) # roket başlığı
 	cyl("red", 0.042, 0.012, Vector3(0, 0, -0.62), Vector3(0, 0, -0.68), 12)
 	cyl("steel", 0.012, 0.0, Vector3(0, 0, -0.68), Vector3(0, 0, -0.695), 8)
+	part("body")
 	cyl("dark", 0.055, 0.078, Vector3(0, 0, 0.35), Vector3(0, 0, 0.46), 14) # arka huni
 	cyl("black", 0.07, 0.07, Vector3(0, 0, 0.459), Vector3(0, 0, 0.46), 14)
 	box("dark", Vector3(-0.068, 0.04, -0.12), Vector3(0.03, 0.045, 0.14), 0.006) # nişangâh
@@ -583,6 +664,8 @@ func _bazooka() -> void:
 	for z in [-0.45, -0.25, 0.1]: # perçinler
 		for a in [0.6, 2.54]:
 			sph("steel", Vector3(cos(a) * 0.056, sin(a) * 0.056, z), 0.004, 6, 3)
+	marker("muzzle", Vector3(0, 0, -0.6))
+	marker("grip_l", Vector3(0, -0.1, -0.26))
 
 
 func _sword() -> void:
@@ -604,3 +687,5 @@ func _sword() -> void:
 	cyl("gold", 0.016, 0.019, Vector3(0, 0, 0.14), Vector3(0, 0, 0.148), 10)
 	sph("gold", Vector3(0, 0, 0.165), 0.024, 10, 6) # topuz
 	sph("ruby", Vector3(0, 0, 0.188), 0.008, 8, 4)
+	marker("muzzle", Vector3(0, 0, -0.7))
+	marker("grip_l", Vector3(0, 0, 0.1))
