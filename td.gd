@@ -21,6 +21,14 @@ const HALF := 30.0 # forest.gd HALF
 const SYNC_DT := 1.0 / 12.0 # yaratık konum yayını
 const STATE_DT := 0.1 # durum yayını en sık bu aralıkla (kule dövülürken kare başı rpc gitmesin)
 const TELE := 1.5 # doğma uyarısı (yerde kırmızı halka) ile ilk yaratık arası
+const SLAM_EVERY := 8.0 # Kara Şövalye yer darbesi aralığı
+const SLAM_T := 1.2 # darbe uyarısı süresi
+const SLAM_R := 5.0
+const SLAM_DMG := 30
+const DROP_LIFE := 15.0 # yerdeki eşya kaç sn kalır
+const DROP_R := 1.5 # alma uzaklığı
+const CHEST_MONEY := 40
+const CHEST_XP := 40
 
 var wave := 0
 var state := "break" # "break" | "fight" | "won" | "lost"
@@ -65,6 +73,14 @@ var _plist_t := 0.0
 var _ids := PackedInt32Array()
 var _pos := PackedVector3Array()
 var _yaw := PackedByteArray()
+var _mod_seed := 0 # maç başında host'ta randi(); sıradaki dalganın modları bundan
+var _boss: Node3D # host: yaşayan boss
+var _slam_cd := SLAM_EVERY
+var _summoned := false
+var _drops := {} # host: eşya no -> [konum, id, yaş]
+var _dnodes := {} # her makine: eşya no -> görsel düğüm
+var _did := 0
+var _alive := {} # host: peer -> canlı mıydı (ölüm sayacı için)
 
 
 func _ready() -> void:
@@ -89,6 +105,9 @@ func _ready() -> void:
 	xp_next = Balance.xp_for(1, _n)
 	time_left = Balance.BREAK_TIME
 	multiplayer.peer_disconnected.connect(_on_peer_left)
+	if multiplayer.is_server():
+		_mod_seed = randi()
+		mods = Balance.roll_mods(1, difficulty, _mod_seed)
 
 
 func is_ready(peer: int) -> bool:
@@ -137,6 +156,8 @@ func _physics_process(dt: float) -> void:
 		_plist_t = 0.25
 		var p := _players()
 		plist = p.get_children() if p else []
+		_track_deaths()
+	_drops_tick(dt)
 	if state == "break":
 		if time_left > 3.0 and _all_ready(): # herkes hazır: kısa geri sayım
 			time_left = 3.0
@@ -148,9 +169,10 @@ func _physics_process(dt: float) -> void:
 		while not _queue.is_empty() and _queue[0][0] <= _wave_t and elist.size() < Balance.MAX_ALIVE:
 			var q: Array = _queue.pop_front()
 			if q[1] == "":
-				_tele.rpc(q[2])
+				_tele.rpc(q[2], 3.2, TELE)
 			else:
-				_spawn_now(q[1], q[2])
+				_spawn_now(q[1], q[2], q.size() > 3 and q[3])
+		_boss_tick(dt)
 		if _queue.is_empty() and elist.is_empty():
 			_end_wave()
 		_sync_t -= dt
@@ -201,9 +223,122 @@ func _summary(d: Dictionary) -> void:
 	summary_ready.emit(d)
 
 
-## Host: yaratık ölünce yere eşya bırakır (item_id: "potion" | "bomb" | "chest").
+## Host: yere eşya bırakır (item_id: "potion" | "bomb" | "chest"); herkeste görünür, DROP_LIFE sn durur.
 func drop(pos: Vector3, item_id: String) -> void:
-	pass
+	_did += 1
+	_drops[_did] = [pos, item_id, 0.0]
+	_drop_new.rpc(_did, pos, item_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func _drop_new(n: int, pos: Vector3, id: String) -> void:
+	var mi := MeshInstance3D.new()
+	var m := StandardMaterial3D.new()
+	var c := Color(1.0, 0.8, 0.2) if id == "chest" else (Color(0.2, 0.9, 0.4) if id == "potion" else Color(0.9, 0.2, 0.2))
+	if id == "potion":
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.12
+		cm.bottom_radius = 0.2
+		cm.height = 0.45
+		mi.mesh = cm
+	else:
+		var bm := BoxMesh.new()
+		bm.size = Vector3.ONE * (0.55 if id == "chest" else 0.4)
+		mi.mesh = bm
+	m.albedo_color = c
+	m.emission_enabled = true
+	m.emission = c
+	m.emission_energy_multiplier = 0.6
+	mi.material_override = m
+	mi.position = pos + Vector3.UP * 0.5
+	get_parent().add_child(mi)
+	mi.create_tween().set_loops().tween_property(mi, "rotation:y", TAU, 2.0).as_relative()
+	_dnodes[n] = mi
+
+
+@rpc("authority", "call_local", "reliable")
+func _drop_gone(n: int) -> void:
+	if _dnodes.has(n):
+		_dnodes[n].queue_free()
+		_dnodes.erase(n)
+
+
+## Host: süresi dolanı sil, 1,5 m'ye giren ilk canlı oyuncuya ver.
+func _drops_tick(dt: float) -> void:
+	for n in _drops.keys():
+		var d: Array = _drops[n]
+		d[2] += dt
+		if d[2] >= DROP_LIFE:
+			_drops.erase(n)
+			_drop_gone.rpc(n)
+			continue
+		for p in plist:
+			if is_instance_valid(p) and p.hp > 0 and Vector2(p.global_position.x - d[0].x, p.global_position.z - d[0].z).length() < DROP_R:
+				_take(n, p)
+				break
+
+
+## Eşyayı p'ye verir; zaten alınmışsa false (iki oyuncu aynı anda alırsa bir kez).
+func _take(n: int, p: Node) -> bool:
+	if not _drops.has(n):
+		return false
+	var id: String = _drops[n][1]
+	_drops.erase(n)
+	_drop_gone.rpc(n)
+	if id == "chest":
+		# shortcut: "chest" kartı player.gd gerektirir; şimdilik para + XP verir. Kart açılınca burası değişir.
+		money += CHEST_MONEY
+		_add_xp(CHEST_XP)
+		_dirty = true
+	else:
+		_to_owner(p, "add_item", [{"kind": "item", "id": id}])
+	return true
+
+
+func _add_xp(n: int) -> void:
+	xp += n
+	while xp >= xp_next: # taşan XP sonraki seviyeye kalır
+		xp -= xp_next
+		level += 1
+		xp_next = Balance.xp_for(level, _n)
+		for p in plist:
+			_to_owner(p, "level_up", [])
+
+
+## Host: istatistik sayacı (peer -> pstats).
+func _stat(peer: int, key: String, n := 1) -> void:
+	if peer <= 0:
+		return
+	if not pstats.has(peer):
+		pstats[peer] = {"dmg": 0, "kills": 0, "crits": 0, "builds": 0, "deaths": 0}
+	pstats[peer][key] += n
+
+
+## Host: oyuncu canlıdan ölüye geçince deaths++.
+func _track_deaths() -> void:
+	for p in plist:
+		if is_instance_valid(p):
+			var peer: int = p.get_multiplayer_authority()
+			var a: bool = p.hp > 0
+			if _alive.get(peer, true) and not a:
+				_stat(peer, "deaths")
+			_alive[peer] = a
+
+
+## Host: maç bitti; özeti herkese yayar. MVP = dmg + 50 x yapı - 100 x ölüm.
+func _finish(won: bool) -> void:
+	for p in plist:
+		if is_instance_valid(p):
+			_stat(p.get_multiplayer_authority(), "dmg", 0) # hiç vurmayan da listede olsun
+	var mvp := 0
+	var best := -INF
+	for peer in pstats:
+		var st: Dictionary = pstats[peer]
+		var sc: float = st.dmg + 50 * st.builds - 100 * st.deaths
+		if sc > best:
+			best = sc
+			mvp = peer
+	_summary.rpc({"won": won, "wave": wave, "difficulty": difficulty, "endless": endless, "players": pstats, "mvp": mvp})
 
 
 # ---------- Dalga (host) ----------
@@ -222,16 +357,16 @@ func _all_ready() -> bool:
 func _start_wave() -> void:
 	wave += 1
 	_n = _count_players()
-	_wd = Balance.wave(wave, _n)
+	_wd = Balance.wave(wave, _n, difficulty, mods)
 	var batches := []
 	for g in _wd.groups:
 		var left: int = g.count
 		while left > 0:
-			batches.append([g.type, mini(left, Balance.BATCH)])
+			batches.append([g.type, mini(left, Balance.BATCH), _wd.elite]) # 3.: kümede 1 elit
 			left -= Balance.BATCH
 	batches.shuffle()
 	if _wd.boss != "": # boss dalganın ortasında
-		batches.insert(batches.size() / 2, [_wd.boss, 1])
+		batches.insert(batches.size() / 2, [_wd.boss, 1, false])
 	var pts := Balance.SPAWN_POINTS.size()
 	var first := randi() % pts
 	var open := mini(pts, 2 + wave)
@@ -243,7 +378,7 @@ func _start_wave() -> void:
 		var sp: Vector3 = Balance.SPAWN_POINTS[(first + randi() % open) % pts]
 		_queue.append([t, "", sp])
 		for i in b[1]:
-			_queue.append([t + TELE + i * 0.45, b[0], sp + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2))])
+			_queue.append([t + TELE + i * 0.45, b[0], sp + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)), b[2] and i == 0])
 		_to_spawn += b[1]
 		t += gap
 	_queue.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
@@ -256,18 +391,20 @@ func _start_wave() -> void:
 
 func _end_wave() -> void:
 	ready_votes = {}
-	if wave >= Balance.WAVE_COUNT:
+	if wave >= Balance.WAVE_COUNT and not endless:
 		state = "won"
+		_finish(true)
 	else:
 		state = "break"
 		time_left = Balance.BREAK_TIME
-		money += Balance.wave_bonus(wave, _n)
+		money += roundi(Balance.wave_bonus(wave, _n) * Balance.DIFFS[difficulty].money)
+		mods = Balance.roll_mods(wave + 1, difficulty, _mod_seed) # molada ilan edilir
 		tower_hp = mini(tower_max, tower_hp + roundi(tower_max * Balance.TOWER_REPAIR))
 	_dirty = true
 	_state_t = 0.0
 
 
-func _spawn_now(type: String, pos: Vector3) -> void:
+func _spawn_now(type: String, pos: Vector3, elite := false) -> void:
 	var e: Dictionary = Balance.ENEMIES[type]
 	var space := tower.get_world_3d().direct_space_state
 	var q := PhysicsPointQueryParameters3D.new()
@@ -279,18 +416,30 @@ func _spawn_now(type: String, pos: Vector3) -> void:
 		pos += Vector3(randf_range(-2.5, 2.5), 0, randf_range(-2.5, 2.5))
 	_eid += 1
 	_to_spawn -= 1
-	_spawn.rpc(_eid, type, pos, roundi(e.hp * _wd.hp_mult * (_wd.boss_hp if type == _wd.boss else 1.0)), roundi(e.dmg * _wd.dmg_mult))
+	var x := {"spd": Balance.enemy_speed(type, _wd) / e.speed, "armor": _wd.get("armor_add", 0), "elite": elite,
+		"money": maxi(roundi(e.money * _wd.get("money_mult", 1.0) * Balance.DIFFS[difficulty].money), 1)}
+	var hp: float = e.hp * _wd.hp_mult * (_wd.boss_hp if type == _wd.boss else 1.0) * (3.0 if elite else 1.0)
+	_spawn.rpc(_eid, type, pos, roundi(hp), roundi(e.dmg * _wd.dmg_mult), x)
+	if type == _wd.boss: # dalganın boss'u (çağrılan hortlaklar boss türü değil)
+		_boss = _by_id[_eid]
+		boss_eid = _eid
+		_slam_cd = SLAM_EVERY
+		_summoned = false
 	_dirty = true
 
 
 @rpc("authority", "call_local", "reliable")
-func _spawn(id: int, type: String, pos: Vector3, hp: int, dmg: int) -> void:
+func _spawn(id: int, type: String, pos: Vector3, hp: int, dmg: int, x: Dictionary) -> void:
 	var e: CharacterBody3D = EnemyScript.new()
 	e.name = "E%d" % id
 	e.eid = id
 	e.type = type
 	e.hp = hp
 	e.dmg = dmg
+	e.spd_k = x.spd
+	e.bonus_armor = x.armor
+	e.elite = x.elite
+	e.money = x.money
 	e.td = self
 	e.position = pos
 	e.rotation.y = atan2(pos.x, pos.z) # kuleye dönük
@@ -301,14 +450,14 @@ func _spawn(id: int, type: String, pos: Vector3, hp: int, dmg: int) -> void:
 
 ## Doğma uyarısı: noktada 1,5 sn büyüyen kırmızı halka.
 @rpc("authority", "call_local", "reliable")
-func _tele(pos: Vector3) -> void:
+func _tele(pos: Vector3, r: float, t: float) -> void:
 	var c := Color(1.0, 0.15, 0.1, 0.9)
-	var ring := Fx.ground(3.2, c, Vector4(0.2, 0.1, 0.2, 1.6))
+	var ring := Fx.ground(r, c, Vector4(0.2, 0.1, 0.2, 1.6))
 	ring.position = pos + Vector3.UP * 0.06
 	get_parent().add_child(ring)
 	var tw := ring.create_tween().set_parallel()
-	Fx.anim(tw, ring, "shape", Vector4(0.2, 0.1, 0.2, 1.6), Vector4(0.9, 0.08, 0.2, 1.6), TELE)
-	Fx.anim(tw, ring, "col", c, Color(c, 0.0), 0.5).set_delay(TELE)
+	Fx.anim(tw, ring, "shape", Vector4(0.2, 0.1, 0.2, 1.6), Vector4(0.9, 0.08, 0.2, 1.6), t)
+	Fx.anim(tw, ring, "col", c, Color(c, 0.0), 0.5).set_delay(t)
 	tw.chain().tween_callback(ring.queue_free)
 	Sfx.play3d(Sfx.rumble, pos, 2.0)
 
@@ -339,6 +488,28 @@ func _sync(ids: PackedInt32Array, pos: PackedVector3Array, yaw: PackedByteArray)
 			e.moving = yaw[i] >= 128
 
 
+## Host: Kara Şövalye. Her SLAM_EVERY sn'de SLAM_T sn uyarılı yer darbesi; canı %50 altına inince bir kez 4 hortlak çağırır.
+func _boss_tick(dt: float) -> void:
+	if not is_instance_valid(_boss) or _boss.hp <= 0 or _boss.type != "boss":
+		return
+	_slam_cd -= dt
+	if _slam_cd <= 0.0:
+		_slam_cd = SLAM_EVERY
+		var at := _boss.global_position
+		_tele.rpc(at, SLAM_R / 0.9, SLAM_T) # halka 0,9 x r'ye büyür
+		get_tree().create_timer(SLAM_T, false).timeout.connect(func() -> void:
+			if state != "fight":
+				return
+			for p in plist:
+				if is_instance_valid(p) and p.hp > 0 and Vector2(p.global_position.x - at.x, p.global_position.z - at.z).length() < SLAM_R:
+					hit_player(p, roundi(SLAM_DMG * _wd.dmg_mult)))
+	if not _summoned and _boss.hp * 2 < _boss.max_hp:
+		_summoned = true
+		_to_spawn += 4 # _spawn_now sıradan sayar
+		for i in 4:
+			_spawn_now("grunt", _boss.global_position + Vector3.RIGHT.rotated(Vector3.UP, i * TAU / 4.0) * 3.0)
+
+
 # ---------- Hasar ----------
 
 ## Mermiyi atan makine isabeti hesaplar ve host'a bildirir (host ise doğrudan çağırır).
@@ -347,7 +518,7 @@ func damage_enemy(enemy_name: String, dmg: int, crit: bool) -> void:
 	if multiplayer.is_server():
 		var e: Node3D = _by_id.get(enemy_name.trim_prefix("E").to_int())
 		if e:
-			damage(e, dmg, crit)
+			damage(e, dmg, crit, 0, _sender())
 
 
 ## Yavaşlatma / sersemletme (hız 0) / itme: atan makine bildirir, host uygular.
@@ -370,25 +541,29 @@ func effect_enemy(enemy_name: String, fx: Dictionary) -> void:
 
 
 ## Host: zırhı düşer, canı yayar, ölümde ödülü havuza ekler. n = -1: kendini patlattı (ödül yok).
-func damage(e: Node3D, dmg: int, crit: bool, n := 0) -> void:
+func damage(e: Node3D, dmg: int, crit: bool, n := 0, by := 0) -> void:
 	if e.hp <= 0 or state != "fight":
 		return
 	if n == 0:
 		n = maxi(dmg - e.armor, ceili(dmg * 0.4)) # zırh hasarın en fazla %60'ını keser: hızlı silahlar geç dalgada da işe yarar
 	var hp := maxi(e.hp - maxi(n, 0), 0) if n > 0 else 0
+	var was: int = e.hp # _hit apply_hit'te e.hp'yi düşürür
 	_hit.rpc(e.eid, hp, n, crit)
+	if n > 0:
+		_stat(by, "dmg", mini(n, was))
+		_stat(by, "crits", int(crit))
 	if hp > 0:
 		return
+	if e.eid == boss_eid:
+		boss_eid = 0
 	if n > 0:
 		kills += 1
-		money += e.d.money
-		xp += e.d.xp
-		while xp >= xp_next: # taşan XP sonraki seviyeye kalır
-			xp -= xp_next
-			level += 1
-			xp_next = Balance.xp_for(level, _n)
-			for p in plist:
-				_to_owner(p, "level_up", [])
+		_stat(by, "kills")
+		money += e.money
+		_add_xp(e.d.xp)
+		var id := Balance.roll_drop(randf(), e.elite)
+		if id != "":
+			drop(e.global_position, id)
 	_dirty = true
 
 
@@ -418,6 +593,7 @@ func hurt_tower(dmg: int) -> void:
 	if tower_hp == 0:
 		state = "lost"
 		_state_t = 0.0
+		_finish(false)
 		_send_sync()
 	_dirty = true
 
@@ -529,6 +705,7 @@ func _req_place(id: String, pos: Vector3, yaw: float) -> void:
 		_to_owner(_players().get_node_or_null(str(_sender())), "add_item", [{"kind": "build", "id": id}])
 		return
 	_bid += 1
+	_stat(_sender(), "builds")
 	_place.rpc(_bid, id, Vector3(pos.x, 0, pos.z), yaw)
 
 
