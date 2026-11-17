@@ -279,7 +279,7 @@ static func _make(id: String) -> Dictionary:
 				"vis": [[0.0, "Rig/Weapon/tank", true], [0.4 * L, "Rig/Weapon/tank", false], [0.48 * L, "Rig/Weapon/tank", true]],
 				"poses": [[0.18 * L, "L", "grip"], [0.9 * L, "L", hold]], "events": [[0.85 * L, "mag_in"], [L, "done"]]}
 		"bow":
-			var nock := Vector3(0, 0, 0.11) # el kameraya fazla yaklaşmasın
+			var nock := Vector3(0, 0, 0.07) # el kameraya fazla yaklaşmasın
 			c["draw_string"] = {"len": 0.6, "tracks": {
 					"Rig/Weapon/string_top": [_k(0), _k(0.6, Z, Vector3(-0.31, 0, 0))],
 					"Rig/Weapon/string_bot": [_k(0), _k(0.6, Z, Vector3(0.31, 0, 0))],
@@ -354,7 +354,7 @@ static func _drink() -> Dictionary:
 	var rs := rest("item:potion")
 	var gl: Vector3 = rs["HandL"][0]
 	var cork0: Vector3 = rs["Rig/Weapon/cork"][0]
-	var chest := [Vector3(-0.12, 0.07, 0.03), Vector3(0, 0, 0.15)] # göğüs hizası, ağız sol ele dönük
+	var chest := [Vector3(-0.17, -0.02, 0.05), Vector3(0, 0, 0.15)] # göğüs hizası, ağız sol ele dönük
 	# Ağızda: gövde ekranın alt-ortasında, boyun ~60° eğik yukarı-kameraya (iksir view'una göre fark).
 	var mouth := [Vector3(-0.15, 0.03, 0.1), Vector3(1.05, 0, 0.12)]
 	var sip := [mouth[0] + Vector3(0, 0.008, 0.012), mouth[1] + Vector3(0.12, 0, 0)] # yudum: biraz daha eğ, ağza it

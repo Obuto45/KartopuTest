@@ -72,6 +72,7 @@ func _fp_hold(me: Node, i: int, it: Dictionary) -> void:
 
 func _fp_shots(me: Node) -> void:
 	await _fp_hold(me, 1, {"kind": "weapon", "id": "pistol", "count": 1, "lvl": 1, "ammo": 3})
+	await _shot("fp_pistol") # dinlenme: iki el görünür
 	me.start_reload()
 	await _wait(0.6)
 	await _shot("fp_reload")
@@ -102,9 +103,10 @@ func _fp_shots(me: Node) -> void:
 	await _shot("fp_scope")
 	Input.action_release("aim")
 	await _fp_hold(me, 1, {"kind": "weapon", "id": "shotgun", "count": 1, "lvl": 1, "ammo": 2})
+	await _shot("fp_shotgun") # dinlenme: sağ el kabzada, sol el pompada
 	me.start_reload()
 	await _wait(0.5)
-	await _shot("fp_shotgun")
+	await _shot("fp_shotgun_reload")
 	await _wait(2.0)
 	await _fp_hold(me, 1, {"kind": "weapon", "id": "smg", "count": 1, "lvl": 1, "ammo": 30})
 	var box := MeshInstance3D.new() # burnumuzun dibinde duvar: silah içine girmemeli
