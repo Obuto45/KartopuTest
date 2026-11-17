@@ -36,6 +36,8 @@ Faz 0 sözleşmeleri (commit `a9bd3d7`): `start_td(ids, opts)`, `td.gd` durum di
 - [x] Faz 0: sözleşmeler commit'lendi ve push'landı
 - [ ] Faz 1 (worktree'lerde, paralel): Dalga (F4/F5/F6/F8 sayaç/F9), Silah (F7), Profil (F3/F10), Giriş (F1/F3 menü/F4 seçim), Tutuş
 - [ ] Faz 2: Arayüz ajanı (`td_ui.gd`): F2 rehber, F8 ekranı, boss barı, modifikatör afişi; başarım tetik satırları; denge simülasyonuna göre ayar
+- [x] Steam paketi bitti: `docs/steam/` (mağaza sayfası, 34 başarım, pazarlama planı, görsel/fragman brifi)
+- [ ] Faz 3 (birleştirmeden sonra, çakışmasın diye): İngilizce yerelleştirme (`tr()` + çeviri dosyası). Steam ajanının 1 numaralı önerisi.
 - [ ] Aşama 3: worktree dallarını birleştir; tüm testler, ekran görüntüleri, iki süreçli ağ testi
 - [ ] Aşama 4: commit, push, rapor
 
