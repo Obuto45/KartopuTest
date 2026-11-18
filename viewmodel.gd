@@ -23,6 +23,9 @@ const POLE := Vector3(0.0, -0.15, 0.0)
 ## Uzun silahta sol kol (WA.UNDER): dirsek sola itilir ki kol ekrana alt-sol köşeden çapraz girsin (yatay çubuk ya da
 ## dik direk değil). Kısa silahta sol el kameraya yakın: itilirse üst kol görüşü kapatır.
 const POLE_L := Vector3(-0.3, -0.15, 0.0)
+## Yayda sağ el kirişi yüzün önünde çeker: "elin gerisi" kuralı dirseği kameranın yanına getirip ön kolu ekrana
+## yayıyordu. Dirsek elden sağa-aşağı itilir, ön kol ekranın sağ alt köşesinden çapraz girer.
+const POLE_BOW_R := Vector3(0.5, -0.45, 0.25)
 const ITEM_VIEW := {"build": [Vector3(0.1, -0.24, -0.3), Vector3.ZERO], "item:potion": [Vector3(0.13, -0.1, -0.36), Vector3.ZERO], "item:bomb": [Vector3(0.16, -0.17, -0.3), Vector3.ZERO]}
 
 var sway_offset := Vector3.ZERO # _feel yazar: salınım, adım, geri tepme
@@ -246,7 +249,10 @@ func _process(dt: float) -> void:
 		var pole := get_node_or_null("Pole" + s) as Node3D
 		if pole:
 			var h := hand_r if s == "R" else hand_l
-			pole.global_position = h.global_transform * Vector3(0, 0, 0.6) + global_basis * (POLE if s == "R" else (POLE_L if id in WA.UNDER else POLE))
+			if s == "R" and id == "bow":
+				pole.global_position = h.global_position + global_basis * POLE_BOW_R
+			else:
+				pole.global_position = h.global_transform * Vector3(0, 0, 0.6) + global_basis * (POLE if s == "R" else (POLE_L if id in WA.UNDER else POLE))
 
 
 func _ev(name: String) -> void:
