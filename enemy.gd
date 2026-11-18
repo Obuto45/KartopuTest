@@ -6,6 +6,7 @@ extends CharacterBody3D
 
 const Balance := preload("res://balance.gd")
 const Fx := preload("res://explosion.gd")
+const Ragdoll := preload("res://ragdoll.gd")
 const TICK := 0.2 # yapay zekâ karar aralığı (sn); kareler arası yalnızca yürür
 const MODEL_SCALE := 0.72
 const TOWER_R := 2.1
@@ -72,6 +73,9 @@ void fragment() {
 var model_scale := Vector3.ONE # doğma büyümesinin hedefi
 var hit_tw: Tween # darbe sekmesi; üst üste vuruşta öncekini keser
 var swing_t := 0.0 # > 0: vuruş animasyonu oynuyor
+var stun_vis := 0.0 # > 0: sersem (sallanır, kafasında yıldızlar döner)
+var stars: Node3D
+var walk_t := 0.0
 var moving := false
 var net_pos := Vector3.ZERO
 var net_vel := Vector3.ZERO # istemci: son iki eşitlemeden hız (ileri tahmin)
@@ -127,6 +131,9 @@ static func float_text(world: Node, pos: Vector3, text: String, c: Color, px: fl
 	l.position = pos
 	world.add_child(l)
 	var tw := l.create_tween().set_parallel()
+	l.position.x += randf_range(-0.15, 0.15)
+	l.scale = Vector3.ONE * (1.8 if px > 0.01 else 1.3) # sayı büyük çıkıp oturur (kritikte daha çok)
+	tw.tween_property(l, "scale", Vector3.ONE, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tw.tween_property(l, "position:y", pos.y + 1.1, 0.7).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(l, "modulate:a", 0.0, 0.3).set_delay(0.4)
 	tw.chain().tween_callback(l.queue_free)
@@ -211,11 +218,50 @@ func _physics_process(dt: float) -> void:
 		want = atk_anim
 	elif moving:
 		want = run_anim
+	_sway(dt)
 	if want != cur:
 		cur = want
 		anim.play(want, 0.15)
 		# Adım hızı yürüme hızına uysun (koşu ~7, yürüyüş ~4,7 m/sn'ye göre çizilmiş).
 		anim.speed_scale = clampf(d.speed / ((7.0 if want == "Run" else 4.7) * d.scale), 0.5, 2.2) if want == run_anim else 1.0
+
+
+## Yürürken yana yalpalama, sersemken yalpalayıp dönen yıldızlar (yalnız görüntü: model düğümü).
+func _sway(dt: float) -> void:
+	walk_t += dt * (9.0 if moving else 0.0)
+	var roll := sin(walk_t) * 0.05 if moving else 0.0
+	var pitch := 0.0
+	if stun_vis > 0.0:
+		stun_vis -= dt
+		var t := Time.get_ticks_msec() * 0.001
+		roll = sin(t * 7.0) * 0.18
+		pitch = cos(t * 5.0) * 0.1
+		if stars:
+			stars.rotate_y(dt * 5.0)
+		if stun_vis <= 0.0 and stars:
+			stars.queue_free()
+			stars = null
+	model.rotation.z = lerpf(model.rotation.z, roll, minf(1.0, dt * 10.0))
+	model.rotation.x = lerpf(model.rotation.x, pitch, minf(1.0, dt * 10.0))
+
+
+func stun_fx(t: float) -> void:
+	stun_vis = maxf(stun_vis, t)
+	if stars:
+		return
+	stars = Node3D.new()
+	stars.position = Vector3.UP * (height + 0.15)
+	add_child(stars)
+	for i in 3:
+		var l := Label3D.new()
+		l.text = "★"
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.font_size = 64
+		l.pixel_size = 0.004
+		l.outline_size = 10
+		l.modulate = Color(1.0, 0.9, 0.25)
+		l.position = Vector3(cos(i * TAU / 3.0), 0, sin(i * TAU / 3.0)) * radius * 0.8
+		stars.add_child(l)
 
 
 func _overlay(m: Material) -> void:
@@ -338,6 +384,11 @@ func attack_fx(pos: Vector3) -> void:
 	swing_t = 0.55
 	cur = ""
 	anim.stop()
+	# hazırlık: geriye çekilip öne atılır, sonra yerine döner
+	var lw := create_tween()
+	lw.tween_property(model, "position:z", 0.15, 0.1).set_ease(Tween.EASE_OUT)
+	lw.tween_property(model, "position:z", -0.3, 0.08).set_ease(Tween.EASE_IN)
+	lw.tween_property(model, "position:z", 0.0, 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	if d.range > 4.0 and not d.has("explode"):
 		var mi := MeshInstance3D.new()
 		mi.mesh = shared("spit", func() -> Resource:
@@ -367,6 +418,11 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 		float_text(world, global_position + Vector3(randf_range(-0.3, 0.3), height + 0.3, randf_range(-0.3, 0.3)),
 			str(n), Color(1.0, 0.85, 0.15) if crit else Color.WHITE, 0.013 if crit else 0.008)
 		flash_t = 0.12
+		if crit and hp > 0: # kritik: yaratık bir an donar (hit-stop), sonra sürer
+			anim.speed_scale = 0.0
+			create_tween().tween_callback(func() -> void: # düğümle birlikte ölür: silinmiş yaratığa çağrı gitmez
+				if hp > 0:
+					cur = "").set_delay(0.09) # bir sonraki karede animasyon ve hız yeniden kurulur
 		if hp > 0: # darbe: kısa ezilip geri sekme (doğma büyümesi bitmişse)
 			var base := model_scale
 			if hit_tw:
@@ -399,7 +455,12 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 		queue_free()
 		return
 	anim.speed_scale = 1.0
-	anim.play("Death", 0.1)
+	if hit_tw:
+		hit_tw.kill()
+	model.scale = model_scale
+	var rag := Ragdoll.start(model, global_basis.z * 0.8) # son vuruşların yönünde savrulur
+	if rag == null: # Düşük kalite: eski ölüm animasyonu
+		anim.play("Death", 0.1)
 	var p := Fx.parts(spark_mesh(), 10, 0.7, 2.0, 5.0, [Color(1.0, 0.85, 0.2), Color(1.0, 0.7, 0.1, 0.0)], 1.0, 0.3)
 	p.position = c
 	p.direction = Vector3.UP
@@ -411,14 +472,20 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 	float_text(world, c + Vector3.UP * 0.4, "+%d" % money, Color(1.0, 0.8, 0.2), 0.007)
 	Sfx.play3d(Sfx.kill, c, -6.0)
 	var tw := create_tween()
-	tw.tween_interval(1.1)
+	tw.tween_interval(1.8 if rag else 1.1)
 	# Kor halinde dağılma: gövdede kayan parlak benekler, model küçülüp batar.
 	var em := ShaderMaterial.new()
 	em.shader = shared("ember", func() -> Resource:
 		var sh := Shader.new()
 		sh.code = EMBER
 		return sh)
+	em.set_shader_parameter("t", 0.0) # başsız (testte) gölgelendirici derlenmez: parametre baştan var olsun
 	_overlay(em)
+	if rag: # ragdoll: kor yayılırken toprağa gömülür
+		tw.tween_callback(Ragdoll.sink.bind(rag))
+		tw.tween_property(em, "shader_parameter/t", 1.0, 1.0)
+		tw.tween_callback(queue_free)
+		return
 	tw.set_parallel()
 	tw.tween_property(em, "shader_parameter/t", 1.0, 0.8)
 	tw.tween_property(model, "scale", model_scale * 0.05, 0.8).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)

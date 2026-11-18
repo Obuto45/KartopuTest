@@ -471,10 +471,12 @@ func damage_enemy(enemy_name: String, dmg: int, crit: bool) -> void:
 ## shortcut: "vuln" (fazla hasar alma) uygulanmıyor; gerekince damage() içine çarpan eklenir.
 @rpc("any_peer", "call_local", "reliable")
 func effect_enemy(enemy_name: String, fx: Dictionary) -> void:
-	if not multiplayer.is_server():
-		return
 	var e: Node3D = _by_id.get(enemy_name.trim_prefix("E").to_int())
 	if e == null or e.hp <= 0:
+		return
+	if fx.has("stun") and e.has_method("stun_fx"): # sersemleme görüntüsü her makinede
+		e.stun_fx(minf(float(fx.stun), 5.0))
+	if not multiplayer.is_server():
 		return
 	if fx.has("stun"):
 		e.slow_k = 0.0
