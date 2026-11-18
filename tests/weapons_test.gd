@@ -258,15 +258,16 @@ func _ready() -> void:
 	chk("ekipman kartı: kalkan slot 3'te ve çalışıyor", me.inv[2].get("kind") == "equip" and me.shield_on, me.inv[2])
 	me.td_hit(30)
 	chk("kalkan yaratık darbesini emer", me.hp == me.max_hp and not me.shield_on)
-	chk("slotlar doluyken yeni silah kartı çıkmaz", not Weapons.pool(me).any(func(c): return c.type == "weapon"))
+	me.bag = Weapons.empty_bag().map(func(_d): return {"kind": "item", "id": "dummy", "count": 1}) # çanta da dolu
+	chk("el ve çanta doluyken yeni silah kartı çıkmaz", not Weapons.pool(me).any(func(c): return c.type == "weapon"))
+	me.bag = Weapons.empty_bag()
 	var lv: int = me.level
 	me.cards = []
 	me.pending = 0
-	me.stat_points = 0
 	me.level_up()
 	me.level_up()
 	var first: Array = me.cards
-	chk("level_up: 3 kart + stat puanı, seviyeler birikir", first.size() == 3 and me.stat_points == 2 and me.level == lv + 2 and me.pending == 2)
+	chk("level_up: 3 kart, seviyeler birikir", first.size() == 3 and me.level == lv + 2 and me.pending == 2)
 	me.choose_card(1)
 	var second_ok: bool = me.cards.size() == 3
 	me.choose_card(0)
@@ -280,22 +281,16 @@ func _ready() -> void:
 	me.choose_card(0)
 	me.banished.clear()
 
-	# --- stat puanı yalnızca molada
-	me.stat_points = 2
-	td.state = "fight"
-	var a0: float = me.stats.armor
-	var r1: bool = me.spend_point("armor")
-	td.state = "break"
-	var r2: bool = me.spend_point("armor")
-	chk("stat puanı yalnızca molada harcanır", not r1 and r2 and me.stat_points == 1 and is_equal_approx(me.stats.armor, a0 + 0.05), [r1, r2, me.stats.armor])
+	# --- can statı: üst sınır canı da artırır
 	var hp0: int = me.max_hp
-	me.spend_point("hp")
+	Weapons.stat_up(me.stats, "hp")
+	me._td_changed()
 	chk("can statı üst sınırı ve canı artırır", me.max_hp == hp0 + 15 and me.hp == me.max_hp, me.max_hp)
-	chk("yanlış stat adı reddedilir", not me.spend_point("yok"))
 
 	# --- envanter kuralları
 	me.inv = [{}, {}, {}, {}, {}]
 	var r := []
+	me.bag = Weapons.empty_bag().map(func(_d): return {"kind": "item", "id": "dummy", "count": 1}) # taşma çantaya gitmesin
 	for d in [{"kind": "weapon", "id": "bow"}, {"kind": "weapon", "id": "bow"}, {"kind": "equip", "id": "wall"}, {"kind": "weapon", "id": "smg"},
 			{"kind": "weapon", "id": "flame"}, {"kind": "build", "id": "wall"}, {"kind": "build", "id": "wall"}, {"kind": "item", "id": "potion"},
 			{"kind": "item", "id": "bomb"}, {"kind": "build", "id": "turret"}, {"kind": "saçma", "id": "x"}]:
@@ -304,6 +299,7 @@ func _ready() -> void:
 		r == [true, false, true, true, false, true, true, true, false, false, false]
 		and me.inv[0].id == "bow" and me.inv[1].id == "wall" and me.inv[1].kind == "equip" and me.inv[2].id == "smg"
 		and me.inv[3].kind == "build" and me.inv[3].count == 2 and me.inv[4].id == "potion", [r, me.inv])
+	me.bag = Weapons.empty_bag()
 	chk("eklenen silahlar dolu şarjörlü", me.inv[0].get("ammo") == 1 and me.inv[2].get("ammo") == 30 and not me.inv[3].has("ammo"), me.inv)
 	chk("sahibi olmayan kopya yalnızca yer bildirir", mate.add_item({"kind": "item", "id": "bomb"}) and mate.inv[3].is_empty())
 

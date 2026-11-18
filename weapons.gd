@@ -37,7 +37,6 @@ const STATS := [
 	{"id": "hp", "name": "Can", "base": 100.0, "step": 15.0, "max": 400.0},
 ]
 const STAT_TIERS := [["common", 1], ["rare", 2], ["epic", 3]] # stat kartı: nadirlik -> kaç adım
-const POINTS_PER_LEVEL := 1
 const EVO_WEIGHT := 40.0 # evrim kartı ağırlığı (Efsanevi taban 4: hazırsa neredeyse her çekimde çıkar)
 const OWN_BOOST := 2.5 # sahip olunan silahın yükseltmeleri bu kat sık çıkar (MegaBonk)
 const BURN_T := 3.0 # silah yanığı süresi (sn)
@@ -277,6 +276,68 @@ static func find_slot(inv: Array, d: Dictionary) -> int:
 	return free
 
 
+## Çanta: elde taşınan yedek slotlar (yalnız sahibinde). Birleşik indeks: 0–4 el slotu, 5.. çanta.
+const BAG_SIZE := 15
+
+
+static func empty_bag() -> Array:
+	var b := []
+	for i in BAG_SIZE:
+		b.append({})
+	return b
+
+
+## d, birleşik i indeksli slota girebilir mi? (silah/ekipman yalnız 0–2, yapı/eşya yalnız 3–4; çantaya hepsi.)
+static func slot_ok(i: int, d: Dictionary) -> bool:
+	return d.is_empty() or i >= 5 or (d.get("kind", "") in ["weapon", "equip"]) == (i < 3)
+
+
+## d için çantadaki slot (0..); yer yok / silah zaten elde ya da çantada ise -1. Yapı/eşya aynı türe yığılır.
+static func bag_slot(inv: Array, bag: Array, d: Dictionary) -> int:
+	var gear: bool = d.get("kind", "") in ["weapon", "equip"]
+	if not gear and not d.get("kind", "") in ["build", "item"]:
+		return -1
+	if gear and (inv + bag).any(func(it): return it.get("kind", "") == d.kind and it.get("id", "") == d.id):
+		return -1
+	var free := -1
+	for i in bag.size():
+		if bag[i].is_empty():
+			if free < 0:
+				free = i
+		elif not gear and bag[i].kind == d.kind and bag[i].id == d.id:
+			return i
+	return free
+
+
+## El + çantada d'ye yer var mı (satın alma ön kontrolü).
+static func has_room(inv: Array, bag: Array, d: Dictionary) -> bool:
+	return find_slot(inv, d) >= 0 or bag_slot(inv, bag, d) >= 0
+
+
+## a'daki öğeyi b'ye taşır (birleşik indeks); b doluysa yer değiştirir, aynı yapı/eşya ise yığar.
+## Tür kuralı bozulacaksa hiçbir şey değişmez ve false döner. Öğe sözlüğü olduğu gibi taşınır (ammo, lvl korunur).
+static func move_item(inv: Array, bag: Array, a: int, b: int) -> bool:
+	var n := 5 + bag.size()
+	if a == b or a < 0 or b < 0 or a >= n or b >= n:
+		return false
+	var x: Dictionary = inv[a] if a < 5 else bag[a - 5]
+	var y: Dictionary = inv[b] if b < 5 else bag[b - 5]
+	if x.is_empty() or not slot_ok(b, x) or not slot_ok(a, y):
+		return false
+	if not y.is_empty() and x.kind == y.kind and x.id == y.id and x.kind in ["build", "item"]:
+		y.count = int(y.get("count", 1)) + int(x.get("count", 1))
+		x = {}
+	else:
+		var t := x
+		x = y
+		y = t
+	if a < 5: inv[a] = x
+	else: bag[a - 5] = x
+	if b < 5: inv[b] = y
+	else: bag[b - 5] = y
+	return true
+
+
 # ---------- Kartlar ----------
 
 static func _card(id: String, title: String, desc: String, rarity: String, type: String) -> Dictionary:
@@ -302,6 +363,11 @@ static func pool(p: Object) -> Array:
 			free = true
 		else:
 			owned.append(p.inv[i].id)
+	for it in p.bag:
+		if it.get("kind", "") in ["weapon", "equip"]:
+			owned.append(it.id)
+		elif it.is_empty():
+			free = true # el dolu olsa da çantada yer var
 	if free: # yeni silah / ekipman yalnızca boş slot varken
 		for w in LIST:
 			if not owned.has(w.id):
@@ -374,13 +440,13 @@ static func apply_card(p: Object, c: Dictionary) -> void:
 			p.add_item({"kind": "equip" if a[0] == "equip" else "weapon", "id": a[1]})
 		"evo":
 			p.ups[c.id] = 1
-			for it in p.inv:
+			for it in p.inv + p.bag:
 				if it.get("id", "") == a[1]:
 					it["evo"] = true
 		"weapon_up":
 			var k := a[1] + ":" + a[2]
 			p.ups[k] = p.ups.get(k, 0) + 1
-			for it in p.inv:
+			for it in p.inv + p.bag:
 				if it.get("id", "") == a[1]:
 					it.lvl += 1
 

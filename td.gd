@@ -680,7 +680,7 @@ func buy(id: String) -> bool:
 	return true
 
 
-## Yapı slotlarında (4–5) boş yer ya da aynı yapının yığını var mı? (inv: B'nin sözleşmedeki dizisi.)
+## Yapı slotlarında (4–5) ya da çantada boş yer / aynı yapının yığını var mı? (inv: B'nin sözleşmedeki dizisi.)
 func _has_room(me: Node, id: String) -> bool:
 	var inv = me.get("inv")
 	if not (inv is Array) or inv.size() < 5:
@@ -689,7 +689,8 @@ func _has_room(me: Node, id: String) -> bool:
 		var s: Dictionary = inv[i]
 		if s.is_empty() or (s.get("kind") == "build" and s.get("id") == id):
 			return true
-	return false
+	var bag = me.get("bag")
+	return bag is Array and Weapons.bag_slot(inv, bag, {"kind": "build", "id": id}) >= 0
 
 
 @rpc("any_peer", "call_remote", "reliable")

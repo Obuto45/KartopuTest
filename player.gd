@@ -154,9 +154,9 @@ var dust: CPUParticles3D # koşarken ayak tozu
 # Tower Defense: yalnızca "td" grubunda düğüm varken dolar; arenada hepsi boş kalır (st() 1 döner).
 var td: Node
 var stats := {} # stat id -> değer (weapons.gd STATS)
-var stat_points := 0
 var level := 1
 var inv: Array = [{}, {}, {}, {}, {}] # 1–3 silah/ekipman, 4–5 yapı/eşya
+var bag: Array = Weapons.empty_bag() # çanta: el slotu doluyken öğeler buraya düşer (E ile açılır)
 var ups := {} # yükseltme seviyeleri: "<silah>:<id>" ve "char:<id>"
 var cards: Array = [] # seçim bekleyen kartlar
 var pending := 0 # kartı seçilmemiş seviye sayısı
@@ -1978,27 +1978,40 @@ func td_respawn() -> void:
 ## Sahibi olmayan kopyada yalnızca "yer var mı" cevabını verir (host satın almadan önce sorabilir).
 @rpc("any_peer", "call_local", "reliable")
 func add_item(d: Dictionary) -> bool:
+	var arr := inv
 	var i := Weapons.find_slot(inv, d) if td else -1
+	if i < 0 and td:
+		arr = bag
+		i = Weapons.bag_slot(inv, bag, d)
 	if i < 0:
 		return false
 	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() <= 1:
-		if inv[i].is_empty():
-			inv[i] = {"kind": d.kind, "id": d.id, "count": d.get("count", 1), "lvl": 1}
+		if arr[i].is_empty():
+			arr[i] = {"kind": d.kind, "id": d.id, "count": d.get("count", 1), "lvl": 1}
 			if d.kind == "weapon":
-				inv[i]["ammo"] = Weapons.full_ammo(d.id)
+				arr[i]["ammo"] = Weapons.full_ammo(d.id)
 		else:
-			inv[i].count += d.get("count", 1)
+			arr[i].count += d.get("count", 1)
 		_td_changed()
 	return true
 
 
-## Takım seviye atlayınca host her oyuncuda çağırır: stat puanı + 3 kart (birikirse sırayla).
+## Envanter paneli: birleşik indeks a'daki öğeyi b'ye taşır (0–4 el, 5.. çanta). Tür kuralları Weapons.move_item'de.
+func move_item(a: int, b: int) -> bool:
+	if td == null or not Weapons.move_item(inv, bag, a, b):
+		return false
+	reloading = false # el slotunun içeriği değişti: yarım doldurma iptal
+	_sync_held()
+	_td_changed()
+	return true
+
+
+## Takım seviye atlayınca host her oyuncuda çağırır: 3 kart (birikirse sırayla).
 @rpc("any_peer", "call_local", "reliable")
 func level_up() -> void:
 	if td == null or not is_multiplayer_authority() or multiplayer.get_remote_sender_id() > 1:
 		return
 	level += 1
-	stat_points += Weapons.POINTS_PER_LEVEL
 	pending += 1
 	if cards.is_empty():
 		cards = _roll()
@@ -2043,27 +2056,19 @@ func banish_card(i: int) -> bool:
 	return true
 
 
-## Stat puanı harcar; yalnızca dalga arası molada.
-func spend_point(stat_id: String) -> bool:
-	if td == null or td.get("state") != "break" or stat_points <= 0 or not Weapons.stat_up(stats, stat_id):
-		return false
-	stat_points -= 1
-	_td_changed()
-	return true
-
-
 ## Sahibinde stat / envanter / yükseltme değişti: diğer makinelere yay (silah modeli, can barı, mermi sayısı).
 func _td_changed() -> void:
 	var d := int(stats.hp) - max_hp
 	max_hp = int(stats.hp)
-	td_sync.rpc(inv, stats, ups, level)
+	td_sync.rpc(inv, stats, ups, level, bag)
 	if d != 0 and hp > 0:
 		set_hp.rpc(hp + d)
 
 
 @rpc("authority", "call_remote", "reliable")
-func td_sync(i: Array, s: Dictionary, u: Dictionary, l: int) -> void:
+func td_sync(i: Array, s: Dictionary, u: Dictionary, l: int, b: Array) -> void:
 	inv = i
+	bag = b
 	stats = s
 	ups = u
 	level = l

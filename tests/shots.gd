@@ -51,11 +51,9 @@ var skill_cd := 4.2
 var inv := []
 var slot := 1
 var stats := {}
-var stat_points := 0
 var level := 3
 var cards := []
 func choose_card(_i): cards = []
-func spend_point(_id): pass
 """
 
 func _fake(src: String) -> Node:
@@ -164,7 +162,6 @@ func _td_shots(main: Node) -> void:
 	for d in ui.stat_defs:
 		st[d.id] = d.base + d.step * (randi() % 4)
 	pl.stats = st
-	pl.stat_points = 2
 	await _wait(0.6)
 	await _shot("td_break")
 	ui._open_shop()
