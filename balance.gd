@@ -4,7 +4,7 @@ extends RefCounted
 ## Dalga akışı ve tür ağırlıkları fikri: quiver-dev/tower-defense-godot4 (MIT) ve
 ## brannotaylor/SurvivorsClone_Complete (CC0) okunarak; kod kopyalanmadı.
 
-const TOWER_HP := 3000 # tek oyuncu; her ek oyuncu +%35 (tower_hp). balance_sim: 1500'de ortalama oyuncu 3–5. dalgada kaybediyordu # dalga 10'da kuleye ulaşan bir boss ~35 hasar/sn vurur: tek başına ~40 sn dayanır
+const TOWER_HP := 3000 # tek oyuncu; her ek oyuncu +%50 (tower_hp). balance_sim: 1500'de ortalama oyuncu 3–5. dalgada kaybediyordu # dalga 10'da kuleye ulaşan bir boss ~35 hasar/sn vurur: tek başına ~40 sn dayanır
 const TOWER_REPAIR := 0.1 # her dalga sonunda kule canının bu oranı onarılır (hata telafisi, kartopu etkisini kırar)
 const BREAK_TIME := 25.0 # alışveriş + stat + yerleştirme için yeter; herkes hazırsa 3 sn'ye iner
 const WAVE_COUNT := 10
@@ -81,7 +81,7 @@ const DIFFS := {
 	"easy": {"name": "Kolay", "hp": 0.75, "dmg": 0.8, "money": 1.15, "reward": 0.5, "mods": 0, "unlock": ""},
 	"normal": {"name": "Normal", "hp": 1.0, "dmg": 1.0, "money": 1.0, "reward": 1.0, "mods": 0, "unlock": ""},
 	"hard": {"name": "Zor", "hp": 1.25, "dmg": 1.15, "money": 0.9, "reward": 1.5, "mods": 0, "unlock": "win_normal"},
-	"nightmare": {"name": "Kabus", "hp": 1.5, "dmg": 1.3, "money": 0.85, "reward": 2.5, "mods": 1, "unlock": "win_hard"},
+	"nightmare": {"name": "Kabus", "hp": 1.4, "dmg": 1.2, "money": 0.85, "reward": 2.5, "mods": 1, "unlock": "win_hard"},
 }
 
 
@@ -101,7 +101,7 @@ const DROPS := {"potion": 0.03, "bomb": 0.015} # yaratık ölünce düşme olas�
 ## 4 oyuncu: 2,65 x 1,45 = 3,84 kat toplam can, 4 kat ateş gücüne karşı -> kişi başı yük solo ile aynı düzeyde,
 ## ama yaratık sayısı arttığı için kule daha çok yönden sıkışır (kolaylaşmaz). Ödüller sayıyla birlikte büyür.
 static func crowd(players: int) -> float:
-	return 1.0 + 0.4 * (clampi(players, 1, 4) - 1)
+	return 1.0 + 0.35 * (clampi(players, 1, 4) - 1)
 
 
 ## Yaratık genel çarpanları (balance_sim ile ayarlandı; ENEMIES tablosu dalga 1 oranlarını korur).
@@ -111,7 +111,7 @@ const ENEMY_DMG_K := 0.55
 
 ## Kule canı: kalabalıkta aynı anda daha çok yaratık kuleye ulaşır, kule de büyür.
 static func tower_hp(players: int) -> int:
-	return roundi(TOWER_HP * (1.0 + 0.35 * (clampi(players, 1, 4) - 1)))
+	return roundi(TOWER_HP * (1.0 + 0.5 * (clampi(players, 1, 4) - 1)))
 
 
 ## n: 1..WAVE_COUNT (sonsuzda daha büyük). Can dalga başına +%10 (dalga 10: x1,9), hasar +%6 (x1,54): oyuncunun kart ve
@@ -140,7 +140,7 @@ static func wave(n: int, players: int, diff := "normal", mods: Array = []) -> Di
 				groups.append({"type": type, "count": ceili((a[type] + b.get(type, 0)) * 0.5 * (1.0 + 0.08 * (n - WAVE_COUNT)) * cnt)})
 		hp *= pow(1.12, n - WAVE_COUNT)
 		boss = "boss" if n % 5 == 0 else ""
-	hp *= ENEMY_HP_K * (1.0 + 0.25 * (p - 1)) * df.hp * (1.3 if "gold" in mods else 1.0) * (0.75 if "swarm" in mods else 1.0)
+	hp *= ENEMY_HP_K * (1.0 + 0.3 * (p - 1)) * df.hp * (1.3 if "gold" in mods else 1.0) * (0.75 if "swarm" in mods else 1.0)
 	return {"groups": groups, "hp_mult": hp,
 		"dmg_mult": ENEMY_DMG_K * (1.0 + 0.06 * (n - 1)) * (1.0 + 0.05 * (p - 1)) * df.dmg, "boss": boss,
 		"boss_hp": 1.0 + 0.5 * (p - 1), "mods": mods, # boss tek gelir: sayı çarpanı yerine canı büyür (4 oyuncu: x2,5 x1,45)
