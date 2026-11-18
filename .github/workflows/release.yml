@@ -1,0 +1,56 @@
+# Elle tetiklenir (Actions > Release > Run workflow): Windows exe'sini derler, zip'ler ve Release açar.
+# Otomatik güncelleyici (updater.gd) "v<sürüm>" etiketli son Release'deki "*_Windows.zip"i indirir.
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # Release ve etiket oluşturmak için
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    env:
+      GODOT: "4.7.2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sürümü oku
+        id: v
+        run: |
+          ver=$(sed -n 's/^config\/version="\(.*\)"/\1/p' project.godot)
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          test -f "docs/surum-notlari/v$ver.md" # notsuz sürüm çıkmasın
+          ! gh release view "v$ver" >/dev/null 2>&1 # aynı sürüm iki kez yayınlanmasın
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Godot ve Windows şablonu
+        run: |
+          base=https://github.com/godotengine/godot/releases/download/$GODOT-stable
+          curl -sSL -o godot.zip "$base/Godot_v$GODOT-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv "Godot_v$GODOT-stable_linux.x86_64" godot && chmod +x godot
+          curl -sSL -o tpl.tpz "$base/Godot_v$GODOT-stable_export_templates.tpz"
+          dst="$HOME/.local/share/godot/export_templates/$GODOT.stable"
+          mkdir -p "$dst"
+          unzip -q -j tpl.tpz templates/version.txt templates/windows_release_x86_64.exe -d "$dst"
+          rm tpl.tpz godot.zip
+
+      - name: Dışa aktar
+        run: |
+          ./godot --headless --path . --import > import.log 2>&1 || true
+          mkdir -p build
+          ./godot --headless --path . --export-release "Windows Desktop" build/KartopuTest.exe 2>&1 | tee export.log
+          ! grep -E "SCRIPT ERROR|Parse Error" export.log
+          test -f build/KartopuTest.exe && test -f build/steam_api64.dll
+
+      - name: Zip ve Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver=${{ steps.v.outputs.ver }}
+          cp steam_appid.txt build/
+          (cd build && zip -9 "../KartopuTest_v${ver}_Windows.zip" KartopuTest.exe *.dll steam_appid.txt)
+          gh release create "v$ver" "KartopuTest_v${ver}_Windows.zip" --target "$GITHUB_SHA" \
+            --title "v$ver" --notes-file "docs/surum-notlari/v$ver.md"
