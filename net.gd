@@ -5,6 +5,7 @@ signal status(msg: String)
 signal lobby_changed
 signal left
 signal invited(from_name: String, lobby: int)
+signal lobbies_found(list: Array) # [{id, name, mode, diff, n}, ...]
 
 const APP_ID := 480 # Spacewar test App ID'si; kendi App ID'n olunca değiştir.
 const LOCAL_PORT := 7777
@@ -16,6 +17,8 @@ var chars := {} # peer_id -> karakter numarası (characters.gd LIST sırası)
 var my_char := 0
 var weapons := {} # peer_id -> TD başlangıç silahı (weapons.gd LIST sırası)
 var my_weapon := 0
+var public_lobby := false # kurulacak lobi herkese açık mı
+var meta := {"mode": "arena", "diff": "normal"} # lobi verisi: host main.gd'den günceller
 
 
 func _ready() -> void:
@@ -26,6 +29,7 @@ func _ready() -> void:
 		Steam.lobby_joined.connect(_on_lobby_joined)
 		Steam.join_requested.connect(_on_join_requested)
 		Steam.lobby_invite.connect(func(inviter, lobby, _game): invited.emit(Steam.getFriendPersonaName(inviter), lobby))
+		Steam.lobby_match_list.connect(_on_match_list)
 		Steam.lobby_chat_update.connect(func(_a, _b, _c, _d): lobby_changed.emit())
 	else:
 		push_warning("Steam başlatılamadı: %s" % r)
@@ -57,7 +61,7 @@ func host_steam() -> void:
 		status.emit("Steam açık değil / başlatılamadı.")
 		return
 	leave()
-	Steam.createLobby(Steam.LOBBY_TYPE_FRIENDS_ONLY, 4)
+	Steam.createLobby(Steam.LOBBY_TYPE_PUBLIC if public_lobby else Steam.LOBBY_TYPE_FRIENDS_ONLY, 4)
 	status.emit("Lobi kuruluyor...")
 
 
@@ -90,6 +94,39 @@ func invite_friend(id: int, friend_name: String) -> void:
 		status.emit("Davet gönderilemedi.")
 
 
+## Host: lobi listesinde görünen mod ve zorluk.
+func set_meta_data(mode: String, diff: String) -> void:
+	meta = {"mode": mode, "diff": diff}
+	if steam_ok and lobby_id != 0 and multiplayer.is_server():
+		Steam.setLobbyData(lobby_id, "mode", mode)
+		Steam.setLobbyData(lobby_id, "diff", diff)
+
+
+## Açık lobileri ara (yalnız aynı sürüm); sonuç lobbies_found ile gelir.
+func find_lobbies() -> void:
+	if not steam_ok:
+		lobbies_found.emit([])
+		return
+	Steam.addRequestLobbyListStringFilter("ver", Updater.version(), Steam.LOBBY_COMPARISON_EQUAL)
+	Steam.addRequestLobbyListFilterSlotsAvailable(1)
+	Steam.requestLobbyList()
+
+
+func _on_match_list(lobbies: Array) -> void:
+	var out := []
+	for id in lobbies:
+		out.append({"id": id, "name": Steam.getLobbyData(id, "name"), "mode": Steam.getLobbyData(id, "mode"),
+			"diff": Steam.getLobbyData(id, "diff"), "n": Steam.getNumLobbyMembers(id)})
+	lobbies_found.emit(out)
+
+
+## Steam'siz tek kişilik oyun: OfflineMultiplayerPeer zaten sunucu (id 1), call_local rpc çalışır.
+func solo() -> void:
+	names[1] = my_name()
+	chars[1] = my_char
+	weapons[1] = my_weapon
+
+
 func _new_steam_peer() -> SteamMultiplayerPeer:
 	var peer := SteamMultiplayerPeer.new()
 	peer.set_server_relay(true) # Valve relay: NAT sorunsuz, düşük ping
@@ -103,6 +140,8 @@ func _on_lobby_created(result: int, id: int) -> void:
 		return
 	lobby_id = id
 	Steam.setLobbyData(id, "name", my_name() + " lobisi")
+	Steam.setLobbyData(id, "ver", Updater.version())
+	set_meta_data(meta.mode, meta.diff)
 	var peer := _new_steam_peer()
 	peer.host_with_lobby(id)
 	multiplayer.multiplayer_peer = peer
