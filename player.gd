@@ -1970,7 +1970,7 @@ func _impact_fx(at: Vector3, n: Vector3, flesh: bool) -> void:
 		dc.global_position = at
 		dc.global_basis = Basis(Quaternion(Vector3.UP, n)) # Decal'ın -Y'si yüzeye yansır
 		var tw := dc.create_tween()
-		tw.tween_interval(4.0)
+		tw.tween_interval(2.0 if q == 1 else 4.0) # Orta kalitede delikler daha kısa kalır
 		tw.tween_property(dc, "modulate:a", 0.0, 1.5)
 		tw.tween_callback(dc.queue_free)
 

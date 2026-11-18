@@ -420,9 +420,9 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 		flash_t = 0.12
 		if crit and hp > 0: # kritik: yaratık bir an donar (hit-stop), sonra sürer
 			anim.speed_scale = 0.0
-			get_tree().create_timer(0.09).timeout.connect(func() -> void:
-				if is_instance_valid(self) and hp > 0:
-					cur = "") # bir sonraki karede animasyon ve hız yeniden kurulur
+			create_tween().tween_callback(func() -> void: # düğümle birlikte ölür: silinmiş yaratığa çağrı gitmez
+				if hp > 0:
+					cur = "").set_delay(0.09) # bir sonraki karede animasyon ve hız yeniden kurulur
 		if hp > 0: # darbe: kısa ezilip geri sekme (doğma büyümesi bitmişse)
 			var base := model_scale
 			if hit_tw:
