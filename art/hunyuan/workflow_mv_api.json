@@ -1,0 +1,19 @@
+{
+  "1": {"class_type": "ImageOnlyCheckpointLoader", "inputs": {"ckpt_name": "hunyuan3d-dit-v2-mv.safetensors"}},
+  "10": {"class_type": "LoadImage", "inputs": {"image": "front.png"}},
+  "11": {"class_type": "LoadImage", "inputs": {"image": "left.png"}},
+  "12": {"class_type": "LoadImage", "inputs": {"image": "back.png"}},
+  "13": {"class_type": "LoadImage", "inputs": {"image": "right.png"}},
+  "20": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["1", 1], "image": ["10", 0], "crop": "none"}},
+  "21": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["1", 1], "image": ["11", 0], "crop": "none"}},
+  "22": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["1", 1], "image": ["12", 0], "crop": "none"}},
+  "23": {"class_type": "CLIPVisionEncode", "inputs": {"clip_vision": ["1", 1], "image": ["13", 0], "crop": "none"}},
+  "30": {"class_type": "Hunyuan3Dv2ConditioningMultiView", "inputs": {"front": ["20", 0], "left": ["21", 0], "back": ["22", 0], "right": ["23", 0]}},
+  "31": {"class_type": "EmptyLatentHunyuan3Dv2", "inputs": {"resolution": 3072, "batch_size": 1}},
+  "32": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 1.0}},
+  "40": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 30, "cfg": 5.0, "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0,
+         "model": ["32", 0], "positive": ["30", 0], "negative": ["30", 1], "latent_image": ["31", 0]}},
+  "50": {"class_type": "VAEDecodeHunyuan3D", "inputs": {"samples": ["40", 0], "vae": ["1", 2], "num_chunks": 8000, "octree_resolution": 256}},
+  "51": {"class_type": "VoxelToMeshBasic", "inputs": {"voxel": ["50", 0], "threshold": 0.6}},
+  "60": {"class_type": "SaveGLB", "inputs": {"mesh": ["51", 0], "filename_prefix": "mesh/kartopu"}}
+}
