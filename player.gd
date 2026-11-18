@@ -1869,12 +1869,16 @@ func _slash_fx(at: Vector3, d: Vector3, k: float) -> void:
 
 ## Namlu ateşi: parlak alev çiçeği + kısa ışık; mermili silahta sağa sekip düşen pirinç kovan.
 func _muzzle_fx(at: Vector3, d: Vector3, casing: bool) -> void:
-	var p := ExplosionScript.parts(ExplosionScript.quad("glow", 0.35), 6, 0.08, 1.0, 4.0,
+	# kendi gözümüzde silah ayrı FOV'lu kamerada çizilir: efekt de o katmanda olmalı, yoksa nişangâha kayar
+	var fp := vm != null and vm.visible
+	var p := ExplosionScript.parts(ExplosionScript.quad("glow", 0.15 if fp else 0.35), 6, 0.06 if fp else 0.08, 0.5 if fp else 1.0, 2.0 if fp else 4.0,
 		[Color(1.0, 0.9, 0.5, 0.9), Color(1.0, 0.5, 0.1, 0.0)], 1.0, 0.3)
 	p.direction = d
 	p.spread = 25.0
 	p.position = at
 	p.finished.connect(p.queue_free)
+	if fp:
+		p.layers = 1 << (vm.LAYER - 1)
 	_world().add_child(p)
 	p.emitting = true
 	var l := OmniLight3D.new()
@@ -1897,6 +1901,8 @@ func _muzzle_fx(at: Vector3, d: Vector3, casing: bool) -> void:
 		c.angular_velocity_max = 720.0
 		c.position = at - d * 0.25
 		c.finished.connect(c.queue_free)
+		if fp:
+			c.layers = 1 << (vm.LAYER - 1)
 		_world().add_child(c)
 		c.emitting = true
 
