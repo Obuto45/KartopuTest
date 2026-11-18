@@ -106,6 +106,7 @@ func _ready() -> void:
 	var k := scale.x
 	get_tree().call_group("players", "shake", global_position, k)
 	get_tree().call_group("chickens", "boom", global_position)
+	preload("res://ragdoll.gd").poke(global_position, Vector3.UP * 14.0 * k, 3.5 * k) # cesetler ve ölenler savrulur
 	var low := global_position.y < 1.2 * k # yere yakın: halka ve yanık izi zemine yapışır
 	var gy := (0.04 - global_position.y) / k if low else 0.0
 

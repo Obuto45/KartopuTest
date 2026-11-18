@@ -12,6 +12,7 @@ const ZoneScript := preload("res://zone.gd")
 const Weapons := preload("res://weapons.gd")
 const WeaponAnims := preload("res://weapon_anims.gd")
 const Profile := preload("res://profile.gd")
+const Ragdoll := preload("res://ragdoll.gd")
 const BUILD_DIST := 3.0 # TD: yapı önizlemesi önümüzde bu mesafede
 const SIT_TIME := 2.0 # sit_shield pasifi: bu kadar durunca kalkan alır
 const SPEED := 7.0
@@ -143,6 +144,8 @@ var back := false # geri geri yürüyor: koşu animasyonu tersten
 var sq := 0.0 # ez-uzat yayı: + uzar, - ezilir
 var sq_v := 0.0
 var flinch := 0.0 # vurulunca geriye savrulma
+var rag: PhysicalBoneSimulator3D # ölüyken ragdoll (ragdoll.gd)
+var rag_off := false # ragdoll kapalı (kalite / sınır): ölüm animasyonu oynar
 var kick := 0.0 # bazuka geri tepmesi
 var sway := Vector2.ZERO # silahın bakışın gerisinde kalması
 var bob_t := 0.0
@@ -964,7 +967,7 @@ func _beam_fx(from: Vector3, to: Vector3, c: Color) -> void:
 	if d.length() < 0.1:
 		return
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.035; cyl.bottom_radius = 0.035; cyl.height = d.length()
+	cyl.top_radius = 0.035; cyl.bottom_radius = 0.008; cyl.height = d.length() # namlu ucunda ince: kameraya yakın kalın görünmesin
 	var mi := _mesh(_world(), cyl, (from + to) * 0.5, c)
 	_bar_mat(mi)
 	mi.basis = Basis(Quaternion(Vector3.UP, d.normalized()))
@@ -1010,6 +1013,13 @@ func _animate(dt: float) -> void:
 	var mine := is_multiplayer_authority()
 	var spd: float = Vector2(velocity.x, velocity.z).length() if mine else net_speed
 	var air: bool = not is_on_floor() if mine else net_air
+	if hp <= 0 and rag == null and not rag_off: # ölünce fizikle yığıl (Düşük kalitede ölüm animasyonu)
+		rag = Ragdoll.start(model, velocity * 0.4 + global_basis.z * 1.5)
+		rag_off = rag == null
+	elif hp > 0 and (rag or rag_off):
+		Ragdoll.stop(rag)
+		rag = null
+		rag_off = false
 	var want := "Idle"
 	if hp <= 0:
 		want = "Death"
@@ -1279,6 +1289,8 @@ func set_hp(v: int) -> void:
 		flash = 0.35
 		flinch = 1.0
 		sq_v -= 2.5
+		if v > 0 and model:
+			Ragdoll.flinch(model, global_position + Vector3.UP * 1.3, global_basis.z * 3.0)
 		shake(global_position, 0.6)
 		if is_multiplayer_authority():
 			Sfx.play2d(Sfx.hurt)
@@ -1736,9 +1748,19 @@ func _td_ghost(alive: bool) -> void:
 		(ghost.material_override as StandardMaterial3D).albedo_color = Color(0.3, 1.0, 0.4, 0.45) if td.can_place(it.id, p) else Color(1.0, 0.25, 0.2, 0.45)
 
 
+## Namlu ucu (dünyada). Kendi gözümüzde silah ayrı FOV'lu kamerada çizilir: o kameradaki ekran noktasını
+## ana kameradan aynı derinliğe taşırız, böylece alev / iz ekranda tam silahın ucunda görünür.
 func _muzzle() -> Vector3:
 	if vm and vm.visible:
-		return vm.muzzle()
+		var p: Vector3 = vm.muzzle()
+		var c := get_viewport().get_camera_3d()
+		if c and vm.vcam and not vm.vcam.is_position_behind(p):
+			var depth := -(c.global_transform.affine_inverse() * p).z
+			return c.project_position(vm.vcam.unproject_position(p), depth) # ikisi de aynı piksel boyutunda (vp.size = pencere)
+		return p
+	var m := hold.find_child("muzzle", true, false) as Node3D if hold and hold.visible else null
+	if m: # başkasının elindeki silahın gerçek namlusu
+		return m.global_position
 	return look.global_position + look.global_basis * Vector3(0.25, -0.2, -0.8)
 
 
@@ -1826,6 +1848,12 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 			"melee":
 				swing_t = SWING_T
 				_slash_fx(origin, d, k)
+				var fl := Vector3(d.x, 0, d.z).normalized()
+				for e in Weapons.alive(get_tree()): # vuruş yönünde savrulma ve uzuv sarsıntısı (her makinede)
+					var em := Weapons.e_mid(e)
+					if em.distance_to(origin) < w.range + 1.0 and (em - origin).normalized().dot(fl) > 0.3:
+						Ragdoll.poke(em, fl * 5.0 * k)
+						Ragdoll.flinch(e.get("model"), em, fl * 5.0 * k)
 				if mine:
 					_td_arc(w, origin, d)
 
@@ -1869,16 +1897,13 @@ func _slash_fx(at: Vector3, d: Vector3, k: float) -> void:
 
 ## Namlu ateşi: parlak alev çiçeği + kısa ışık; mermili silahta sağa sekip düşen pirinç kovan.
 func _muzzle_fx(at: Vector3, d: Vector3, casing: bool) -> void:
-	# kendi gözümüzde silah ayrı FOV'lu kamerada çizilir: efekt de o katmanda olmalı, yoksa nişangâha kayar
-	var fp := vm != null and vm.visible
+	var fp := vm != null and vm.visible # kendi gözümüzde alev küçük: ekranı kapatmasın
 	var p := ExplosionScript.parts(ExplosionScript.quad("glow", 0.15 if fp else 0.35), 6, 0.06 if fp else 0.08, 0.5 if fp else 1.0, 2.0 if fp else 4.0,
 		[Color(1.0, 0.9, 0.5, 0.9), Color(1.0, 0.5, 0.1, 0.0)], 1.0, 0.3)
 	p.direction = d
 	p.spread = 25.0
 	p.position = at
 	p.finished.connect(p.queue_free)
-	if fp:
-		p.layers = 1 << (vm.LAYER - 1)
 	_world().add_child(p)
 	p.emitting = true
 	var l := OmniLight3D.new()
@@ -1901,10 +1926,88 @@ func _muzzle_fx(at: Vector3, d: Vector3, casing: bool) -> void:
 		c.angular_velocity_max = 720.0
 		c.position = at - d * 0.25
 		c.finished.connect(c.queue_free)
-		if fp:
-			c.layers = 1 << (vm.LAYER - 1)
 		_world().add_child(c)
 		c.emitting = true
+
+
+## İsabet: duvarda kıvılcım + toz + birkaç saniye kalan kurşun deliği; yaratıkta yeşilimsi sıçrama.
+func _impact_fx(at: Vector3, n: Vector3, flesh: bool) -> void:
+	var q: int = Settings.quality
+	if flesh:
+		var b := ExplosionScript.parts(enemy_splash_mesh(), 4 + q * 3, 0.45, 1.5, 3.5,
+			[Color(0.55, 0.9, 0.25), Color(0.3, 0.55, 0.1, 0.0)], 1.0, 0.4)
+		b.direction = n
+		b.spread = 50.0
+		b.gravity = Vector3(0, -12, 0)
+		b.position = at
+		b.finished.connect(b.queue_free)
+		_world().add_child(b)
+		b.emitting = true
+		return
+	var sp := ExplosionScript.parts(ExplosionScript.quad("glow", 0.06), 3 + q * 3, 0.25, 2.0, 6.0,
+		[Color(1.0, 0.85, 0.4), Color(1.0, 0.4, 0.1, 0.0)], 1.0, 0.2)
+	sp.direction = n
+	sp.spread = 40.0
+	sp.gravity = Vector3(0, -9.8, 0)
+	sp.position = at + n * 0.02
+	sp.finished.connect(sp.queue_free)
+	_world().add_child(sp)
+	sp.emitting = true
+	if q > 0:
+		var du := ExplosionScript.parts(ExplosionScript.quad("puff", 0.35), 3, 0.7, 0.2, 0.8,
+			[Color(0.55, 0.5, 0.45, 0.45), Color(0.6, 0.58, 0.55, 0.0)], 0.5, 1.6)
+		du.direction = n
+		du.spread = 30.0
+		du.position = at + n * 0.05
+		du.finished.connect(du.queue_free)
+		_world().add_child(du)
+		du.emitting = true
+		var dc := Decal.new()
+		dc.size = Vector3(0.12, 0.2, 0.12)
+		dc.texture_albedo = bullet_hole()
+		dc.modulate = Color(1, 1, 1, 0.9)
+		_world().add_child(dc)
+		dc.global_position = at
+		dc.global_basis = Basis(Quaternion(Vector3.UP, n)) # Decal'ın -Y'si yüzeye yansır
+		var tw := dc.create_tween()
+		tw.tween_interval(4.0)
+		tw.tween_property(dc, "modulate:a", 0.0, 1.5)
+		tw.tween_callback(dc.queue_free)
+
+
+static var _hole: Texture2D
+static var _splash: Mesh
+
+
+## Kurşun deliği dokusu: koyu merkez, yumuşak kenar (koddan, bir kez).
+static func bullet_hole() -> Texture2D:
+	if _hole == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0.02, 0.02, 0.02, 1.0))
+		g.set_color(1, Color(0.15, 0.13, 0.12, 0.0))
+		g.add_point(0.35, Color(0.05, 0.05, 0.05, 0.95))
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 32
+		t.height = 32
+		_hole = t
+	return _hole
+
+
+static func enemy_splash_mesh() -> Mesh:
+	if _splash == null:
+		var s := SphereMesh.new()
+		s.radius = 0.035; s.height = 0.07
+		s.radial_segments = 6; s.rings = 3
+		var m := StandardMaterial3D.new()
+		m.vertex_color_use_as_albedo = true
+		m.roughness = 0.3
+		s.material = m
+		_splash = s
+	return _splash
 
 
 ## Anında isabet: yol üstündeki yaratıkları (pierce + 1 tane) vurur, sonra yakındakilere seker.
@@ -1919,6 +2022,9 @@ func _td_shot(w: Dictionary, from: Vector3, d: Vector3, mine: bool) -> void:
 	var extra := 0 # evrim (Altıpatlar Lordu): kritik vuruş ek sekme
 	for h in Weapons.ray(get_tree(), from, to).slice(0, w.pierce + 1):
 		seen.append(h[1])
+		Ragdoll.poke(h[2], d * (2.0 + w.knock)) # ölürse bu yöne savrulur
+		Ragdoll.flinch(h[1].get("model"), h[2], d * (2.0 + w.knock))
+		_impact_fx(h[2], -d, true)
 		if mine:
 			td_affect(h[1], w, from)
 			if _last_crit:
@@ -1926,6 +2032,8 @@ func _td_shot(w: Dictionary, from: Vector3, d: Vector3, mine: bool) -> void:
 		if seen.size() > w.pierce:
 			to = h[2] # son yaratıkta durdu
 	_beam_fx(_muzzle(), to, w.color)
+	if r and seen.size() <= w.pierce: # duvar / zemin: kıvılcım, toz, kısa süren delik
+		_impact_fx(r.position, r.normal, false)
 	if seen.is_empty():
 		return
 	for i in w.bounce + int(st("bounce", 0.0)) + extra:
