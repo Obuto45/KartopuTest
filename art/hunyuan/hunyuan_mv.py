@@ -1,4 +1,5 @@
-"""Yerel ComfyUI'deki Hunyuan3D-2mv ile dört açıdan (front/left/back/right.png) 3D model üretir.
+"""Yerel ComfyUI'deki Hunyuan3D ile 3D model üretir.
+Hunyuan3D-2mv kuruluysa dört açıdan (front/left/back/right.png); yoksa tek görüntülü model (ör. 2.1) ile three_quarter.png'den.
 
 Kullanım (ComfyUI açıkken; yalnız standart kütüphane):
   python art/hunyuan/hunyuan_mv.py art/hunyuan/bazooka
@@ -17,6 +18,7 @@ import uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VIEWS = {"front": "10", "left": "11", "back": "12", "right": "13"}
+SINGLE_VIEW = "three_quarter" # tek görüntülü modelde derinliği en iyi gösteren açı
 
 
 def _get(url):
@@ -43,28 +45,48 @@ def upload(server, path, name):
     return (res.get("subfolder", "") + "/" if res.get("subfolder") else "") + res["name"]
 
 
-def check_nodes(server, wf):
-    """Eksik düğüm ya da model varsa çalıştırmadan söyler."""
+def to_single(wf):
+    """Dört açılı iş akışını tek görüntülü olana çevirir (Hunyuan3D 2.1 vb.): yalnız düğüm 11 / 21 kalır."""
+    for n in ["10", "12", "13", "20", "22", "23"]:
+        del wf[n]
+    wf["30"] = {"class_type": "Hunyuan3Dv2Conditioning", "inputs": {"clip_vision_output": ["21", 0]}}
+    wf["31"]["inputs"]["resolution"] = 4096 # shortcut: 2.1 şablonunun değeri varsayıldı; hata verirse --gizil 3072 dene
+    return {SINGLE_VIEW: "11"}
+
+
+def setup(server, wf):
+    """Kurulu modele göre iş akışını hazırlar; eksik düğüm ya da model varsa çalıştırmadan söyler. Görüntü -> düğüm döner."""
     info = json.loads(_get(server + "/object_info"))
+    loader = info.get("ImageOnlyCheckpointLoader")
+    ckpts = loader["input"]["required"]["ckpt_name"][0] if loader else []
+    want = wf["1"]["inputs"]["ckpt_name"]
+    hy = [c for c in ckpts if "hunyuan" in c.lower()]
+    mv = [c for c in hy if "mv" in c.lower()]
+    views = VIEWS
+    if want in ckpts:
+        pass
+    elif mv:
+        wf["1"]["inputs"]["ckpt_name"] = mv[0]
+    elif hy:
+        wf["1"]["inputs"]["ckpt_name"] = hy[0]
+        views = to_single(wf)
+    else:
+        sys.exit(f"Hunyuan3D modeli bulunamadı. models/checkpoints içindekiler: {', '.join(ckpts) or '(boş)'}")
+    print("Model:", wf["1"]["inputs"]["ckpt_name"], "| mod:", "4 açı" if views is VIEWS else "tek görüntü (" + SINGLE_VIEW + ")")
     missing = sorted({n["class_type"] for n in wf.values()} - set(info))
     if missing:
         sys.exit("ComfyUI'de eksik düğümler: " + ", ".join(missing) +
-                 "\nComfyUI'yi güncelle (bu düğümler ComfyUI'nin kendi Hunyuan3D v2 desteği).")
-    ckpts = info["ImageOnlyCheckpointLoader"]["input"]["required"]["ckpt_name"][0]
-    want = wf["1"]["inputs"]["ckpt_name"]
-    if want not in ckpts:
-        mv = [c for c in ckpts if "hunyuan" in c.lower() and "mv" in c.lower()]
-        if not mv:
-            sys.exit(f"Hunyuan3D-2mv modeli bulunamadı ({want}). models/checkpoints içindekiler: {', '.join(ckpts)}")
-        print(f"'{want}' yok; kullanılan: {mv[0]}")
-        wf["1"]["inputs"]["ckpt_name"] = mv[0]
+                 "\nComfyUI'yi güncelle (bunlar ComfyUI'nin kendi Hunyuan3D desteği).")
+    return views
 
 
-def run(server, folder, seed, res, wait=1800):
+def run(server, folder, seed, res, latent=0, wait=1800):
     wf = json.load(open(os.path.join(HERE, "workflow_mv_api.json"), encoding="utf-8"))
-    check_nodes(server, wf)
+    views = setup(server, wf)
+    if latent:
+        wf["31"]["inputs"]["resolution"] = latent
     name = os.path.basename(os.path.normpath(folder))
-    for view, node in VIEWS.items():
+    for view, node in views.items():
         wf[node]["inputs"]["image"] = upload(server, os.path.join(folder, view + ".png"), f"kartopu_{name}_{view}.png")
     wf["40"]["inputs"]["seed"] = seed
     wf["50"]["inputs"]["octree_resolution"] = res
@@ -95,8 +117,9 @@ def main(argv=None):
     ap.add_argument("--sunucu", default="http://127.0.0.1:8188")
     ap.add_argument("--tohum", type=int, default=1)
     ap.add_argument("--cozunurluk", type=int, default=256, help="octree çözünürlüğü (yüksek = daha detaylı, daha yavaş)")
+    ap.add_argument("--gizil", type=int, default=0, help="EmptyLatentHunyuan3Dv2 çözünürlüğü (0 = moda göre)")
     a = ap.parse_args(argv)
-    return run(a.sunucu.rstrip("/"), a.klasor, a.tohum, a.cozunurluk)
+    return run(a.sunucu.rstrip("/"), a.klasor, a.tohum, a.cozunurluk, a.gizil)
 
 
 if __name__ == "__main__":

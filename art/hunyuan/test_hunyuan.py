@@ -12,6 +12,7 @@ GLB = b"glTF\x02\x00\x00\x00fake"
 
 
 class H(http.server.BaseHTTPRequestHandler):
+    ckpts = ["sdxl.safetensors", "hunyuan3d-dit-v2-mv-fp16.safetensors"]
     uploads = []
     prompts = []
 
@@ -28,7 +29,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if self.path == "/object_info":
             wf = json.load(open(os.path.join(hunyuan_mv.HERE, "workflow_mv_api.json")))
             info = {n["class_type"]: {} for n in wf.values()}
-            info["ImageOnlyCheckpointLoader"] = {"input": {"required": {"ckpt_name": [["sdxl.safetensors", "hunyuan3d-dit-v2-mv-fp16.safetensors"]]}}}
+            info["Hunyuan3Dv2Conditioning"] = {}
+            info["ImageOnlyCheckpointLoader"] = {"input": {"required": {"ckpt_name": [H.ckpts]}}}
             self._send(json.dumps(info).encode())
         elif self.path.startswith("/history/"):
             pid = self.path.rsplit("/", 1)[1]
@@ -54,7 +56,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         d = os.path.join(tmp, "bazooka")
         os.makedirs(d)
-        for v in hunyuan_mv.VIEWS:
+        for v in list(hunyuan_mv.VIEWS) + [hunyuan_mv.SINGLE_VIEW]:
             shutil.copy(os.path.join(hunyuan_mv.HERE, "bazooka", v + ".png"), d)
         out = hunyuan_mv.main([d, "--sunucu", f"http://127.0.0.1:{srv.server_port}", "--tohum", "5"])
         assert open(out, "rb").read() == GLB
@@ -62,6 +64,16 @@ def main():
         g = H.prompts[0]
         assert g["1"]["inputs"]["ckpt_name"] == "hunyuan3d-dit-v2-mv-fp16.safetensors" # adı farklı mv modeline düşer
         assert g["11"]["inputs"]["image"] == "kartopu_bazooka_left.png" and g["40"]["inputs"]["seed"] == 5
+        assert g["30"]["class_type"] == "Hunyuan3Dv2ConditioningMultiView"
+
+        # Yalnız 2.1 kuruluysa: tek görüntülü iş akışı, çapraz görüntü
+        H.ckpts, H.uploads, H.prompts = ["hunyuan_3d_v2.1.safetensors"], [], []
+        hunyuan_mv.main([d, "--sunucu", f"http://127.0.0.1:{srv.server_port}"])
+        g = H.prompts[0]
+        assert H.uploads == ["kartopu_bazooka_three_quarter.png"], H.uploads
+        assert g["1"]["inputs"]["ckpt_name"] == "hunyuan_3d_v2.1.safetensors"
+        assert g["30"]["class_type"] == "Hunyuan3Dv2Conditioning" and g["30"]["inputs"]["clip_vision_output"] == ["21", 0]
+        assert "10" not in g and "23" not in g and g["11"]["inputs"]["image"] == "kartopu_bazooka_three_quarter.png"
     srv.shutdown()
     print("HUNYUAN_TEST: OK")
 
