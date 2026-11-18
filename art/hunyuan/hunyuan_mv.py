@@ -32,10 +32,28 @@ def _post_json(url, body):
         return json.loads(r.read())
 
 
+def square_png(path):
+    """Kare olmayan görseli beyaz kenarla kareye tamamlar (görüntü kodlayıcı kareye ezip bozmasın). Pillow yoksa olduğu gibi."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return open(path, "rb").read(), False
+    import io
+    im = Image.open(path).convert("RGB")
+    side = max(im.size)
+    sq = Image.new("RGB", (side, side), (255, 255, 255))
+    sq.paste(im, ((side - im.size[0]) // 2, (side - im.size[1]) // 2))
+    out = io.BytesIO()
+    sq.save(out, "PNG")
+    return out.getvalue(), True
+
+
 def upload(server, path, name):
     """ComfyUI /upload/image (multipart); yüklenen dosyanın adını döner."""
     b = uuid.uuid4().hex
-    data = open(path, "rb").read()
+    data, squared = square_png(path)
+    if not squared:
+        print("Uyarı: Pillow yok, görsel kareye tamamlanmadı (kare değilse kodlayıcı ortasını kırpar)")
     body = (f"--{b}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{name}\"\r\n"
             f"Content-Type: image/png\r\n\r\n").encode() + data + \
         f"\r\n--{b}\r\nContent-Disposition: form-data; name=\"overwrite\"\r\n\r\ntrue\r\n--{b}--\r\n".encode()

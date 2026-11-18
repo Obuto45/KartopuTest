@@ -241,6 +241,19 @@ func drop(pos: Vector3, item_id: String) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _drop_new(n: int, pos: Vector3, id: String) -> void:
+	if id == "chest" and ResourceLoader.exists("res://models/chest.glb"): # Hunyuan3D ile yapılan sandık modeli
+		var ch: Node3D = load("res://models/chest.glb").instantiate()
+		var glow := OmniLight3D.new() # altın parıltısı: yerde fark edilsin
+		glow.light_color = Color(1.0, 0.8, 0.3)
+		glow.light_energy = 1.5
+		glow.omni_range = 2.5
+		glow.position = Vector3.UP * 0.5
+		ch.add_child(glow)
+		ch.position = pos + Vector3.UP * 0.15
+		get_parent().add_child(ch)
+		ch.create_tween().set_loops().tween_property(ch, "rotation:y", TAU, 3.0).as_relative()
+		_dnodes[n] = ch
+		return
 	var mi := MeshInstance3D.new()
 	var m := StandardMaterial3D.new()
 	var c := Color(1.0, 0.8, 0.2) if id == "chest" else (Color(0.2, 0.9, 0.4) if id == "potion" else Color(0.9, 0.2, 0.2))
