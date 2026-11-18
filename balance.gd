@@ -4,7 +4,7 @@ extends RefCounted
 ## Dalga akışı ve tür ağırlıkları fikri: quiver-dev/tower-defense-godot4 (MIT) ve
 ## brannotaylor/SurvivorsClone_Complete (CC0) okunarak; kod kopyalanmadı.
 
-const TOWER_HP := 1500 # dalga 10'da kuleye ulaşan bir boss ~35 hasar/sn vurur: tek başına ~40 sn dayanır
+const TOWER_HP := 3000 # tek oyuncu; her ek oyuncu +%35 (tower_hp). balance_sim: 1500'de ortalama oyuncu 3–5. dalgada kaybediyordu # dalga 10'da kuleye ulaşan bir boss ~35 hasar/sn vurur: tek başına ~40 sn dayanır
 const TOWER_REPAIR := 0.1 # her dalga sonunda kule canının bu oranı onarılır (hata telafisi, kartopu etkisini kırar)
 const BREAK_TIME := 25.0 # alışveriş + stat + yerleştirme için yeter; herkes hazırsa 3 sn'ye iner
 const WAVE_COUNT := 10
@@ -31,7 +31,7 @@ const ENEMIES := {
 		"scale": 0.72, "money": 4, "xp": 3, "model": "goblin_male", "tint": Color(1.0, 1.0, 0.8)},
 	"spitter": {"name": "Tükürükçü", "hp": 45, "speed": 3.0, "dmg": 10, "rate": 2.2, "range": 11.0, "target": "player",
 		"scale": 0.95, "money": 8, "xp": 7, "model": "witch", "tint": Color(0.7, 1.0, 0.45), "anim": "Shoot_OneHanded"},
-	"bomber": {"name": "Patlak", "hp": 40, "speed": 5.0, "dmg": 45, "rate": 1.0, "range": 0.6, "target": "tower",
+	"bomber": {"name": "Patlak", "hp": 40, "speed": 5.0, "dmg": 36, "rate": 1.0, "range": 0.6, "target": "tower",
 		"scale": 0.85, "money": 7, "xp": 6, "model": "zombie_female", "tint": Color(1.0, 0.6, 0.4), "explode": 3.2},
 	"knight": {"name": "Zırhlı", "hp": 170, "speed": 2.8, "dmg": 16, "rate": 1.3, "range": 1.7, "target": "player",
 		"scale": 1.15, "money": 12, "xp": 10, "model": "knight_golden_male", "tint": Color(1.0, 0.95, 0.85), "armor": 4, "anim": "SwordSlash"},
@@ -53,7 +53,7 @@ const WAVES := [
 	{"grunt": 10, "runner": 8, "brute": 2, "boss": "ogre"},
 	{"grunt": 10, "bomber": 6, "spitter": 4, "knight": 2, "brute": 2},
 	{"runner": 12, "knight": 4, "spitter": 4, "brute": 3},
-	{"grunt": 14, "bomber": 8, "knight": 5, "brute": 4},
+	{"grunt": 14, "bomber": 6, "knight": 5, "brute": 4},
 	{"runner": 12, "spitter": 6, "knight": 6, "bomber": 6, "brute": 5},
 	{"grunt": 12, "runner": 10, "knight": 6, "bomber": 6, "brute": 4, "boss": "boss"},
 ]
@@ -80,8 +80,8 @@ const SHOP := [
 const DIFFS := {
 	"easy": {"name": "Kolay", "hp": 0.75, "dmg": 0.8, "money": 1.15, "reward": 0.5, "mods": 0, "unlock": ""},
 	"normal": {"name": "Normal", "hp": 1.0, "dmg": 1.0, "money": 1.0, "reward": 1.0, "mods": 0, "unlock": ""},
-	"hard": {"name": "Zor", "hp": 1.35, "dmg": 1.25, "money": 0.9, "reward": 1.5, "mods": 0, "unlock": "win_normal"},
-	"nightmare": {"name": "Kabus", "hp": 1.8, "dmg": 1.5, "money": 0.85, "reward": 2.5, "mods": 1, "unlock": "win_hard"},
+	"hard": {"name": "Zor", "hp": 1.25, "dmg": 1.15, "money": 0.9, "reward": 1.5, "mods": 0, "unlock": "win_normal"},
+	"nightmare": {"name": "Kabus", "hp": 1.5, "dmg": 1.3, "money": 0.85, "reward": 2.5, "mods": 1, "unlock": "win_hard"},
 }
 
 
@@ -101,7 +101,17 @@ const DROPS := {"potion": 0.03, "bomb": 0.015} # yaratık ölünce düşme olas�
 ## 4 oyuncu: 2,65 x 1,45 = 3,84 kat toplam can, 4 kat ateş gücüne karşı -> kişi başı yük solo ile aynı düzeyde,
 ## ama yaratık sayısı arttığı için kule daha çok yönden sıkışır (kolaylaşmaz). Ödüller sayıyla birlikte büyür.
 static func crowd(players: int) -> float:
-	return 1.0 + 0.55 * (clampi(players, 1, 4) - 1)
+	return 1.0 + 0.4 * (clampi(players, 1, 4) - 1)
+
+
+## Yaratık genel çarpanları (balance_sim ile ayarlandı; ENEMIES tablosu dalga 1 oranlarını korur).
+const ENEMY_HP_K := 0.85
+const ENEMY_DMG_K := 0.55
+
+
+## Kule canı: kalabalıkta aynı anda daha çok yaratık kuleye ulaşır, kule de büyür.
+static func tower_hp(players: int) -> int:
+	return roundi(TOWER_HP * (1.0 + 0.35 * (clampi(players, 1, 4) - 1)))
 
 
 ## n: 1..WAVE_COUNT (sonsuzda daha büyük). Can dalga başına +%10 (dalga 10: x1,9), hasar +%6 (x1,54): oyuncunun kart ve
@@ -130,11 +140,11 @@ static func wave(n: int, players: int, diff := "normal", mods: Array = []) -> Di
 				groups.append({"type": type, "count": ceili((a[type] + b.get(type, 0)) * 0.5 * (1.0 + 0.08 * (n - WAVE_COUNT)) * cnt)})
 		hp *= pow(1.12, n - WAVE_COUNT)
 		boss = "boss" if n % 5 == 0 else ""
-	hp *= (1.0 + 0.15 * (p - 1)) * df.hp * (1.3 if "gold" in mods else 1.0) * (0.75 if "swarm" in mods else 1.0)
+	hp *= ENEMY_HP_K * (1.0 + 0.25 * (p - 1)) * df.hp * (1.3 if "gold" in mods else 1.0) * (0.75 if "swarm" in mods else 1.0)
 	return {"groups": groups, "hp_mult": hp,
-		"dmg_mult": (1.0 + 0.06 * (n - 1)) * (1.0 + 0.05 * (p - 1)) * df.dmg, "boss": boss,
+		"dmg_mult": ENEMY_DMG_K * (1.0 + 0.06 * (n - 1)) * (1.0 + 0.05 * (p - 1)) * df.dmg, "boss": boss,
 		"boss_hp": 1.0 + 0.5 * (p - 1), "mods": mods, # boss tek gelir: sayı çarpanı yerine canı büyür (4 oyuncu: x2,5 x1,45)
-		"speed_mult": 1.2 if "fast" in mods else 1.0, "armor_add": 3 if "armored" in mods else 0,
+		"speed_mult": 1.2 if "fast" in mods else 1.0, "armor_add": 2 if "armored" in mods else 0,
 		"money_mult": (1.25 if "fast" in mods else 1.0) * (2.0 if "gold" in mods else 1.0), "elite": "elite" in mods}
 
 

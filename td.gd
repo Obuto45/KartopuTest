@@ -98,7 +98,7 @@ func _ready() -> void:
 	difficulty = str(opts.get("difficulty", "normal"))
 	endless = bool(opts.get("endless", false))
 	_n = _count_players()
-	tower_max = Balance.TOWER_HP
+	tower_max = Balance.tower_hp(_n)
 	tower_hp = tower_max
 	_seen_hp = tower_hp
 	money = Balance.START_MONEY * _n
@@ -370,7 +370,7 @@ func _start_wave() -> void:
 	var pts := Balance.SPAWN_POINTS.size()
 	var first := randi() % pts
 	var open := mini(pts, 2 + wave)
-	var gap := minf(3.5, Balance.SPAWN_SPAN / batches.size())
+	var gap := minf(8.0, Balance.SPAWN_SPAN / batches.size()) # az kümeli ilk dalgalar da yayılsın (boş geçmesin)
 	_queue.clear()
 	_to_spawn = 0
 	var t := 1.0
