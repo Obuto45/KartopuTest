@@ -144,7 +144,7 @@ static func wave(n: int, players: int, diff := "normal", mods: Array = []) -> Di
 	return {"groups": groups, "hp_mult": hp,
 		"dmg_mult": ENEMY_DMG_K * (1.0 + 0.06 * (n - 1)) * (1.0 + 0.05 * (p - 1)) * df.dmg, "boss": boss,
 		"boss_hp": 1.0 + 0.5 * (p - 1), "mods": mods, # boss tek gelir: sayı çarpanı yerine canı büyür (4 oyuncu: x2,5 x1,45)
-		"speed_mult": 1.2 if "fast" in mods else 1.0, "armor_add": 2 if "armored" in mods else 0,
+		"speed_mult": 1.2 if "fast" in mods else 1.0, "armor_add": 1 if "armored" in mods else 0,
 		"money_mult": (1.25 if "fast" in mods else 1.0) * (2.0 if "gold" in mods else 1.0), "elite": "elite" in mods}
 
 
