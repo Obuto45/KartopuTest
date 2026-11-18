@@ -247,8 +247,8 @@ static func _make(id: String) -> Dictionary:
 	var low := Vector3(0, -0.22, 0.05)
 	var down := Vector3(-0.7, 0, 0.25)
 	c["draw"] = {"len": 0.35, "tracks": {
-			"Rig": [_k(0, low, down), _k(0.35)],
-			"HandL": [_k(0, low + Vector3(0, -0.1, 0)), _k(0.35)]},
+			"Rig": [_k(0, low, down), _k(0.22, Vector3(0, 0.012, -0.01), Vector3(0.07, 0, -0.04)), _k(0.35)],
+			"HandL": [_k(0, low + Vector3(0, -0.1, 0)), _k(0.22, Vector3(0, 0.012, -0.01)), _k(0.35)]},
 		"poses": [[0.0, "R", hr], [0.0, "L", hold]], "events": [[0.35, "ready"]]}
 	c["idle"] = {"len": 0.1, "poses": [[0.0, "R", hr], [0.0, "L", hold]]}
 	match id:
@@ -383,7 +383,24 @@ static func _make(id: String) -> Dictionary:
 				"poses": [[0.0, "R", "open"], [0.0, "L", "open"]], "events": [[0.25, "done"]]}
 		"item:potion":
 			c["drink"] = _drink()
+	if id not in ONE_HAND and id not in BARE:
+		for n in c:
+			var tr: Dictionary = c[n].get("tracks", {})
+			if tr.has("Rig") and not tr.has("HandL"):
+				tr["HandL"] = _follow(id, tr["Rig"])
 	return c
+
+
+## İki elli silahta Rig oynarken sol el (Rig dışında) kabzadan kopmasın: Rig izinden sol el izi.
+static func _follow(id: String, rig: Array) -> Array:
+	var hl: Array = rest(id)["HandL"]
+	assert(rest(id)["Rig"] == [Z, Z], "Rig dinlenmesi sıfır sayıldı")
+	var hb := Basis.from_euler(hl[1])
+	var out := []
+	for k in rig:
+		var b := Basis.from_euler(k[2])
+		out.append(_k(k[0], k[1] + b * hl[0] - hl[0], (b * hb).get_euler() - hl[1]))
+	return out
 
 
 ## İksir içme (~1.7 sn): kaldır (hafif önden çökme) → sol el avuç aşağı tıpayı işaret-başparmak uçları arasında
@@ -447,7 +464,8 @@ static func _drink() -> Dictionary:
 ## Geri tepme: kick büyüklüğünde; ek parça izleriyle.
 static func _fire(L: float, kick: float, extra: Dictionary) -> Dictionary:
 	var t := minf(0.05, L * 0.4)
-	var tr := {"Rig": [_k(0), _k(t, Vector3(0, 0.01 * kick, 0.03 * kick), Vector3(0.08 * kick, 0, 0)), _k(minf(L, t * 3.0))]}
+	var tr := {"Rig": [_k(0), _k(t, Vector3(0.002 * kick, 0.01 * kick, 0.03 * kick), Vector3(0.08 * kick, 0.012 * kick, 0.025 * kick)),
+		_k(minf(L, t * 4.0) * 0.55, Vector3(0, -0.002 * kick, 0.006 * kick), Vector3(-0.012 * kick, 0, -0.006 * kick)), _k(minf(L, t * 4.0))]}
 	tr.merge(extra)
 	return {"len": L, "tracks": tr, "events": [[0.0, "fired"], [L, "done"]]}
 
@@ -485,5 +503,5 @@ static func _bolt(t0: float) -> Array:
 
 ## Kılıç savuruşu: hazırlık (a) -> vuruş (b), isabet anı ortada.
 static func _swing(L: float, pa: Vector3, ra: Vector3, pb: Vector3, rb: Vector3) -> Dictionary:
-	return {"len": L, "tracks": {"Rig": [_k(0), _k(0.08, pa, ra), _k(0.22, pb, rb), _k(L)]},
+	return {"len": L, "tracks": {"Rig": [_k(0), _k(0.08, pa, ra), _k(0.22, pb, rb), _k(0.3, pb * 1.1, rb * 1.08), _k(L)]},
 		"events": [[0.15, "fired"], [L, "done"]]}

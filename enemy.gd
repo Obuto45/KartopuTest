@@ -50,6 +50,27 @@ var run_anim := "Run"
 var atk_anim := "Punch"
 var bar: MeshInstance3D
 var flash_t := 0.0
+const EMBER := """shader_type spatial;
+render_mode unshaded, blend_mix, cull_back, depth_draw_never;
+uniform float t = 0.0;
+varying vec3 wp;
+float h(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+float vn(vec3 p) { // yumuşak değer gürültüsü
+	vec3 i = floor(p); vec3 f = smoothstep(0.0, 1.0, fract(p));
+	return mix(mix(mix(h(i), h(i + vec3(1,0,0)), f.x), mix(h(i + vec3(0,1,0)), h(i + vec3(1,1,0)), f.x), f.y),
+		mix(mix(h(i + vec3(0,0,1)), h(i + vec3(1,0,1)), f.x), mix(h(i + vec3(0,1,1)), h(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
+void fragment() {
+	float n = vn(wp * 6.0) * 0.65 + vn(wp * 15.0) * 0.35;
+	float c = t * 1.25 - 0.1; // yanma cephesi
+	float edge = 1.0 - smoothstep(0.0, 0.07, abs(n - c));
+	float burnt = step(n, c);
+	ALBEDO = mix(vec3(0.06, 0.04, 0.03), vec3(1.0, 0.55, 0.15) * 4.0, edge);
+	ALPHA = clamp(max(burnt, edge), 0.0, 1.0);
+}"""
+var model_scale := Vector3.ONE # doğma büyümesinin hedefi
+var hit_tw: Tween # darbe sekmesi; üst üste vuruşta öncekini keser
 var swing_t := 0.0 # > 0: vuruş animasyonu oynuyor
 var moving := false
 var net_pos := Vector3.ZERO
@@ -165,8 +186,9 @@ func _ready() -> void:
 	bar = make_bar(clampf(0.9 * s, 0.8, 2.4), height + 0.45)
 	add_child(bar)
 	# Yerden büyüyerek çıkar.
-	model.scale = Vector3.ONE * MODEL_SCALE * s * 0.15
-	create_tween().tween_property(model, "scale", Vector3.ONE * MODEL_SCALE * s, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	model_scale = Vector3.ONE * MODEL_SCALE * s
+	model.scale = model_scale * 0.15
+	create_tween().tween_property(model, "scale", model_scale, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 
 func _physics_process(dt: float) -> void:
@@ -345,6 +367,13 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 		float_text(world, global_position + Vector3(randf_range(-0.3, 0.3), height + 0.3, randf_range(-0.3, 0.3)),
 			str(n), Color(1.0, 0.85, 0.15) if crit else Color.WHITE, 0.013 if crit else 0.008)
 		flash_t = 0.12
+		if hp > 0: # darbe: kısa ezilip geri sekme (doğma büyümesi bitmişse)
+			var base := model_scale
+			if hit_tw:
+				hit_tw.kill()
+			hit_tw = create_tween()
+			hit_tw.tween_property(model, "scale", base * Vector3(1.12, 0.86, 1.12), 0.05)
+			hit_tw.tween_property(model, "scale", base, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		_overlay(shared("flash", func() -> Resource:
 			var m := StandardMaterial3D.new()
 			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -382,6 +411,16 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 	float_text(world, c + Vector3.UP * 0.4, "+%d" % money, Color(1.0, 0.8, 0.2), 0.007)
 	Sfx.play3d(Sfx.kill, c, -6.0)
 	var tw := create_tween()
-	tw.tween_interval(1.3)
-	tw.tween_property(self, "position:y", position.y - height * 0.6, 0.6)
-	tw.tween_callback(queue_free)
+	tw.tween_interval(1.1)
+	# Kor halinde dağılma: gövdede kayan parlak benekler, model küçülüp batar.
+	var em := ShaderMaterial.new()
+	em.shader = shared("ember", func() -> Resource:
+		var sh := Shader.new()
+		sh.code = EMBER
+		return sh)
+	_overlay(em)
+	tw.set_parallel()
+	tw.tween_property(em, "shader_parameter/t", 1.0, 0.8)
+	tw.tween_property(model, "scale", model_scale * 0.05, 0.8).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)
+	tw.tween_property(self, "position:y", position.y - height * 0.3, 0.8)
+	tw.chain().tween_callback(queue_free)

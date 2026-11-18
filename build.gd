@@ -203,6 +203,9 @@ func fx(pos: Vector3) -> void:
 		var v := pos - from
 		beam.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, v.normalized())).scaled(Vector3(1, v.length(), 1)), from + v * 0.5)
 		beam.visible = true
+		var kick := head.create_tween() # geri tepme: namlu kısa ezilip toparlanır
+		kick.tween_property(head, "scale", Vector3(1.15, 0.9, 0.8), 0.03)
+		kick.tween_property(head, "scale", Vector3.ONE, 0.12).set_ease(Tween.EASE_OUT)
 		create_tween().tween_callback(beam.hide).set_delay(0.07)
 		Sfx.play3d(Sfx.fire, from, -16.0)
 	elif id == "trap":
