@@ -5,22 +5,61 @@ const PlayerScript := preload("res://player.gd")
 const ForestScript := preload("res://forest.gd")
 const ExplosionScript := preload("res://explosion.gd")
 const Chars := preload("res://characters.gd")
+const TdUi := preload("res://td_ui.gd")
+const Profile := preload("res://profile.gd")
+const Balance := preload("res://balance.gd")
+const UPGRADES := {"tower_hp": "Kule Zırhı", "start_money": "Başlangıç Altını", "reroll": "Yeniden Çekme", "banish": "Eleme"}
+const UPGRADE_DESC := {"tower_hp": "Kule canı +%4 / kademe", "start_money": "Maç başı parası +10 ₺ / kademe",
+	"reroll": "Maç başına +1 kart yeniden çekme hakkı", "banish": "Maç başına +1 kart eleme hakkı"}
+## Profile.QUESTS istatistiği -> açılma koşulu ("%d" hedef). wins_<zorluk> ayrıca _quest_text'te.
+const QUEST_TEXT := {"best_match_kills": "Tek maçta %d öldürme", "best_wave": "%d. dalgaya ulaş", "builds": "Toplam %d yapı kur",
+	"hard_best_wave": "Zor ya da Kabus'ta %d. dalgaya ulaş", "wins": "%d maç kazan"}
+const LANG_NAMES := ["Otomatik (sistem dili)", "Türkçe", "English"] # Settings.LANGUAGES sırasıyla; dil adları çevrilmez
 const HP_W := 316.0 # can barının iç genişliği (px)
 const STATUS := {"stun": "SERSEMLEDİN", "blind": "KÖR OLDUN", "silence": "SUSTURULDUN", "confuse": "YÖNLER TERS",
 	"slow": "YAVAŞLADIN", "vuln": "İŞARETLENDİN", "burn": "YANIYORSUN", "haste": "HIZLI", "power": "GÜÇLÜ ROKET",
 	"rapid": "SERİ ATEŞ", "multi": "ÜÇLÜ ATIŞ", "armor": "ZIRH", "size": "BOY DEĞİŞTİ", "invis": "GÖRÜNMEZ",
 	"float": "SÜZÜLÜYOR", "regen": "İYİLEŞİYOR"}
 const SPAWNS := [Vector3(-14, 1, -14), Vector3(14, 1, 14), Vector3(-14, 1, 14), Vector3(14, 1, -14)]
+# TD: orta alan (kule ve çevresi) ağaçsız kalsın; oyuncular kulenin dibinde doğar.
+const TD_CLEAR := [Vector3(0, 0, 0), Vector3(6, 0, 0), Vector3(-6, 0, 0), Vector3(0, 0, 6), Vector3(0, 0, -6)]
+const TD_SPAWNS := [Vector3(5, 1, 0), Vector3(-5, 1, 0), Vector3(0, 1, 5), Vector3(0, 1, -5)]
+const MODES := {"arena": ["ARENA", "Lobi kur, arkadaşlarını davet et, savaşı başlat.", "▶  Oyunu Başlat (host)"],
+	"td": ["TOWER DEFENSE", "Rapunzel'in kulesini birlikte savunun. Tek başına da başlatabilirsin.", "▶  Savunmayı Başlat (host)"]}
 const MENU_SPOT := Vector3(14, 0, 14) # menü sahnesi bir doğma noktasında: etrafı ağaçsız
 const MENU_CREW := [40, 50, 34, 8, 26] # seçilen karakterin yanında duranlar
 # Menü kamerası [konum, bakılan nokta], ekibe göre: giriş ekranı geniş ve ortalı, menüde ekip sağda.
 const CAM_INTRO := [Vector3(0, 1.75, 6.6), Vector3(0, 1.55, 0)] # 6,6 m: daha geride ağaç var
 const CAM_MENU := [Vector3(0.6, 1.4, 6.6), Vector3(-2.6, 1.1, 0)]
 
+var mode := "arena" # "arena" | "td": host seçer, set_mode ile istemcilere gider
 var ui: Control
+var ui_layer: CanvasLayer
+var td_ui: Control # yalnız TD maçında var (td_ui.gd)
+var hotbar: HBoxContainer # arena envanter çubuğu: TD'de gizlenir
+var help_lbl: Label
+var lobby_title: Label
+var lobby_sub: Label
+var weapon_btn: Button
+var weapon_wrap: ColorRect
+var weapon_grid: GridContainer
+var weapon_list: Array = TdUi.consts("res://weapons.gd").get("LIST", []) # weapons.gd yoksa boş
+var weapon_sel := 0 # Net.my_weapon yoksa yerel seçim
+var dev := OS.is_debug_build() or "--dev" in OS.get_cmdline_user_args() # Yerel Host/Katıl düğmeleri
+var diff_id := "normal" # TD zorluğu (host seçer, istemciler set_opts ile görür)
+var endless := false
+var diff_opt: OptionButton
+var diff_hint: Label
+var endless_chk: CheckBox
+var td_box: VBoxContainer # yalnız TD lobisinde: zorluk + sonsuz mod
+var find_box: VBoxContainer
+var growth_box: VBoxContainer
+var _pf_names := {} # Profile'ın var olan statik fonksiyonları (iskelet/gerçek farkı)
 var info: Label
 var members: Label
 var start_btn: Button
+var crosshair: Label
+var letterbox: Array[ColorRect] = [] # sinematik şeritler: yalnız giriş ekranında
 var friends_box: VBoxContainer
 var invite_box: VBoxContainer
 var dmg_rect: ColorRect
@@ -33,6 +72,7 @@ var hp_txt: Label
 var trail_f := 1.0
 var char_btn: Button
 var char_wrap: ColorRect
+var char_grid: HFlowContainer
 var char_cards := [] # ızgaradaki her karakter kutusunun StyleBoxFlat'ı
 var char_sel := 0 # seçim ekranında incelenen karakter
 var char_view: Node3D # önizleme sahnesinde modelin durduğu yer
@@ -47,6 +87,10 @@ var settings_wrap: ColorRect
 var vol_lbl: Label
 var res_opt: OptionButton
 var close_btn: Button
+var ver_lbl: Label
+var chars_title: Label
+var shake_slider: HSlider
+var intro_logo: Label
 var ingame_box: VBoxContainer
 var world: Node3D
 var players: Node3D
@@ -71,9 +115,12 @@ func _ready() -> void:
 	Net.invited.connect(_on_invited)
 	Updater.status.connect(func(m): info.text = m)
 	multiplayer.peer_disconnected.connect(_on_peer_left)
+	multiplayer.peer_connected.connect(func(id): # yeni gelen hostun modunu öğrensin
+		if multiplayer.is_server():
+			set_mode.rpc_id(id, mode))
 	_set_menu_bg(true)
 	_show_page("intro")
-	_refresh()
+	set_mode("arena")
 	if "--selftest" in OS.get_cmdline_user_args(): # yayın öncesi: paketlenmiş exe'de haritayı açıp bir kare kaydeder
 		Net.host_local()
 		_on_start()
@@ -84,13 +131,14 @@ func _ready() -> void:
 
 func _setup_input() -> void:
 	var keys := {"fwd": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D, "jump": KEY_SPACE,
-		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "skill": KEY_Q}
+		"dash": KEY_SHIFT, "slot1": KEY_1, "slot2": KEY_2, "slot3": KEY_3, "slot4": KEY_4, "skill": KEY_Q,
+		"slot5": KEY_5, "stats": KEY_TAB, "shop": KEY_B, "ready": KEY_G, "interact": KEY_E, "reload": KEY_R} # son satır TD için
 	for a in keys:
 		InputMap.add_action(a)
 		var ev := InputEventKey.new()
 		ev.physical_keycode = keys[a]
 		InputMap.action_add_event(a, ev)
-	var mouse := {"throw": MOUSE_BUTTON_LEFT}
+	var mouse := {"throw": MOUSE_BUTTON_LEFT, "aim": MOUSE_BUTTON_RIGHT}
 	for a in mouse:
 		InputMap.add_action(a)
 		var ev := InputEventMouseButton.new()
@@ -144,10 +192,14 @@ func _make_theme() -> Theme:
 	t.set_stylebox("hover", "Button", _sb(Color(0.85, 0.42, 0.12)))
 	t.set_stylebox("pressed", "Button", _sb(Color(0.6, 0.28, 0.08)))
 	t.set_stylebox("disabled", "Button", _sb(Color(0.12, 0.12, 0.16, 0.6)))
-	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	var focus := _sb(Color(0, 0, 0, 0), 8, 10) # klavye / gamepad odağı görünsün (fare odağı çizilmez)
+	focus.draw_center = false
+	focus.set_border_width_all(3)
+	focus.border_color = Color(1.0, 0.62, 0.18)
+	t.set_stylebox("focus", "Button", focus)
 	t.set_color("font_color", "Button", Color(0.92, 0.94, 1.0))
 	t.set_color("font_hover_color", "Button", Color.WHITE)
-	t.set_color("font_disabled_color", "Button", Color(0.5, 0.5, 0.55))
+	t.set_color("font_disabled_color", "Button", Color(0.65, 0.65, 0.7))
 	for k in ["normal", "hover", "pressed"]:
 		t.set_stylebox(k, "OptionButton", t.get_stylebox(k, "Button"))
 	var p := _sb(Color(0.06, 0.07, 0.11, 0.93), 14, 26)
@@ -164,6 +216,7 @@ func _make_theme() -> Theme:
 	mh.border_color = Color(1.0, 0.85, 0.4)
 	for k in ["normal", "hover", "pressed", "disabled"]:
 		t.set_stylebox(k, "BigButton", mh if k != "normal" and k != "disabled" else mn)
+	t.set_stylebox("focus", "BigButton", mh)
 	t.set_font_size("font_size", "BigButton", 30)
 	t.set_constant("outline_size", "BigButton", 6)
 	t.set_color("font_outline_color", "BigButton", Color(0, 0, 0, 0.7))
@@ -199,6 +252,7 @@ func _txt(parent: Node, text: String, size: int, alpha := 0.85) -> Label:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	ui_layer = layer
 	var theme := _make_theme()
 
 	_build_menu(layer, theme)
@@ -217,13 +271,15 @@ func _build_ui() -> void:
 	blind_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	blind_rect.color = Color(1, 1, 0.95, 0)
 	hud.add_child(blind_rect)
-	_full_label(28, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER).text = "+"
+	crosshair = _full_label(28, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
+	crosshair.text = "+"
 	_build_hp_bar()
 	score_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_RIGHT, VERTICAL_ALIGNMENT_TOP)
 	center_lbl = _full_label(52, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
 	spec_lbl = _full_label(22, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_TOP)
 	spec_lbl.offset_top = 60
-	_full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM).text = \
+	help_lbl = _full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM)
+	help_lbl.text = \
 		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD atıl | 1-4 eşya | Q karakter yeteneği | Sol tık kullan | ESC menü/ayarlar | F10 çık"
 	# Alt envanter çubuğu (hotbar)
 	var bar := HBoxContainer.new()
@@ -233,6 +289,7 @@ func _build_ui() -> void:
 	bar.offset_top = -140; bar.offset_bottom = -50
 	bar.add_theme_constant_override("separation", 10)
 	hud.add_child(bar)
+	hotbar = bar
 	for i in 5: # 1-4 eşyalar + Q karakter yeteneği
 		var cell := PanelContainer.new()
 		cell.custom_minimum_size = Vector2(90, 84)
@@ -242,18 +299,33 @@ func _build_ui() -> void:
 		sb.set_border_width_all(3)
 		sb.set_corner_radius_all(6)
 		cell.add_theme_stylebox_override("panel", sb)
+		var icon := TextureRect.new() # bazuka ve kılıçta simge; ilk HUD karesinde doldurulur
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(icon)
 		var l := Label.new()
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		l.add_theme_font_size_override("font_size", 15)
 		cell.add_child(l)
+		var cdb := ProgressBar.new() # bekleme süresi: dolu = yeni kullanıldı, boşalınca hazır
+		cdb.show_percentage = false
+		cdb.max_value = 1.0
+		cdb.custom_minimum_size.y = 5
+		cdb.size_flags_vertical = Control.SIZE_SHRINK_END
+		cdb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cdb.add_theme_stylebox_override("background", StyleBoxEmpty.new())
+		cdb.add_theme_stylebox_override("fill", _sb(Color(1, 1, 1, 0.85), 2, 0))
+		cell.add_child(cdb)
 		bar.add_child(cell)
-		slots.append([sb, l])
+		slots.append([sb, l, icon, cdb, 0.0])
 	status_lbl = _full_label(20, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_BOTTOM)
 	status_lbl.offset_bottom = -150
 	hud.hide()
 	_build_settings(layer, theme)
 	_build_chars(layer, theme)
+	_build_weapons(layer, theme)
 
 
 ## Sol üst: karakter adı + 20'lik dilimli can barı, hasarda beyaz iz, sayı.
@@ -310,7 +382,7 @@ func _update_hp_bar(me: Node, dt: float) -> void:
 			line.size = Vector2(2, 26)
 			line.position.x = HP_W * (k + 1) * 20.0 / me.max_hp - 1.0
 			hp_ticks.add_child(line)
-	char_lbl.text = "%s  •  %s" % [me.ch.name, me.ch.role]
+	char_lbl.text = "%s  •  %s" % [tr(me.ch.name), tr(me.ch.role)]
 	char_lbl.modulate = me.ch.color.lightened(0.3)
 
 
@@ -344,6 +416,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 			bar.offset_top = -34
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ui.add_child(bar)
+		letterbox.append(bar)
 
 	# Giriş ekranı
 	var intro := _page("intro")
@@ -353,7 +426,8 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	iv.alignment = BoxContainer.ALIGNMENT_CENTER
 	iv.add_theme_constant_override("separation", 4)
 	intro.add_child(iv)
-	_logo(iv, "BAZUKA SAVAŞI", 124).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intro_logo = _logo(iv, "BAZUKA SAVAŞI", 124)
+	intro_logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_txt(iv, "R O K E T L E R    •    K A O S    •    A R K A D A Ş L A R", 20).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = _txt(intro, "BAŞLAMAK İÇİN BİR TUŞA BAS", 24, 1.0)
 	prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -366,6 +440,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	_txt(mv, "4 kişilik bazuka kaosu", 18, 0.75)
 	mv.add_child(_gap(36))
 	_big(mv, "OYNA", _show_page.bind("modes"))
+	_big(mv, "GELİŞİM", _open_growth)
 	char_btn = _big(mv, "", _open_chars)
 	_update_char_btn()
 	_big(mv, "AYARLAR", _open_settings)
@@ -377,7 +452,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	# Mod seçimi: iki büyük kart
 	var modes := _page("modes")
 	var mc := VBoxContainer.new()
-	mc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mc.alignment = BoxContainer.ALIGNMENT_CENTER
 	mc.add_theme_constant_override("separation", 26)
 	modes.add_child(mc)
@@ -388,38 +463,77 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	mc.add_child(cards)
 	_mode_card(cards, "ARENA", "PvP  •  2–4 oyuncu", Color(1.0, 0.55, 0.15),
 		"Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır.",
-		"▶  ARENAYA GİR", _show_page.bind("lobby"))
-	_mode_card(cards, "HİKAYE MODU", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
-		"Arkadaşlarınla omuz omuza. Dalga dalga gelen düşmanlara karşı hayatta kal, güçlen, boss'u devir.",
-		"YAKINDA", Callable())
+		"▶  ARENAYA GİR", _pick_mode.bind("arena"))
+	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
+		"Rapunzel'in kulesini savun. 10 dalga yaratık, seviye atladıkça kart seç, molada mağazadan duvar, tuzak ve taret al.",
+		"▶  KULEYİ SAVUN", _pick_mode.bind("td"))
+	var quick := HBoxContainer.new()
+	quick.alignment = BoxContainer.ALIGNMENT_CENTER
+	quick.add_theme_constant_override("separation", 20)
+	mc.add_child(quick)
+	var solo_b := _btn(quick, "⚡  TEK BAŞINA OYNA  (Steam gerekmez)", _solo_td)
+	solo_b.custom_minimum_size = Vector2(520, 60)
+	solo_b.add_theme_font_size_override("font_size", 22)
+	var find_b := _btn(quick, "🔍  Açık Lobi Bul", _open_find)
+	find_b.custom_minimum_size = Vector2(300, 60)
 	var back := _btn(mc, "◀  Geri", _show_page.bind("main"))
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	back.custom_minimum_size.x = 220
 
 	# Arena lobisi: Steam lobisi, arkadaşlar, başlat
 	var lv := _column(_page("lobby"))
-	_logo(lv, "ARENA", 72)
-	_txt(lv, "Lobi kur, arkadaşlarını davet et, savaşı başlat.", 17, 0.75)
-	lv.add_child(_gap(14))
+	lobby_title = _logo(lv, "ARENA", 72)
+	lobby_sub = _txt(lv, MODES.arena[1], 17, 0.75)
+	lv.add_child(_gap(8))
 	var panel := PanelContainer.new()
+	var ps: StyleBoxFlat = theme.get_stylebox("panel", "PanelContainer").duplicate()
+	ps.set_content_margin_all(16) # 720p: TD lobisi (zorluk + sonsuz satırı) ekrana sığsın
+	panel.add_theme_stylebox_override("panel", ps)
 	lv.add_child(panel)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 9)
+	v.add_theme_constant_override("separation", 7)
 	panel.add_child(v)
-	_btn(v, "Steam Lobisi Kur", Net.host_steam)
+	var hrow := HBoxContainer.new()
+	hrow.add_theme_constant_override("separation", 9)
+	v.add_child(hrow)
+	_btn(hrow, "Steam Lobisi Kur", Net.host_steam).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var pub := CheckBox.new()
+	pub.text = "Herkese açık"
+	pub.toggled.connect(func(on: bool): Net.public_lobby = on)
+	hrow.add_child(pub)
 	_btn(v, "Arkadaşlar (davet et / lobisine katıl)", _show_friends)
 	var scroll := ScrollContainer.new()
 	friends_box = VBoxContainer.new()
 	friends_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(friends_box)
+	scroll.visible = false # liste boşken ayırma boşluğu da kalmasın
 	v.add_child(scroll)
-	_btn(v, "Karakter Değiştir", _open_chars)
+	var crow := HBoxContainer.new()
+	crow.add_theme_constant_override("separation", 9)
+	v.add_child(crow)
+	_btn(crow, "Karakter Değiştir", _open_chars).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	weapon_btn = _btn(crow, "", _open_weapons)
+	weapon_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	td_box = VBoxContainer.new()
+	td_box.add_theme_constant_override("separation", 4)
+	v.add_child(td_box)
+	diff_opt = OptionButton.new()
+	for k in Balance.DIFFS:
+		diff_opt.add_item(Balance.DIFFS[k].name)
+	diff_opt.item_selected.connect(_pick_diff)
+	td_box.add_child(diff_opt)
+	diff_hint = _lbl(td_box, "", 14)
+	endless_chk = CheckBox.new()
+	endless_chk.text = "Sonsuz Mod"
+	endless_chk.toggled.connect(func(on: bool): endless = on; _sync_opts())
+	td_box.add_child(endless_chk)
 	start_btn = _btn(v, "▶  Oyunu Başlat (host)", _on_start)
 	start_btn.custom_minimum_size.y = 48
 	members = _lbl(v, "", 16)
 	_btn(v, "Lobiden Çık", Net.leave)
 	var test := HBoxContainer.new()
 	test.add_theme_constant_override("separation", 9)
+	test.visible = dev
 	v.add_child(test)
 	var tl := _lbl(test, "Tek PC testi:", 14)
 	tl.modulate = Color(1, 1, 1, 0.6)
@@ -429,14 +543,42 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	lv.add_child(_gap(6))
 	_btn(lv, "◀  Geri", _show_page.bind("modes"))
 
+	# Açık lobi bul
+	var fv := _column(_page("find"))
+	_logo(fv, "LOBİ BUL", 64)
+	_txt(fv, "Herkese açık, senin sürümünde lobiler.", 17, 0.75)
+	var fs := ScrollContainer.new()
+	fs.custom_minimum_size.y = 300
+	fs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	fv.add_child(fs)
+	find_box = VBoxContainer.new()
+	find_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fs.add_child(find_box)
+	_btn(fv, "↻  Yenile", _open_find)
+	_btn(fv, "◀  Geri", _show_page.bind("modes"))
+	Net.lobbies_found.connect(_on_lobbies)
+
+	# Gelişim: Altın Saç, kalıcı yükseltmeler, açılımlar
+	var gv := _column(_page("growth"))
+	_logo(gv, "GELİŞİM", 64)
+	var gs := ScrollContainer.new()
+	gs.custom_minimum_size.y = 430
+	gs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	gv.add_child(gs)
+	growth_box = VBoxContainer.new()
+	growth_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	growth_box.add_theme_constant_override("separation", 6)
+	gs.add_child(growth_box)
+	_btn(gv, "◀  Geri", _show_page.bind("main"))
+
 	# Her sayfada görünenler: alt bilgi satırı, sürüm, gelen davetler
 	info = _txt(ui, "", 15, 0.8)
 	info.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	info.offset_left = 40; info.offset_right = -260; info.offset_top = -78; info.offset_bottom = -42
-	var ver := _txt(ui, "sürüm " + Updater.version(), 14, 0.55)
-	ver.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	ver.offset_left = -200; ver.offset_right = -24; ver.offset_top = -64; ver.offset_bottom = -42
-	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ver_lbl = _txt(ui, tr("sürüm %s") % Updater.version(), 14, 0.55)
+	ver_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver_lbl.offset_left = -200; ver_lbl.offset_right = -24; ver_lbl.offset_top = -64; ver_lbl.offset_bottom = -42
+	ver_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	invite_box = VBoxContainer.new() # gelen davetler sağ üstte çıkar
 	invite_box.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	invite_box.offset_left = -380; invite_box.offset_right = -30; invite_box.offset_top = 60
@@ -493,7 +635,9 @@ func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String
 	_logo(v, title, 46, c)
 	var t := _txt(v, tag, 18, 0.8)
 	t.add_theme_color_override("font_color", c.lightened(0.4))
-	_txt(v, desc, 17, 0.9).size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var dl := _txt(v, desc, 17, 0.9)
+	dl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dl.custom_minimum_size.x = 340 # sıfır genişlikte sarma, kutuyu dev yüksekliğe şişirmesin
 	var b := _btn(v, btn, cb if cb.is_valid() else func(): pass)
 	b.custom_minimum_size.y = 54
 	b.add_theme_font_size_override("font_size", 20)
@@ -508,18 +652,54 @@ func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String
 		badge.rotation_degrees = 8
 
 
+## Mod kartı: modu host seçer; lobiye bağlı istemci hostun modunda kalır.
+func _pick_mode(m: String) -> void:
+	if Net.online() and not multiplayer.is_server():
+		_show_page("lobby")
+		return
+	set_mode(m)
+	if Net.online():
+		set_mode.rpc(m)
+	_show_page("lobby")
+
+
+@rpc("authority", "call_remote", "reliable")
+func set_mode(m: String) -> void:
+	mode = m if MODES.has(m) else "arena"
+	lobby_title.text = MODES[mode][0]
+	lobby_title.add_theme_font_size_override("font_size", 72 if mode == "arena" else 54) # uzun ad sütuna sığsın
+	lobby_sub.text = MODES[mode][1]
+	start_btn.text = MODES[mode][2]
+	weapon_btn.visible = mode == "td"
+	td_box.visible = mode == "td"
+	_update_diff_ui()
+	_update_weapon_btn()
+	_refresh()
+
+
 func _show_page(n: String) -> void:
 	page = n
+	if n == "intro": # İngilizce ad ("BAZOOKA BUDDIES") daha uzun: 720p'de ekrana sığsın
+		var w := intro_logo.get_theme_font("font").get_string_size(intro_logo.atr(intro_logo.text), HORIZONTAL_ALIGNMENT_LEFT, -1, 124).x
+		intro_logo.add_theme_font_size_override("font_size", mini(124, int(124.0 * (get_viewport().get_visible_rect().size.x - 80.0) / maxf(w, 1.0))))
 	for k in pages:
 		pages[k].visible = k == n
 	var p: Control = pages[n]
 	p.modulate.a = 0.0
 	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(p, "modulate:a", 1.0, 0.35)
+	for b in letterbox:
+		tw.tween_property(b, "modulate:a", 1.0 if n == "intro" else 0.0, 0.4)
 	tw.tween_property(shade, "modulate:a", 0.25 if n == "intro" else (0.75 if n == "modes" else 1.0), 0.6)
 	tw.tween_property(self, "cam_k", 0.0 if n == "intro" else 1.0, 1.4)
 	var first := p.get_child(0) as Control # içerik soldan kayarak gelsin
+	if n == "modes": # sarmalı etiketler kutuyu şişirip ekran dışına itebiliyor: tam ekrana geri çek
+		first.set_anchors_and_offsets_preset.call_deferred(Control.PRESET_FULL_RECT)
 	tw.tween_property(first, "position:x", first.position.x, 0.4).from(first.position.x - 50)
+	for b: Button in p.find_children("*", "Button", true, false): # klavye / gamepad ile gezilebilsin
+		if b.visible and not b.disabled and b.focus_mode != Control.FOCUS_NONE:
+			b.grab_focus.call_deferred()
+			break
 
 
 ## Menüdeki canlı sahne: orman, seçili karakter ve ekibi, arkada ara ara patlamalar.
@@ -604,8 +784,8 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 14)
 	margin.add_child(v)
-	var title := _lbl(v, "KARAKTERİNİ SEÇ   •   %d karakter" % Chars.LIST.size(), 30)
-	title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	chars_title = _lbl(v, tr("KARAKTERİNİ SEÇ   •   %d karakter") % Chars.LIST.size(), 30)
+	chars_title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 	var row := HBoxContainer.new()
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 20)
@@ -617,6 +797,7 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	row.add_child(scroll)
 	var grid := HFlowContainer.new()
+	char_grid = grid
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
@@ -632,7 +813,6 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 		b.text = c.name
 		b.add_theme_font_size_override("font_size", 11)
 		b.clip_text = true
-		b.tooltip_text = "%s – %s" % [c.name, c.skill_name]
 		var sb := _sb(Color(c.color.darkened(0.72), 0.95), 10, 6)
 		sb.set_border_width_all(3)
 		for st in ["normal", "hover", "pressed", "focus"]:
@@ -706,16 +886,39 @@ func _show_char(i: int) -> void:
 	var ap: AnimationPlayer = m.find_children("*", "AnimationPlayer", true, false)[0]
 	ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
 	ap.play("Idle")
-	char_info.name.text = c.name
+	char_info.name.text = tr(c.name)
 	char_info.name.add_theme_color_override("font_color", c.color.lightened(0.3))
-	char_info.role.text = c.role
-	char_info.stats.text = "Can %d   •   Hız %%%d   •   Kalkan %d sn" % [c.get("hp", 100), roundi(c.get("speed", 1.0) * 100.0), c.get("shield_cd", 8.0)]
-	char_info.passive.text = "Pasif: " + Chars.passive_text(c)
-	char_info.skill.text = "Q – %s (%d sn)\n%s" % [c.skill_name, c.cd, c.skill_desc]
-	char_info.quote.text = "\"%s\"" % c.quote
+	char_info.role.text = tr(c.role)
+	char_info.stats.text = tr("Can %d   •   Hız %%%d   •   Kalkan %d sn") % [c.get("hp", 100), roundi(c.get("speed", 1.0) * 100.0), c.get("shield_cd", 8.0)]
+	char_info.passive.text = tr("Pasif: %s") % passive_text(c)
+	char_info.skill.text = tr("Q – %s (%d sn)\n%s") % [tr(c.skill_name), c.cd, tr(c.skill_desc)]
+	char_info.quote.text = "\"%s\"" % tr(c.quote)
+
+
+## Chars.passive_text'in çevrilen kopyası (characters.gd veri dosyası değişmesin diye burada).
+## i18n_test, Türkçe'de ikisinin aynı çıktığını 52 karakterde denetler.
+func passive_text(c: Dictionary) -> String:
+	var p := PackedStringArray()
+	if c.has("hp"): p.append(tr("%d can") % c.hp)
+	if c.has("speed"): p.append(tr("%+d%% hız") % roundi((c.speed - 1.0) * 100.0))
+	if c.has("shield_cd"): p.append(tr("kalkan %d sn'de dolar") % c.shield_cd)
+	if c.has("dodge"): p.append(tr("%%%d şansla hasardan sıyrılır") % roundi(c.dodge * 100.0))
+	if c.has("throw_mult"): p.append(tr("roketleri %%%d hızlı") % roundi((c.throw_mult - 1.0) * 100.0))
+	if c.has("fire_cd"): p.append(tr("%%%d seri ateş") % roundi((1.0 / c.fire_cd - 1.0) * 100.0))
+	if c.has("rocket_dmg"): p.append(tr("roket hasarı %d") % c.rocket_dmg)
+	if c.has("sword_dmg"): p.append(tr("kılıç hasarı %d") % c.sword_dmg)
+	if c.has("regen"): p.append(tr("saniyede %s can yeniler") % str(c.regen))
+	if c.has("jump"): p.append(tr("%%%d yüksek zıplar") % roundi((c.jump - 1.0) * 100.0))
+	if c.has("air_jumps"): p.append(tr("havada %d kez zıplar") % c.air_jumps)
+	if c.has("wall_cd"): p.append(tr("duvar %d sn'de dolar") % c.wall_cd)
+	if c.get("sit_shield", false): p.append(tr("2 sn durunca kendiliğinden kalkan alır"))
+	return " • ".join(p) if not p.is_empty() else tr("Dengeli: zaafı da yok, üstünlüğü de.")
 
 
 func _open_chars() -> void:
+	for i in char_grid.get_child_count(): # ipucu: dil değişebildiği için her açılışta
+		var c := Chars.get_char(i)
+		char_grid.get_child(i).tooltip_text = "%s – %s" % [tr(c.name), tr(c.skill_name)]
 	_show_char(Net.my_char)
 	char_wrap.show()
 
@@ -730,7 +933,370 @@ func _pick_char(i: int) -> void:
 
 func _update_char_btn() -> void:
 	var c := Chars.get_char(Net.my_char)
-	char_btn.text = "KARAKTER  ·  %s" % c.name.to_upper()
+	char_btn.text = tr("KARAKTER  ·  %s") % tr(c.name).to_upper()
+
+
+# ---------- Silah seçimi (TD) ----------
+
+func _build_weapons(layer: CanvasLayer, theme: Theme) -> void:
+	weapon_wrap = ColorRect.new()
+	weapon_wrap.color = Color(0.03, 0.04, 0.08, 0.98)
+	weapon_wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	weapon_wrap.theme = theme
+	layer.add_child(weapon_wrap)
+	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 18)
+	weapon_wrap.add_child(v)
+	_logo(v, "SİLAHINI SEÇ", 50).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_txt(v, "Tower Defense'e bu silahla girersin. Yenileri seviye kartlarından gelir.", 17, 0.7).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var scroll := ScrollContainer.new() # 720p'de 3. satır ve Kapat ekrana sığsın
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(scroll)
+	weapon_grid = GridContainer.new()
+	weapon_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER | Control.SIZE_EXPAND
+	weapon_grid.add_theme_constant_override("h_separation", 12)
+	weapon_grid.add_theme_constant_override("v_separation", 12)
+	scroll.add_child(weapon_grid)
+	var close := _btn(v, "Kapat", weapon_wrap.hide)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.custom_minimum_size.x = 220
+	weapon_wrap.hide()
+
+
+## Silahın 3B modelinden simge: tek kare çizilen küçük bir görüntü alanı, id başına bir kez kurulur.
+var _icons := {}
+func weapon_icon(id: String) -> Texture2D:
+	if _icons.has(id):
+		return _icons[id]
+	var W = load("res://weapons.gd")
+	if not ResourceLoader.exists("res://models/%s.glb" % id):
+		return null
+	var model: Node3D = W.make_prop({"id": id})
+	if id == "sword":
+		model.rotation.z = PI / 2 # yassı yüzü kameraya
+	var vp := SubViewport.new()
+	vp.size = Vector2i(256, 160)
+	vp.transparent_bg = true
+	vp.own_world_3d = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(vp)
+	vp.add_child(model)
+	var box := AABB()
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var b: AABB = mi.global_transform * mi.get_aabb()
+		box = b if box.size == Vector3.ZERO else box.merge(b)
+	var sun := DirectionalLight3D.new()
+	sun.rotation = Vector3(-0.7, 0.9, 0)
+	sun.light_energy = 2.2 # koyu silahlar koyu kartta kaybolmasın
+	vp.add_child(sun)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_CLEAR_COLOR
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.75, 0.78, 0.9)
+	env.environment.ambient_light_energy = 2.5
+	vp.add_child(env)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = maxf(box.get_longest_axis_size() * 0.72, 0.2) # yandan, hafif üstten: namlu sola bakar
+	vp.add_child(cam)
+	var c := box.get_center()
+	cam.look_at_from_position(c + Vector3(3.0, 0.9, 1.1), c)
+	_icons[id] = vp.get_texture()
+	return _icons[id]
+
+
+func _my_weapon() -> int:
+	var w = Net.get("my_weapon")
+	return weapon_sel if w == null else int(w)
+
+
+## Kartlar her açılışta yeniden kurulur: 10 kart, seçili olan vurgulu.
+func _open_weapons() -> void:
+	_fix_weapon()
+	for c in weapon_grid.get_children():
+		c.queue_free()
+	var rar: Dictionary = TdUi.consts("res://weapons.gd").get("RARITY", {})
+	# Çubuklar en iyi silaha göre dolar. rate atış arası süre olduğu için tersi alınır.
+	var bars := [["Hasar", func(w): return float(w.get("dmg", 0)) * w.get("n", 1), "%d"],
+		["Atış hızı", func(w): return 1.0 / maxf(w.get("rate", 1.0), 0.05), tr("%.1f/sn")], ["Menzil", func(w): return float(w.get("range", 60.0)), "%d m"]]
+	var wide := get_viewport().get_visible_rect().size.x >= 1560.0
+	weapon_grid.columns = 5 if wide else 4 # dar pencerede taşmasın
+	var order := range(weapon_list.size()) # nadirliğe göre: sıradan -> efsanevi (seçim numarası değişmez)
+	order.sort_custom(func(a, b): return [rar.keys().find(weapon_list[a].get("rarity", "")), a] < [rar.keys().find(weapon_list[b].get("rarity", "")), b])
+	for i in order:
+		var w: Dictionary = weapon_list[i]
+		var r: Dictionary = rar.get(w.get("rarity", ""), {})
+		var c: Color = r.get("color", Color(0.75, 0.78, 0.85))
+		var b := Button.new() # tıklanabilir kart: içindekiler fareyi yutmaz
+		b.custom_minimum_size = Vector2(290, 300)
+		var sb := _sb(Color(c.darkened(0.8), 0.95), 12, 0)
+		sb.set_border_width_all(4 if i == _my_weapon() else 2)
+		sb.border_color = Color(1, 0.85, 0.2) if i == _my_weapon() else Color(c, 0.7)
+		var sh: StyleBoxFlat = sb.duplicate()
+		sh.bg_color = Color(c.darkened(0.6), 0.95)
+		for st in ["normal", "pressed", "focus"]:
+			b.add_theme_stylebox_override(st, sb)
+		b.add_theme_stylebox_override("hover", sh)
+		var locked := not _unlocked("weapon:" + str(w.get("id", "")))
+		if locked:
+			b.disabled = true
+			b.modulate = Color(0.5, 0.5, 0.55)
+		else:
+			b.pressed.connect(_pick_weapon.bind(i))
+		weapon_grid.add_child(b)
+		var m := MarginContainer.new()
+		m.set_anchors_preset(Control.PRESET_FULL_RECT)
+		for side in ["left", "right", "top", "bottom"]:
+			m.add_theme_constant_override("margin_" + side, 14)
+		b.add_child(m)
+		var cv := VBoxContainer.new()
+		cv.add_theme_constant_override("separation", 4)
+		m.add_child(cv)
+		_logo(cv, tr(str(w.get("name", "?"))).to_upper(), 22, c.lightened(0.25)).clip_text = true
+		var tag := _lbl(cv, tr(str(r.get("name", ""))).to_upper() + (tr("   ✔ SEÇİLİ") if i == _my_weapon() else ""), 13)
+		tag.add_theme_color_override("font_color", c)
+		var pic := TextureRect.new()
+		pic.texture = weapon_icon(str(w.get("id", "")))
+		pic.custom_minimum_size.y = 84
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cv.add_child(pic)
+		var d := _lbl(cv, tr(str(w.get("desc", ""))), 15)
+		d.modulate.a = 0.85
+		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		d.custom_minimum_size.y = 42 # iki satır: clip_text tek satıra indirmesin
+		d.clip_text = true
+		if locked: # açma koşulu: "Tek maçta 150 öldürme (112/150)"
+			pic.custom_minimum_size.y = 56
+			d.text = tr("🔒 KİLİTLİ") + "\n" + _quest_text("weapon:" + str(w.get("id", "")))
+			d.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+		for st in bars:
+			var row := HBoxContainer.new()
+			cv.add_child(row)
+			var n := _lbl(row, st[0], 13)
+			n.autowrap_mode = TextServer.AUTOWRAP_OFF
+			n.custom_minimum_size.x = 84
+			n.modulate.a = 0.7
+			var pb := ProgressBar.new()
+			pb.show_percentage = false
+			pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			pb.custom_minimum_size.y = 9
+			pb.add_theme_stylebox_override("background", _sb(Color(0, 0, 0, 0.55), 4, 0))
+			pb.add_theme_stylebox_override("fill", _sb(c, 4, 0))
+			pb.max_value = weapon_list.map(st[1]).max()
+			pb.value = st[1].call(w)
+			row.add_child(pb)
+			var num := _lbl(row, st[2] % st[1].call(w), 13)
+			num.autowrap_mode = TextServer.AUTOWRAP_OFF
+			num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			num.custom_minimum_size.x = 58
+		for n in m.find_children("*", "Control", true, false) + [m]:
+			n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if weapon_list.is_empty():
+		_lbl(weapon_grid, "Silah listesi yüklenemedi (weapons.gd).", 18)
+	weapon_wrap.show()
+
+
+func _pick_weapon(i: int) -> void:
+	weapon_sel = i
+	if Net.has_method("set_weapon"):
+		Net.set_weapon(i)
+	_update_weapon_btn()
+	_refresh()
+	weapon_wrap.hide()
+
+
+# ---------- Profil, zorluk, lobi bul, gelişim ----------
+
+## Profile'ın gerçek API'si birleşince çalışsın, iskeletle çökmesin: fonksiyon yoksa varsayılan döner.
+func _pf(fn: String, args := [], def = null) -> Variant:
+	if _pf_names.is_empty():
+		var pg: GDScript = Profile
+		for m in pg.get_script_method_list():
+			_pf_names[m.name] = true
+	var pg: GDScript = Profile
+	return pg.callv(fn, args) if _pf_names.has(fn) else def
+
+
+func _unlocked(id: String) -> bool:
+	return bool(_pf("is_unlocked", [id], true))
+
+
+func _diff_keys() -> Array:
+	return Balance.DIFFS.keys()
+
+
+## "🔒 Normal'i kazan": Balance.DIFFS[...].unlock = "win_<önceki>".
+func _diff_lock_text(k: String) -> String:
+	var u: String = Balance.DIFFS[k].get("unlock", "")
+	return tr("🔒 %s'i kazan") % tr(Balance.DIFFS[u.trim_prefix("win_")].name) if u.begins_with("win_") and Balance.DIFFS.has(u.trim_prefix("win_")) else tr("🔒 Kilitli")
+
+
+func _update_diff_ui() -> void:
+	var keys := _diff_keys()
+	for i in keys.size():
+		var ok := _unlocked("diff:" + keys[i])
+		diff_opt.set_item_disabled(i, not ok)
+		diff_opt.set_item_text(i, tr(Balance.DIFFS[keys[i]].name) + ("" if ok else "  " + _diff_lock_text(keys[i])))
+	diff_opt.select(maxi(keys.find(diff_id), 0))
+	var host := not Net.online() or multiplayer.is_server()
+	if host and not _unlocked("diff:" + diff_id): # katıldığın lobinin kilitli zorluğu sende kalmasın
+		diff_id = "normal"
+		diff_opt.select(maxi(keys.find(diff_id), 0))
+	if host and not _unlocked("mode:endless"):
+		endless = false
+	diff_opt.disabled = not host
+	endless_chk.disabled = not host or not _unlocked("mode:endless")
+	endless_chk.set_pressed_no_signal(endless)
+	endless_chk.text = "Sonsuz Mod" if _unlocked("mode:endless") else "Sonsuz Mod  🔒 Kilitli"
+	diff_hint.text = "" if host else "Zorluğu host seçer."
+	diff_hint.visible = diff_hint.text != ""
+
+
+func _pick_diff(i: int) -> void:
+	diff_id = _diff_keys()[i]
+	_sync_opts()
+
+
+func _sync_opts() -> void:
+	_refresh()
+
+
+@rpc("authority", "call_remote", "reliable")
+func set_opts(d: String, e: bool) -> void:
+	diff_id = d if Balance.DIFFS.has(d) else "normal"
+	endless = e
+	_update_diff_ui()
+
+
+func _solo_td() -> void:
+	if Net.online():
+		Net.leave()
+	set_mode("td")
+	_on_start()
+
+
+func _open_find() -> void:
+	_show_page("find")
+	for c in find_box.get_children():
+		c.queue_free()
+	if not Net.steam_ok:
+		_lbl(find_box, "Lobi bulmak için Steam açık olmalı. Steam'siz oynamak için TEK BAŞINA OYNA'yı kullan.", 17)
+		return
+	_lbl(find_box, "Aranıyor…", 17)
+	Net.find_lobbies()
+
+
+func _on_lobbies(list: Array) -> void:
+	for c in find_box.get_children():
+		c.queue_free()
+	if list.is_empty():
+		_lbl(find_box, "Açık lobi yok — sen kur!", 18)
+	for l in list:
+		var d: String = tr(Balance.DIFFS.get(l.diff, {}).get("name", "-"))
+		var m: String = tr(MODES.get(l.mode, ["?"])[0])
+		_btn(find_box, "▶ %s  •  %s  •  %s  •  %d/4" % [l.name, m, d, l.n], Net.join_lobby.bind(l.id))
+
+
+func _open_growth() -> void:
+	_show_page("growth")
+	for c in growth_box.get_children():
+		c.queue_free()
+	var gold = _pf("gold", [], null)
+	if gold == null:
+		_lbl(growth_box, "Yakında", 22)
+		return
+	_lbl(growth_box, tr("Altın Saç: %d") % int(gold), 24).add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	for id in UPGRADES: # [ad + açıklama + kademe ●●○○○]  [Satın Al · fiyat]
+		var lvl := int(_pf("upgrade_level", [id], 0))
+		var mx := int(_pf("upgrade_max", [id], 5))
+		var cost := int(_pf("upgrade_cost", [id], [60, 120, 200, 300, 450][clampi(lvl, 0, 4)] if lvl < mx else -1))
+		var row := PanelContainer.new()
+		row.add_theme_stylebox_override("panel", _sb(Color(0.07, 0.08, 0.13, 0.88), 8, 10))
+		growth_box.add_child(row)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 10)
+		row.add_child(h)
+		var tv := VBoxContainer.new()
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tv.add_theme_constant_override("separation", 0)
+		h.add_child(tv)
+		_lbl(tv, UPGRADES[id], 19)
+		_lbl(tv, UPGRADE_DESC.get(id, ""), 14).modulate.a = 0.72
+		var pips := _lbl(tv, "●".repeat(lvl) + "○".repeat(maxi(mx - lvl, 0)) + "   %d/%d" % [lvl, mx], 18)
+		pips.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+		var b := _btn(h, tr("AZAMİ") if cost < 0 else tr("Satın Al  ·  %d") % cost, func():
+			if _pf("buy_upgrade", [id], false):
+				Sfx.play2d(Sfx.hurt, -6.0)
+			_open_growth())
+		b.custom_minimum_size.x = 140
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		b.disabled = cost < 0 or cost > int(_pf("gold", [], 0)) or not _pf_names.has("buy_upgrade")
+	_lbl(growth_box, "Açılımlar", 20)
+	var rows := []
+	for w in weapon_list:
+		rows.append(["weapon:" + str(w.get("id", "")), tr(str(w.get("name", "?")))])
+	for k in _diff_keys():
+		if Balance.DIFFS[k].get("unlock", "") != "":
+			rows.append(["diff:" + k, tr("Zorluk: %s") % tr(Balance.DIFFS[k].name)])
+	rows.append(["mode:endless", tr("Sonsuz Mod")])
+	for r in rows:
+		_lbl(growth_box, _unlock_line(r[0], r[1]), 15)
+
+
+## "✔ Ad" ya da "🔒 Ad  —  Tek maçta 150 öldürme  (3/150)".
+func _unlock_line(id: String, name: String) -> String:
+	if _unlocked(id):
+		return "✔ " + name
+	return "🔒 " + name + "  —  " + _quest_text(id)
+
+
+## Açma koşulu ve ilerleme: "Tek maçta 150 öldürme  (112/150)"; koşul bilinmiyorsa "Kazanarak aç."
+func _quest_text(id: String) -> String:
+	var q: Array = Profile.QUESTS.get(id, [])
+	if q.size() != 2:
+		return tr("Kazanarak aç.")
+	var key: String = q[0]
+	var d := key.trim_prefix("wins_")
+	var t: String = tr("%s zorluğunda kazan") % tr(Balance.DIFFS[d].name) if key.begins_with("wins_") and Balance.DIFFS.has(d) \
+		else tr(QUEST_TEXT.get(key, "%d")) % q[1]
+	var pr = _pf("unlock_progress", [id], null)
+	return t + ("  (%d/%d)" % [pr[0], pr[1]] if pr is Array and pr.size() == 2 else "")
+
+
+## Dil değişince koddan biçimlenen yazılar yeniden kurulur (düz metinleri Control'ler kendisi çevirir).
+func _retranslate() -> void:
+	ver_lbl.text = tr("sürüm %s") % Updater.version()
+	chars_title.text = tr("KARAKTERİNİ SEÇ   •   %d karakter") % Chars.LIST.size()
+	_update_char_btn()
+	_on_volume(Settings.volume)
+	shake_slider.value_changed.emit(shake_slider.value)
+	set_mode(mode) # lobi yazıları, zorluk listesi, silah düğmesi, üyeler
+	if page == "growth":
+		_open_growth()
+
+
+## Seçili silah kilitliyse varsayılan tabancaya düş.
+func _fix_weapon() -> void:
+	var i := _my_weapon()
+	if i >= 0 and i < weapon_list.size() and not _unlocked("weapon:" + str(weapon_list[i].get("id", ""))):
+		for j in weapon_list.size():
+			if weapon_list[j].get("id", "") == "pistol":
+				_pick_weapon(j)
+				return
+
+
+func _weapon_name(i: int) -> String:
+	return tr(str(weapon_list[i].get("name", "?"))) if i >= 0 and i < weapon_list.size() else "?"
+
+
+func _update_weapon_btn() -> void:
+	weapon_btn.text = tr("Silah Seç  ·  %s") % _weapon_name(_my_weapon())
 
 
 func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
@@ -773,6 +1339,36 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 	res_opt.disabled = Settings.mode != 0
 	res_opt.item_selected.connect(_on_res)
 	v.add_child(res_opt)
+	_lbl(v, "Grafik kalitesi", 17)
+	var q := OptionButton.new()
+	for n in Settings.QUALITIES:
+		q.add_item(n)
+	q.selected = Settings.quality
+	q.item_selected.connect(func(i: int) -> void:
+		Settings.quality = i
+		Settings.apply_quality()
+		Settings.save())
+	v.add_child(q)
+	var shake_lbl := _lbl(v, "", 17)
+	shake_slider = HSlider.new()
+	shake_slider.min_value = 0.0; shake_slider.max_value = 1.0; shake_slider.step = 0.1
+	shake_slider.value_changed.connect(func(x: float) -> void:
+		Settings.shake = x
+		shake_lbl.text = tr("Kamera sarsıntısı: %d%%") % roundi(x * 100.0))
+	shake_slider.value = Settings.shake
+	shake_slider.value_changed.emit(shake_slider.value)
+	v.add_child(shake_slider)
+	_lbl(v, "Dil / Language", 17)
+	var lang := OptionButton.new()
+	for n in LANG_NAMES:
+		lang.add_item(n)
+	lang.selected = maxi(Settings.LANGUAGES.find(Settings.language), 0)
+	lang.item_selected.connect(func(i: int) -> void:
+		Settings.language = Settings.LANGUAGES[i]
+		Settings.apply_language()
+		_retranslate()
+		Settings.save())
+	v.add_child(lang)
 
 	v.add_child(HSeparator.new())
 	ingame_box = VBoxContainer.new()
@@ -785,7 +1381,7 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 func _on_volume(x: float) -> void:
 	Settings.volume = x
 	Settings.apply_audio()
-	vol_lbl.text = "Ses: %d%%" % roundi(x * 100.0)
+	vol_lbl.text = tr("Ses: %d%%") % roundi(x * 100.0)
 
 
 func _on_mode(i: int) -> void:
@@ -822,22 +1418,23 @@ func _show_friends() -> void:
 	var n := 0
 	for f in list:
 		if f[2] != 0 and f[2] != Net.lobby_id:
-			_btn(friends_box, "▶ Lobisine katıl: " + f[1], Net.join_lobby.bind(f[2]))
+			_btn(friends_box, tr("▶ Lobisine katıl: %s") % f[1], Net.join_lobby.bind(f[2]))
 			n += 1
 		if Net.lobby_id != 0:
-			_btn(friends_box, "Davet et: " + f[1], Net.invite_friend.bind(f[0], f[1]))
+			_btn(friends_box, tr("Davet et: %s") % f[1], Net.invite_friend.bind(f[0], f[1]))
 			n += 1
 	if list.is_empty():
 		info.text = "Çevrimiçi Steam arkadaşı yok."
 	elif Net.lobby_id == 0:
 		info.text = "Davet için önce 'Steam Lobisi Kur'a bas. Lobisi olan arkadaşa ▶ ile katılabilirsin."
 	(friends_box.get_parent() as Control).custom_minimum_size.y = min(n, 5) * 40
+	(friends_box.get_parent() as Control).visible = n > 0
 
 
 func _on_invited(from_name: String, lobby: int) -> void:
 	for c in invite_box.get_children():
 		c.queue_free()
-	_lbl(invite_box, "%s seni lobisine davet etti!" % from_name, 18)
+	_lbl(invite_box, tr("%s seni lobisine davet etti!") % from_name, 18)
 	_btn(invite_box, "✔ Daveti Kabul Et", func():
 		for c in invite_box.get_children():
 			c.queue_free()
@@ -850,10 +1447,26 @@ func _on_invited(from_name: String, lobby: int) -> void:
 
 func _refresh() -> void:
 	var lines := PackedStringArray()
+	var wsel = Net.get("weapons") # peer -> silah no (net.gd'de varsa)
 	for id in Net.names:
-		lines.append(("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + Chars.get_char(Net.chars.get(id, 0)).name)
-	members.text = "Lobidekiler:\n" + "\n".join(lines) if Net.online() else ""
+		var line: String = ("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + tr(Chars.get_char(Net.chars.get(id, 0)).name)
+		if mode == "td" and wsel is Dictionary and wsel.has(id):
+			line += "  •  " + _weapon_name(wsel[id])
+		lines.append(line)
+	members.text = tr("Lobidekiler:") + "\n" + "\n".join(lines) if Net.online() else ""
+	members.visible = members.text != "" # boşken sütunda yer kaplamasın (720p'de Geri sığsın)
 	start_btn.disabled = not (Net.online() and multiplayer.is_server())
+	if not Net.online():
+		start_btn.disabled = mode != "td"
+		start_btn.text = "▶  Tek Başına Başla" if mode == "td" else "Önce lobi kur (Steam)"
+	elif not multiplayer.is_server():
+		start_btn.text = "Host'un başlatması bekleniyor…"
+	else:
+		start_btn.text = MODES.get(mode, MODES.arena)[2]
+	if Net.online() and multiplayer.is_server():
+		set_opts.rpc(diff_id, endless)
+		Net.set_meta_data(mode, diff_id)
+	_update_diff_ui()
 	if Net.online() and world == null and page in ["intro", "main", "modes"]:
 		_show_page("lobby")
 
@@ -867,20 +1480,33 @@ func _process(dt: float) -> void:
 	if me:
 		_update_hp_bar(me, dt)
 		dmg_rect.color.a = me.flash * 1.2
+		crosshair.visible = me.hp > 0
 		blind_rect.color.a = clampf(me.bt("blind") * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
-		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
-		var texts := ["1\nBAZUKA", "2\nKALKAN\n" + sh, "3\nDUVAR\n" + _cd_text(me.wall_cd), "4\nKILIÇ",
-			"Q\n%s\n%s" % [me.ch.skill_name, _cd_text(me.skill_cd)]]
+		var sh := tr("AKTİF") if me.shield_on else _cd_text(me.shield_cd)
+		var texts := ["1\n" + tr("BAZUKA"), "2\n%s\n%s" % [tr("KALKAN"), sh], "3\n%s\n%s" % [tr("DUVAR"), _cd_text(me.wall_cd)], "4\n" + tr("KILIÇ"),
+			"Q\n%s\n%s" % [tr(me.ch.skill_name), _cd_text(me.skill_cd)]]
+		var left := [me.cd, me.shield_cd, me.wall_cd, me.sword_cd, me.skill_cd]
 		for i in 5:
-			slots[i][0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
-			slots[i][1].text = texts[i]
+			var s: Array = slots[i]
+			s[0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
+			if i == 0 or i == 3: # simgeli slot: yalnız tuş numarası, ad simgenin altında
+				if s[2].texture == null:
+					s[2].texture = weapon_icon("bazooka" if i == 0 else "sword")
+				s[1].text = "%d
+
+%s" % [i + 1, tr("BAZUKA") if i == 0 else tr("KILIÇ")]
+				s[1].vertical_alignment = VERTICAL_ALIGNMENT_TOP
+			else:
+				s[1].text = texts[i]
+			s[4] = maxf(s[4], left[i]) if left[i] > 0.0 else 0.0
+			s[3].value = left[i] / s[4] if s[4] > 0.0 else 0.0
 		slots[4][0].border_color = me.ch.color if me.skill_cd <= 0.0 else Color(0.5, 0.5, 0.5, 0.6) # Q hazırsa karakter renginde
 		var st := PackedStringArray()
 		for k in me.buffs:
 			if STATUS.has(k) and me.hp > 0:
-				st.append("%s %.1f" % [STATUS[k], me.buffs[k][1]])
+				st.append("%s %.1f" % [tr(STATUS[k]), me.buffs[k][1]])
 		status_lbl.text = "   ".join(st)
-		spec_lbl.text = "İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir" \
+		spec_lbl.text = tr("İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir") \
 			% Net.display_name(me.spec_target.name.to_int()) if me.hp <= 0 and is_instance_valid(me.spec_target) else ""
 	var s := PackedStringArray()
 	for p in players.get_children():
@@ -889,11 +1515,11 @@ func _process(dt: float) -> void:
 
 
 func _cd_text(t: float) -> String:
-	return "%d sn" % ceili(t) if t > 0.0 else "HAZIR"
+	return tr("%d sn") % ceili(t) if t > 0.0 else tr("HAZIR")
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if world == null and not char_wrap.visible and not settings_wrap.visible:
+	if world == null and not char_wrap.visible and not weapon_wrap.visible and not settings_wrap.visible:
 		if page == "intro" and (e is InputEventKey or e is InputEventMouseButton) and e.pressed:
 			_show_page("main")
 			get_viewport().set_input_as_handled()
@@ -904,6 +1530,8 @@ func _unhandled_input(e: InputEvent) -> void:
 	if e.is_action_pressed("ui_cancel"):
 		if char_wrap.visible:
 			char_wrap.hide()
+		elif weapon_wrap.visible:
+			weapon_wrap.hide()
 		elif settings_wrap.visible:
 			_close_settings()
 		elif world:
@@ -912,7 +1540,8 @@ func _unhandled_input(e: InputEvent) -> void:
 	if world == null or settings_wrap.visible:
 		return
 	if e is InputEventMouseButton and e.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if td_ui == null: # TD'de imleci td_ui yönetir (mağaza, kartlar açıkken görünür kalmalı)
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif e is InputEventKey and e.pressed and e.keycode == KEY_F10:
 		Net.leave()
 
@@ -920,10 +1549,20 @@ func _unhandled_input(e: InputEvent) -> void:
 # ---------- Oyun akışı ----------
 
 func _on_start() -> void:
+	if mode == "td":
+		_fix_weapon() # Net.solo seçili silahı yazmadan önce: kilitliyse tabancaya düşsün
+	if not Net.online():
+		Net.solo() # Steam'siz tek kişilik: OfflineMultiplayerPeer zaten sunucu, call_local rpc çalışır
 	var ids := [1]
 	ids.append_array(Array(multiplayer.get_peers()))
 	ids.sort()
-	start_game.rpc(ids)
+	if Net.steam_ok and Net.lobby_id != 0: # maç sürerken gelen katılmasın (dünyası yok, rpc'ler boşa düşer)
+		Steam.setLobbyJoinable(Net.lobby_id, false)
+	if mode == "td":
+		var d := diff_id if _unlocked("diff:" + diff_id) else "normal"
+		start_td.rpc(ids, {"difficulty": d, "endless": endless and _unlocked("mode:endless")})
+	else:
+		start_game.rpc(ids)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -937,6 +1576,37 @@ func start_game(ids: Array) -> void:
 		p.set_multiplayer_authority(ids[i])
 		p.spawn_pos = SPAWNS[i % SPAWNS.size()]
 		players.add_child(p)
+	round_over = false
+	center_lbl.text = ""
+	ui.hide()
+	hud.show()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Tower Defense maçı: ortası açık harita, oyuncular kule dibinde; dalgaları td.gd yürütür.
+@rpc("authority", "call_local", "reliable")
+## opts: {"difficulty": "easy"|"normal"|"hard"|"nightmare", "endless": bool}; eski çağrılar için boş olabilir.
+func start_td(ids: Array, opts := {}) -> void:
+	_clear_world()
+	_set_menu_bg(false)
+	_build_world(TD_CLEAR)
+	for i in ids.size():
+		var p: CharacterBody3D = PlayerScript.new()
+		p.name = str(ids[i])
+		p.set_multiplayer_authority(ids[i])
+		p.spawn_pos = TD_SPAWNS[i % TD_SPAWNS.size()]
+		players.add_child(p)
+	if ResourceLoader.exists("res://td.gd"):
+		var t: Node = load("res://td.gd").new()
+		t.name = "TD"
+		t.opts.merge(opts, true)
+		world.add_child(t)
+	td_ui = TdUi.new()
+	td_ui.main = self
+	ui_layer.add_child(td_ui)
+	ui_layer.move_child(td_ui, hud.get_index() + 1) # ayarlar ve seçim ekranları üstte kalsın
+	for n in [hotbar, help_lbl, spec_lbl]: # TD'de bunların yerini td_ui tutar
+		n.hide()
 	round_over = false
 	center_lbl.text = ""
 	ui.hide()
@@ -965,7 +1635,7 @@ func end_round(winner: String) -> void:
 	for t in [3, 2, 1]:
 		if not round_over:
 			return
-		center_lbl.text = "%s KAZANDI!\nYeni tur %d sn içinde..." % [winner, t]
+		center_lbl.text = tr("%s KAZANDI!\nYeni tur %d sn içinde...") % [tr(winner), t]
 		await get_tree().create_timer(1.0).timeout
 
 
@@ -991,9 +1661,17 @@ func _clear_world() -> void:
 		world.queue_free()
 	world = null
 	players = null
+	if td_ui: # TD arayüzü maçla birlikte gider, arena HUD'u eski haline döner
+		ui_layer.remove_child(td_ui)
+		td_ui.queue_free()
+		td_ui = null
+		for n in [hotbar, help_lbl, spec_lbl]:
+			n.show()
 
 
 func _back_to_menu() -> void:
+	if Net.steam_ok and Net.lobby_id != 0 and multiplayer.is_server():
+		Steam.setLobbyJoinable(Net.lobby_id, true)
 	_clear_world()
 	round_over = false
 	hud.hide()
@@ -1008,12 +1686,12 @@ func _back_to_menu() -> void:
 
 # ---------- Harita ----------
 
-func _build_world() -> void:
+func _build_world(clear: Array = SPAWNS) -> void:
 	world = Node3D.new()
 	world.name = "World"
 	add_child(world)
 	var forest: Node3D = ForestScript.new()
-	forest.spawns = SPAWNS
+	forest.spawns = clear
 	world.add_child(forest)
 
 	players = Node3D.new()

@@ -1,0 +1,2826 @@
+# Bazuka Savaşı / Bazooka Buddies: İngilizce çeviri. Kaynak dil Türkçe (msgid = Türkçe metin).
+# İskelet: python3 tools/extract_strings.py (var olan çeviriler korunur).
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en\n"
+
+#: main.gd:11
+msgid "Kule Zırhı"
+msgstr "Tower Armor"
+
+#: main.gd:11
+msgid "Başlangıç Altını"
+msgstr "Starting Cash"
+
+#: main.gd:11
+msgid "Yeniden Çekme"
+msgstr "Reroll"
+
+#: main.gd:11
+msgid "Eleme"
+msgstr "Banish"
+
+#: main.gd:12
+msgid "Kule canı +%4 / kademe"
+msgstr "Tower HP +4% per tier"
+
+#: main.gd:12
+msgid "Maç başı parası +10 ₺ / kademe"
+msgstr "+10 ₺ starting money per tier"
+
+#: main.gd:13
+msgid "Maç başına +1 kart yeniden çekme hakkı"
+msgstr "+1 card reroll per match"
+
+#: main.gd:13
+msgid "Maç başına +1 kart eleme hakkı"
+msgstr "+1 card banish per match"
+
+#: main.gd:15
+msgid "Tek maçta %d öldürme"
+msgstr "%d kills in a single match"
+
+#: main.gd:15
+msgid "%d. dalgaya ulaş"
+msgstr "Reach wave %d"
+
+#: main.gd:15
+msgid "Toplam %d yapı kur"
+msgstr "Build %d structures in total"
+
+#: main.gd:16
+msgid "Zor ya da Kabus'ta %d. dalgaya ulaş"
+msgstr "Reach wave %d on Hard or Nightmare"
+
+#: main.gd:16
+msgid "%d maç kazan"
+msgstr "Win %d match"
+
+#: main.gd:17
+msgid "Otomatik (sistem dili)"
+msgstr "Automatic (system language)"
+
+#: main.gd:19
+msgid "SERSEMLEDİN"
+msgstr "STUNNED"
+
+#: main.gd:19
+msgid "KÖR OLDUN"
+msgstr "BLINDED"
+
+#: main.gd:19
+msgid "SUSTURULDUN"
+msgstr "SILENCED"
+
+#: main.gd:19
+msgid "YÖNLER TERS"
+msgstr "CONTROLS REVERSED"
+
+#: main.gd:20
+msgid "YAVAŞLADIN"
+msgstr "SLOWED"
+
+#: main.gd:20
+msgid "İŞARETLENDİN"
+msgstr "MARKED"
+
+#: main.gd:20
+msgid "YANIYORSUN"
+msgstr "BURNING"
+
+#: main.gd:20
+msgid "HIZLI"
+msgstr "HASTE"
+
+#: main.gd:20
+msgid "GÜÇLÜ ROKET"
+msgstr "POWER ROCKETS"
+
+#: main.gd:21
+msgid "SERİ ATEŞ"
+msgstr "RAPID FIRE"
+
+#: main.gd:21
+msgid "ÜÇLÜ ATIŞ"
+msgstr "TRIPLE SHOT"
+
+#: main.gd:21
+msgid "ZIRH"
+msgstr "ARMOR"
+
+#: main.gd:21
+msgid "BOY DEĞİŞTİ"
+msgstr "RESIZED"
+
+#: main.gd:21
+msgid "GÖRÜNMEZ"
+msgstr "INVISIBLE"
+
+#: main.gd:22
+msgid "SÜZÜLÜYOR"
+msgstr "FLOATING"
+
+#: main.gd:22
+msgid "İYİLEŞİYOR"
+msgstr "HEALING"
+
+#: main.gd:27 main.gd:464 main.gd:485
+msgid "ARENA"
+msgstr "ARENA"
+
+#: main.gd:27
+msgid "Lobi kur, arkadaşlarını davet et, savaşı başlat."
+msgstr "Open a lobby, invite your friends, start the fight."
+
+#: main.gd:27 main.gd:530
+msgid "▶  Oyunu Başlat (host)"
+msgstr "▶  Start Game (host)"
+
+#: main.gd:28 main.gd:467
+msgid "TOWER DEFENSE"
+msgstr "TOWER DEFENSE"
+
+#: main.gd:28
+msgid "Rapunzel'in kulesini birlikte savunun. Tek başına da başlatabilirsin."
+msgstr "Defend Rapunzel's tower together. You can also start solo."
+
+#: main.gd:28
+msgid "▶  Savunmayı Başlat (host)"
+msgstr "▶  Start Defense (host)"
+
+#: main.gd:283
+msgid "WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD atıl | 1-4 eşya | Q karakter yeteneği | Sol tık kullan | ESC menü/ayarlar | F10 çık"
+msgstr "WASD move | Space jump (again for double jump) | Shift+WASD dash | 1-4 items | Q character skill | Left click use | ESC menu/settings | F10 quit"
+
+#: main.gd:429
+msgid "BAZUKA SAVAŞI"
+msgstr "BAZOOKA BUDDIES"
+
+#: main.gd:431
+msgid "R O K E T L E R    •    K A O S    •    A R K A D A Ş L A R"
+msgstr "R O C K E T S    •    C H A O S    •    F R I E N D S"
+
+#: main.gd:432
+msgid "BAŞLAMAK İÇİN BİR TUŞA BAS"
+msgstr "PRESS ANY KEY TO START"
+
+#: main.gd:439
+msgid "BAZUKA\nSAVAŞI"
+msgstr "BAZOOKA\nBUDDIES"
+
+#: main.gd:440
+msgid "4 kişilik bazuka kaosu"
+msgstr "4-player bazooka chaos"
+
+#: main.gd:442
+msgid "OYNA"
+msgstr "PLAY"
+
+#: main.gd:443 main.gd:563
+msgid "GELİŞİM"
+msgstr "PROGRESS"
+
+#: main.gd:446 main.gd:1312
+msgid "AYARLAR"
+msgstr "SETTINGS"
+
+#: main.gd:447
+msgid "ÇIKIŞ"
+msgstr "QUIT"
+
+#: main.gd:449
+msgid "●  Steam bağlı değil (Steam açık mı?)"
+msgstr "●  Steam not connected (is Steam running?)"
+
+#: main.gd:459
+msgid "OYUN MODU SEÇ"
+msgstr "CHOOSE GAME MODE"
+
+#: main.gd:464
+msgid "PvP  •  2–4 oyuncu"
+msgstr "PvP  •  2–4 players"
+
+#: main.gd:465
+msgid "Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır."
+msgstr "Free-for-all. 52 characters, bazookas, shields, walls and swords. Last one standing wins the round."
+
+#: main.gd:466
+msgid "▶  ARENAYA GİR"
+msgstr "▶  ENTER THE ARENA"
+
+#: main.gd:467
+msgid "Co-op  •  1–4 oyuncu"
+msgstr "Co-op  •  1–4 players"
+
+#: main.gd:468
+msgid "Rapunzel'in kulesini savun. 10 dalga yaratık, seviye atladıkça kart seç, molada mağazadan duvar, tuzak ve taret al."
+msgstr "Defend Rapunzel's tower. 10 monster waves, pick cards as you level up, buy walls, traps and turrets between waves."
+
+#: main.gd:469
+msgid "▶  KULEYİ SAVUN"
+msgstr "▶  DEFEND THE TOWER"
+
+#: main.gd:474
+msgid "⚡  TEK BAŞINA OYNA  (Steam gerekmez)"
+msgstr "⚡  PLAY SOLO  (no Steam needed)"
+
+#: main.gd:477
+msgid "🔍  Açık Lobi Bul"
+msgstr "🔍  Find Open Lobby"
+
+#: main.gd:479 main.gd:544 main.gd:558 main.gd:572
+msgid "◀  Geri"
+msgstr "◀  Back"
+
+#: main.gd:499
+msgid "Steam Lobisi Kur"
+msgstr "Create Steam Lobby"
+
+#: main.gd:501
+msgid "Herkese açık"
+msgstr "Public"
+
+#: main.gd:504
+msgid "Arkadaşlar (davet et / lobisine katıl)"
+msgstr "Friends (invite / join their lobby)"
+
+#: main.gd:514
+msgid "Karakter Değiştir"
+msgstr "Change Character"
+
+#: main.gd:527 main.gd:1151 main.gd:1242
+msgid "Sonsuz Mod"
+msgstr "Endless Mode"
+
+#: main.gd:533 main.gd:1371
+msgid "Lobiden Çık"
+msgstr "Leave Lobby"
+
+#: main.gd:538
+msgid "Tek PC testi:"
+msgstr "Single-PC test:"
+
+#: main.gd:541
+msgid "Yerel Host"
+msgstr "Local Host"
+
+#: main.gd:541
+msgid "Yerel Katıl"
+msgstr "Local Join"
+
+#: main.gd:548
+msgid "LOBİ BUL"
+msgstr "FIND LOBBY"
+
+#: main.gd:549
+msgid "Herkese açık, senin sürümünde lobiler."
+msgstr "Public lobbies on your game version."
+
+#: main.gd:557
+msgid "↻  Yenile"
+msgstr "↻  Refresh"
+
+#: main.gd:578 main.gd:1269
+msgid "sürüm %s"
+msgstr "version %s"
+
+#: main.gd:647
+msgid "YAKINDA"
+msgstr "COMING SOON"
+
+#: main.gd:787 main.gd:1270
+msgid "KARAKTERİNİ SEÇ   •   %d karakter"
+msgstr "CHOOSE YOUR CHARACTER   •   %d characters"
+
+#: main.gd:870
+msgid "✔  SEÇ"
+msgstr "✔  SELECT"
+
+#: main.gd:870 main.gd:963 main.gd:1372 main.gd:1397
+msgid "Kapat"
+msgstr "Close"
+
+#: main.gd:892
+msgid "Can %d   •   Hız %%%d   •   Kalkan %d sn"
+msgstr "HP %d   •   Speed %d%%   •   Shield %d s"
+
+#: main.gd:893
+msgid "Pasif: %s"
+msgstr "Passive: %s"
+
+#: main.gd:894
+msgid "Q – %s (%d sn)\n%s"
+msgstr "Q – %s (%d s)\n%s"
+
+#: main.gd:902
+msgid "%d can"
+msgstr "%d HP"
+
+#: main.gd:903
+msgid "%+d%% hız"
+msgstr "%+d%% speed"
+
+#: main.gd:904
+msgid "kalkan %d sn'de dolar"
+msgstr "shield recharges in %d s"
+
+#: main.gd:905
+msgid "%%%d şansla hasardan sıyrılır"
+msgstr "%d%% chance to dodge damage"
+
+#: main.gd:906
+msgid "roketleri %%%d hızlı"
+msgstr "rockets %d%% faster"
+
+#: main.gd:907
+msgid "%%%d seri ateş"
+msgstr "%d%% faster fire"
+
+#: main.gd:908
+msgid "roket hasarı %d"
+msgstr "rocket damage %d"
+
+#: main.gd:909
+msgid "kılıç hasarı %d"
+msgstr "sword damage %d"
+
+#: main.gd:910
+msgid "saniyede %s can yeniler"
+msgstr "regenerates %s HP per second"
+
+#: main.gd:911
+msgid "%%%d yüksek zıplar"
+msgstr "jumps %d%% higher"
+
+#: main.gd:912
+msgid "havada %d kez zıplar"
+msgstr "jumps %d times in mid-air"
+
+#: main.gd:913
+msgid "duvar %d sn'de dolar"
+msgstr "wall recharges in %d s"
+
+#: main.gd:914
+msgid "2 sn durunca kendiliğinden kalkan alır"
+msgstr "gets a free shield after standing still for 2 s"
+
+#: main.gd:915
+msgid "Dengeli: zaafı da yok, üstünlüğü de."
+msgstr "Balanced: no weaknesses, no strengths."
+
+#: main.gd:936
+msgid "KARAKTER  ·  %s"
+msgstr "CHARACTER  ·  %s"
+
+#: main.gd:952
+msgid "SİLAHINI SEÇ"
+msgstr "CHOOSE YOUR WEAPON"
+
+#: main.gd:953
+msgid "Tower Defense'e bu silahla girersin. Yenileri seviye kartlarından gelir."
+msgstr "You start Tower Defense with this weapon. More come from level-up cards."
+
+#: main.gd:1024
+msgid "Hasar"
+msgstr "Damage"
+
+#: main.gd:1025
+msgid "Atış hızı"
+msgstr "Fire rate"
+
+#: main.gd:1025
+msgid "%.1f/sn"
+msgstr "%.1f/s"
+
+#: main.gd:1025
+msgid "Menzil"
+msgstr "Range"
+
+#: main.gd:1060
+msgid "   ✔ SEÇİLİ"
+msgstr "   ✔ SELECTED"
+
+#: main.gd:1075
+msgid "🔒 KİLİTLİ"
+msgstr "🔒 LOCKED"
+
+#: main.gd:1101
+msgid "Silah listesi yüklenemedi (weapons.gd)."
+msgstr "Couldn't load the weapon list (weapons.gd)."
+
+#: main.gd:1137
+msgid "🔒 %s'i kazan"
+msgstr "🔒 Win on %s"
+
+#: main.gd:1137
+msgid "🔒 Kilitli"
+msgstr "🔒 Locked"
+
+#: main.gd:1151
+msgid "Sonsuz Mod  🔒 Kilitli"
+msgstr "Endless Mode  🔒 Locked"
+
+#: main.gd:1152
+msgid "Zorluğu host seçer."
+msgstr "The host picks the difficulty."
+
+#: main.gd:1184
+msgid "Lobi bulmak için Steam açık olmalı. Steam'siz oynamak için TEK BAŞINA OYNA'yı kullan."
+msgstr "Steam must be running to find lobbies. To play without Steam, use PLAY SOLO."
+
+#: main.gd:1186
+msgid "Aranıyor…"
+msgstr "Searching…"
+
+#: main.gd:1194
+msgid "Açık lobi yok — sen kur!"
+msgstr "No open lobbies — host one!"
+
+#: main.gd:1207
+msgid "Yakında"
+msgstr "Coming soon"
+
+#: main.gd:1209
+msgid "Altın Saç: %d"
+msgstr "Golden Hair: %d"
+
+#: main.gd:1228
+msgid "AZAMİ"
+msgstr "MAXED"
+
+#: main.gd:1228
+msgid "Satın Al  ·  %d"
+msgstr "Buy  ·  %d"
+
+#: main.gd:1235
+msgid "Açılımlar"
+msgstr "Unlocks"
+
+#: main.gd:1241
+msgid "Zorluk: %s"
+msgstr "Difficulty: %s"
+
+#: main.gd:1258
+msgid "Kazanarak aç."
+msgstr "Win to unlock."
+
+#: main.gd:1261
+msgid "%s zorluğunda kazan"
+msgstr "Win on %s"
+
+#: main.gd:1294
+msgid "Silah Seç  ·  %s"
+msgstr "Weapon  ·  %s"
+
+#: main.gd:1322
+msgid "Ekran modu"
+msgstr "Display mode"
+
+#: main.gd:1329
+msgid "Çözünürlük (pencere modunda)"
+msgstr "Resolution (windowed)"
+
+#: main.gd:1337
+msgid "Grafik kalitesi"
+msgstr "Graphics quality"
+
+#: main.gd:1352
+msgid "Kamera sarsıntısı: %d%%"
+msgstr "Camera shake: %d%%"
+
+#: main.gd:1356
+msgid "Dil / Language"
+msgstr "Language / Dil"
+
+#: main.gd:1379
+msgid "Ses: %d%%"
+msgstr "Volume: %d%%"
+
+#: main.gd:1397
+msgid "Oyuna Dön"
+msgstr "Back to Game"
+
+#: main.gd:1416
+msgid "▶ Lobisine katıl: %s"
+msgstr "▶ Join lobby: %s"
+
+#: main.gd:1419
+msgid "Davet et: %s"
+msgstr "Invite: %s"
+
+#: main.gd:1422
+msgid "Çevrimiçi Steam arkadaşı yok."
+msgstr "No Steam friends online."
+
+#: main.gd:1424
+msgid "Davet için önce 'Steam Lobisi Kur'a bas. Lobisi olan arkadaşa ▶ ile katılabilirsin."
+msgstr "To invite, first press 'Create Steam Lobby'. Use ▶ to join a friend who has a lobby."
+
+#: main.gd:1432
+msgid "%s seni lobisine davet etti!"
+msgstr "%s invited you to their lobby!"
+
+#: main.gd:1433
+msgid "✔ Daveti Kabul Et"
+msgstr "✔ Accept Invite"
+
+#: main.gd:1437
+msgid "✖ Reddet"
+msgstr "✖ Decline"
+
+#: main.gd:1451
+msgid "Lobidekiler:"
+msgstr "In the lobby:"
+
+#: main.gd:1456
+msgid "▶  Tek Başına Başla"
+msgstr "▶  Start Solo"
+
+#: main.gd:1456
+msgid "Önce lobi kur (Steam)"
+msgstr "Create a lobby first (Steam)"
+
+#: main.gd:1458
+msgid "Host'un başlatması bekleniyor…"
+msgstr "Waiting for the host to start…"
+
+#: main.gd:1480
+msgid "AKTİF"
+msgstr "ACTIVE"
+
+#: main.gd:1481 main.gd:1492
+msgid "BAZUKA"
+msgstr "BAZOOKA"
+
+#: main.gd:1481
+msgid "KALKAN"
+msgstr "SHIELD"
+
+#: main.gd:1481
+msgid "DUVAR"
+msgstr "WALL"
+
+#: main.gd:1481 main.gd:1492
+msgid "KILIÇ"
+msgstr "SWORD"
+
+#: main.gd:1504
+msgid "İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir"
+msgstr "SPECTATING: %s\nLeft / Right click: switch player"
+
+#: main.gd:1513
+msgid "%d sn"
+msgstr "%d s"
+
+#: main.gd:1513
+msgid "HAZIR"
+msgstr "READY"
+
+#: main.gd:1616
+msgid "Kimse"
+msgstr "Nobody"
+
+#: main.gd:1629
+msgid "%s KAZANDI!\nYeni tur %d sn içinde..."
+msgstr "%s WINS!\nNext round in %d s..."
+
+#: td_ui.gd:7
+msgid "▲  STAT"
+msgstr "▲  STAT"
+
+#: td_ui.gd:7
+msgid "★  KARAKTER"
+msgstr "★  CHARACTER"
+
+#: td_ui.gd:7
+msgid "✚  YENİ SİLAH"
+msgstr "✚  NEW WEAPON"
+
+#: td_ui.gd:7
+msgid "◆  SİLAH YÜKSELTME"
+msgstr "◆  WEAPON UPGRADE"
+
+#: td_ui.gd:7
+msgid "✦  EVRİM"
+msgstr "✦  EVOLUTION"
+
+#: td_ui.gd:14
+msgid "SOL TIK"
+msgstr "LEFT CLICK"
+
+#: td_ui.gd:14
+msgid "ateş et"
+msgstr "shoot"
+
+#: td_ui.gd:15
+msgid "mağazayı aç, bir Duvar al"
+msgstr "open the shop and buy a Wall"
+
+#: td_ui.gd:16
+msgid "duvarı eline al: yeşil hayaleti kuleyle yaratık yolu arasına koy, sol tıkla kur"
+msgstr "equip the wall: put the green ghost between the tower and the monsters' path, left click to build"
+
+#: td_ui.gd:17
+msgid "hazırım: dalgayı başlat"
+msgstr "ready up: start the wave"
+
+#: td_ui.gd:18
+msgid "kart seç"
+msgstr "pick a card"
+
+#: td_ui.gd:19
+msgid "stat panelini aç, puanını harca"
+msgstr "open the stat panel and spend your point"
+
+#: td_ui.gd:256
+msgid "♜  RAPUNZEL'İN KULESİ"
+msgstr "♜  RAPUNZEL'S TOWER"
+
+#: td_ui.gd:349
+msgid "H: rehberi atla"
+msgstr "H: skip tutorial"
+
+#: td_ui.gd:388
+msgid "TAB statlar   •   B mağaza   •   G hazır   •   1–5 envanter   •   Q yetenek   •   ESC menü"
+msgstr "TAB stats   •   B shop   •   G ready   •   1–5 inventory   •   Q skill   •   ESC menu"
+
+#: td_ui.gd:405
+msgid "SİLAH  /  EKİPMAN"
+msgstr "WEAPON  /  GEAR"
+
+#: td_ui.gd:405
+msgid "YAPI  /  EŞYA"
+msgstr "BUILD  /  ITEM"
+
+#: td_ui.gd:405
+msgid "YETENEK"
+msgstr "SKILL"
+
+#: td_ui.gd:468
+msgid "STATLAR"
+msgstr "STATS"
+
+#: td_ui.gd:477
+msgid "SİLAHLAR VE EKİPMAN"
+msgstr "WEAPONS AND GEAR"
+
+#: td_ui.gd:492
+msgid "SEVİYE ATLADIN!"
+msgstr "LEVEL UP!"
+
+#: td_ui.gd:525
+msgid "MAĞAZA"
+msgstr "SHOP"
+
+#: td_ui.gd:527
+msgid "Takım parasıyla alınır. Yapı 4–5. slota gelir: slotu seç, sol tıkla yerleştir."
+msgstr "Paid with team money. Builds go to slots 4–5: select the slot, left click to place."
+
+#: td_ui.gd:535
+msgid "Kapat  (B)"
+msgstr "Close  (B)"
+
+#: td_ui.gd:571
+msgid "%s geliyor!"
+msgstr "%s incoming!"
+
+#: td_ui.gd:571
+msgid "Son dalga: kuleyi ne pahasına olursa olsun koru."
+msgstr "Final wave: protect the tower at all costs."
+
+#: td_ui.gd:571
+msgid "Yaratıklar geliyor!"
+msgstr "Monsters incoming!"
+
+#: td_ui.gd:572
+msgid "SON DALGA!"
+msgstr "FINAL WAVE!"
+
+#: td_ui.gd:572
+msgid "DALGA %d"
+msgstr "WAVE %d"
+
+#: td_ui.gd:575
+msgid "DALGA TEMİZLENDİ"
+msgstr "WAVE CLEARED"
+
+#: td_ui.gd:575
+msgid "Mola: B ile mağaza, TAB ile stat puanları."
+msgstr "Break: B for the shop, TAB for stat points."
+
+#: td_ui.gd:576 td_ui.gd:610
+msgid "Sıradaki dalga:  %s"
+msgstr "Next wave:  %s"
+
+#: td_ui.gd:596
+msgid "DALGA %d / ∞"
+msgstr "WAVE %d / ∞"
+
+#: td_ui.gd:597
+msgid "DALGA %d / %d"
+msgstr "WAVE %d / %d"
+
+#: td_ui.gd:622
+msgid "Kalan yaratık: %d"
+msgstr "Monsters left: %d"
+
+#: td_ui.gd:622
+msgid "Öldürülen: %d"
+msgstr "Kills: %d"
+
+#: td_ui.gd:626
+msgid "MOLA   •   sıradaki dalgaya %d sn"
+msgstr "BREAK   •   next wave in %d s"
+
+#: td_ui.gd:635
+msgid "SV %d"
+msgstr "LV %d"
+
+#: td_ui.gd:644
+msgid "ÖLDÜN\nYeniden doğuş: %d sn"
+msgstr "YOU DIED\nRespawn in %d s"
+
+#: td_ui.gd:660
+msgid "Elemek istediğin kartı seç: bu maçta bir daha çıkmaz"
+msgstr "Pick the card to banish: it won't show up again this match"
+
+#: td_ui.gd:661
+msgid "1 / 2 / 3 tuşuyla ya da tıklayarak seç"
+msgstr "Pick with 1 / 2 / 3 or click"
+
+#: td_ui.gd:661
+msgid "1 / 2 / 3 tuşuyla seç"
+msgstr "Pick with 1 / 2 / 3"
+
+#: td_ui.gd:663
+msgid "↻  Yeniden Çek  [4]   •   %d hak"
+msgstr "↻  Reroll  [4]   •   %d left"
+
+#: td_ui.gd:665
+msgid "✕  Hangisi? 1 / 2 / 3   ([5] vazgeç)"
+msgstr "✕  Which one? 1 / 2 / 3   ([5] cancel)"
+
+#: td_ui.gd:665
+msgid "✕  Ele  [5]   •   %d hak"
+msgstr "✕  Banish  [5]   •   %d left"
+
+#: td_ui.gd:719
+msgid "Mağaza yalnız molada açılır."
+msgstr "The shop only opens during breaks."
+
+#: td_ui.gd:807 td_ui.gd:847
+msgid "%%%d"
+msgstr "%d%%"
+
+#: td_ui.gd:839
+msgid "Hazırsın"
+msgstr "You're ready"
+
+#: td_ui.gd:839
+msgid "G: Hazır"
+msgstr "G: Ready"
+
+#: td_ui.gd:887
+msgid "%s   •   Seviye %d"
+msgstr "%s   •   Level %d"
+
+#: td_ui.gd:887 net.gd:44
+msgid "Oyuncu"
+msgstr "Player"
+
+#: td_ui.gd:888
+msgid "Harcanacak stat puanı: %d   (+ ile dağıt)"
+msgstr "Stat points to spend: %d   (use +)"
+
+#: td_ui.gd:889
+msgid "Stat puanı: %d   (molada harcanır)"
+msgstr "Stat points: %d   (spend during breaks)"
+
+#: td_ui.gd:899
+msgid "%s    Sv %d   %s"
+msgstr "%s    Lv %d   %s"
+
+#: td_ui.gd:945
+msgid "✦ EVRİM"
+msgstr "✦ EVOLUTION"
+
+#: td_ui.gd:946
+msgid "KART"
+msgstr "CARD"
+
+#: td_ui.gd:974
+msgid "  (sv. %d/%d)"
+msgstr "  (lv. %d/%d)"
+
+#: td_ui.gd:994
+msgid "EKİPMAN: %s"
+msgstr "GEAR: %s"
+
+#: td_ui.gd:994
+msgid "YENİ SİLAH: %s"
+msgstr "NEW WEAPON: %s"
+
+#: td_ui.gd:1002
+msgid "EVRİM: %s"
+msgstr "EVOLUTION: %s"
+
+#: td_ui.gd:1081
+msgid "Para yetmiyor: %d ₺ eksik."
+msgstr "Not enough money: %d ₺ short."
+
+#: td_ui.gd:1087
+msgid "Envanter dolu: 4. ve 5. slotta yer yok. Önce elindeki yapıyı yerleştir."
+msgstr "Inventory full: no room in slots 4 and 5. Place the build you're holding first."
+
+#: td_ui.gd:1089
+msgid "%s alındı."
+msgstr "Bought %s."
+
+#: td_ui.gd:1091
+msgid "Şu an alınamıyor."
+msgstr "Can't buy that right now."
+
+#: td_ui.gd:1103
+msgid "BOSS: %s"
+msgstr "BOSS: %s"
+
+#: td_ui.gd:1103
+msgid "ARA BOSS: %s"
+msgstr "MINI-BOSS: %s"
+
+#: td_ui.gd:1151
+msgid "İLK MAÇ REHBERİ   %d / %d"
+msgstr "FIRST MATCH TUTORIAL   %d / %d"
+
+#: td_ui.gd:1163
+msgid "Rehber tamam. İyi savunmalar!"
+msgstr "Tutorial complete. Happy defending!"
+
+#: td_ui.gd:1235
+msgid "ZAFER!"
+msgstr "VICTORY!"
+
+#: td_ui.gd:1235
+msgid "SONSUZ: DALGA %d"
+msgstr "ENDLESS: WAVE %d"
+
+#: td_ui.gd:1235
+msgid "KULE DÜŞTÜ"
+msgstr "THE TOWER FELL"
+
+#: td_ui.gd:1237
+msgid "Rapunzel güvende. Kule tüm dalgalara dayandı."
+msgstr "Rapunzel is safe. The tower held against every wave."
+
+#: td_ui.gd:1237
+msgid "Kule %d. dalgada düştü."
+msgstr "The tower fell on wave %d."
+
+#: td_ui.gd:1237
+msgid "Yaratıklar kuleyi ele geçirdi."
+msgstr "The monsters took the tower."
+
+#: td_ui.gd:1242
+msgid "DALGA"
+msgstr "WAVE"
+
+#: td_ui.gd:1242 td_ui.gd:1251
+msgid "ZORLUK"
+msgstr "DIFFICULTY"
+
+#: td_ui.gd:1243 td_ui.gd:1300
+msgid "ÖLDÜRME"
+msgstr "KILLS"
+
+#: td_ui.gd:1243
+msgid "SEVİYE"
+msgstr "LEVEL"
+
+#: td_ui.gd:1263
+msgid "↻  Tekrar Oyna"
+msgstr "↻  Play Again"
+
+#: td_ui.gd:1264
+msgid "◀  Menüye Dön"
+msgstr "◀  Main Menu"
+
+#: td_ui.gd:1269
+msgid "Yeniden başlatmayı host yapar."
+msgstr "The host restarts the match."
+
+#: td_ui.gd:1271
+msgid "İpucu: lobide Sonsuz modu açarsan 10. dalgadan sonra da savaş sürer."
+msgstr "Tip: turn on Endless mode in the lobby to keep fighting after wave 10."
+
+#: td_ui.gd:1285 characters.gd:75
+msgid "Kasap"
+msgstr "Butcher"
+
+#: td_ui.gd:1285
+msgid "Mimar"
+msgstr "Architect"
+
+#: td_ui.gd:1285
+msgid "Keskin Göz"
+msgstr "Sharpshooter"
+
+#: td_ui.gd:1298
+msgid "Ölümsüz"
+msgstr "Untouchable"
+
+#: td_ui.gd:1300
+msgid "OYUNCU"
+msgstr "PLAYER"
+
+#: td_ui.gd:1300
+msgid "HASAR"
+msgstr "DAMAGE"
+
+#: td_ui.gd:1300
+msgid "KRİTİK"
+msgstr "CRITS"
+
+#: td_ui.gd:1300
+msgid "YAPI"
+msgstr "BUILDS"
+
+#: td_ui.gd:1300
+msgid "ÖLÜM"
+msgstr "DEATHS"
+
+#: td_ui.gd:1300
+msgid "UNVAN"
+msgstr "TITLES"
+
+#: td_ui.gd:1322
+msgid "★ MVP  "
+msgstr "★ MVP"
+
+#: td_ui.gd:1348
+msgid "+%d ALTIN SAÇ"
+msgstr "+%d GOLDEN HAIR"
+
+#: td_ui.gd:1349
+msgid "Toplam: %d"
+msgstr "Total: %d"
+
+#: td_ui.gd:1351
+msgid "YENİ: %s açıldı!"
+msgstr "NEW: %s unlocked!"
+
+#: td_ui.gd:1361
+msgid "Sıradaki açılımlar:   %s"
+msgstr "Next unlocks:   %s"
+
+#: td_ui.gd:1374
+msgid "%s zorluğu"
+msgstr "%s difficulty"
+
+#: td_ui.gd:1376
+msgid "Sonsuz mod"
+msgstr "Endless mode"
+
+#: player.gd:1262
+msgid "Iska!"
+msgstr "Miss!"
+
+#: net.gd:39
+msgid "Bağlantı başarısız."
+msgstr "Connection failed."
+
+#: net.gd:40
+msgid "Host ayrıldı."
+msgstr "The host left."
+
+#: net.gd:48
+msgid "Oyuncu %d"
+msgstr "Player %d"
+
+#: net.gd:61
+msgid "Steam açık değil / başlatılamadı."
+msgstr "Steam isn't running / couldn't start."
+
+#: net.gd:65
+msgid "Lobi kuruluyor..."
+msgstr "Creating lobby..."
+
+#: net.gd:89
+msgid "Önce Steam lobisi kur."
+msgstr "Create a Steam lobby first."
+
+#: net.gd:92
+msgid "%s davet edildi. Oyunu açıkken Steam sohbetindeki daveti kabul etsin."
+msgstr "%s was invited. They should accept the invite in Steam chat while the game is open."
+
+#: net.gd:94
+msgid "Davet gönderilemedi."
+msgstr "Couldn't send the invite."
+
+#: net.gd:139
+msgid "Lobi kurulamadı (kod %d)."
+msgstr "Couldn't create the lobby (code %d)."
+
+#: net.gd:142
+msgid "%s lobisi"
+msgstr "%s's lobby"
+
+#: net.gd:149
+msgid "Lobi hazır. 'Arkadaş Davet Et' ile çağır."
+msgstr "Lobby ready. Invite friends with 'Friends'."
+
+#: net.gd:155
+msgid "Lobiye katılınıyor..."
+msgstr "Joining lobby..."
+
+#: net.gd:160
+msgid "Lobiye katılınamadı (kod %d)."
+msgstr "Couldn't join the lobby (code %d)."
+
+#: net.gd:168
+msgid "Hosta bağlanılıyor..."
+msgstr "Connecting to host..."
+
+#: net.gd:177
+msgid "Port %d açılamadı."
+msgstr "Couldn't open port %d."
+
+#: net.gd:181
+msgid "Yerel host açık (port %d)."
+msgstr "Local host open (port %d)."
+
+#: net.gd:188
+msgid "İstemci oluşturulamadı."
+msgstr "Couldn't create the client."
+
+#: net.gd:191
+msgid "Yerel hosta bağlanılıyor..."
+msgstr "Connecting to local host..."
+
+#: net.gd:211
+msgid "Bağlandı. Hostun oyunu başlatmasını bekle."
+msgstr "Connected. Wait for the host to start the game."
+
+#: settings.gd:5
+msgid "Pencere"
+msgstr "Windowed"
+
+#: settings.gd:5
+msgid "Tam ekran"
+msgstr "Fullscreen"
+
+#: settings.gd:5
+msgid "Kenarlıksız tam ekran"
+msgstr "Borderless fullscreen"
+
+#: settings.gd:11
+msgid "Düşük"
+msgstr "Low"
+
+#: settings.gd:11
+msgid "Orta"
+msgstr "Medium"
+
+#: settings.gd:11
+msgid "Yüksek"
+msgstr "High"
+
+#: updater.gd:71
+msgid "Yeni sürüm %s indiriliyor..."
+msgstr "Downloading new version %s..."
+
+#: updater.gd:83
+msgid "Güncelleme indirilemedi, eski sürümle devam."
+msgstr "Couldn't download the update, continuing with the current version."
+
+#: updater.gd:88
+msgid "Güncelleme kurulamadı (%s), eski sürümle devam."
+msgstr "Couldn't install the update (%s), continuing with the current version."
+
+#: updater.gd:90
+msgid "%s kuruldu, oyun yeniden başlıyor..."
+msgstr "%s installed, restarting the game..."
+
+#: updater.gd:101
+msgid "zip açılamadı"
+msgstr "couldn't open the zip"
+
+#: updater.gd:115
+msgid "%s değiştirilemedi"
+msgstr "couldn't replace %s"
+
+#: updater.gd:121
+msgid "%s yazılamadı"
+msgstr "couldn't write %s"
+
+#: characters.gd:18
+msgid "Parıltı"
+msgstr "Sparkle"
+
+#: characters.gd:18
+msgid "Göz Alıcı"
+msgstr "Eye-Catcher"
+
+#: characters.gd:19
+msgid "KÖR EDİCİ PARILTI"
+msgstr "BLINDING SPARKLE"
+
+#: characters.gd:19
+msgid "Gözlüğünü takmalıydın!"
+msgstr "Should've worn your shades!"
+
+#: characters.gd:20
+msgid "8 m içinde sana bakanların ekranı 1,5 sn bembeyaz olur."
+msgstr "Anyone within 8 m looking at you goes snow-blind for 1.5 s."
+
+#: characters.gd:22 weapons.gd:69
+msgid "Bumerang"
+msgstr "Boomerang"
+
+#: characters.gd:22
+msgid "Usta Fırlatıcı"
+msgstr "Master Thrower"
+
+#: characters.gd:23
+msgid "GÜDÜMLÜ BUMERANG"
+msgstr "HOMING BOOMERANG"
+
+#: characters.gd:23
+msgid "Kaçamazsın!"
+msgstr "You can't escape!"
+
+#: characters.gd:24
+msgid "Bumerang en yakın düşmanı kovalar: 30 hasar. Keskin dönüşle kaçılabilir."
+msgstr "The boomerang chases the nearest enemy: 30 damage. A sharp turn can dodge it."
+
+#: characters.gd:26
+msgid "Mıknatıs"
+msgstr "Magnet"
+
+#: characters.gd:26
+msgid "Çekim Gücü"
+msgstr "Pull Power"
+
+#: characters.gd:27
+msgid "MANYETİK ALAN"
+msgstr "MAGNETIC FIELD"
+
+#: characters.gd:27
+msgid "Gel buraya!"
+msgstr "Get over here!"
+
+#: characters.gd:28
+msgid "8 m içindekileri kendine çeker (10 hasar), 4 sn boyunca roketlerin 30 hasar verir."
+msgstr "Pulls everyone within 8 m to you (10 damage); your rockets deal 30 damage for 4 s."
+
+#: characters.gd:30
+msgid "Joker"
+msgstr "Joker"
+
+#: characters.gd:30
+msgid "Kart Ustası"
+msgstr "Card Shark"
+
+#: characters.gd:31
+msgid "SEKEN KART"
+msgstr "RICOCHET CARD"
+
+#: characters.gd:31
+msgid "Elim çok iyi!"
+msgstr "I've got a great hand!"
+
+#: characters.gd:32
+msgid "Kart en yakın düşmana gider, 3 kişiye kadar seker: her birine 20 hasar."
+msgstr "The card flies at the nearest enemy and bounces to up to 3 targets: 20 damage each."
+
+#: characters.gd:34
+msgid "Şifacı"
+msgstr "Healer"
+
+#: characters.gd:34
+msgid "Yenilenme"
+msgstr "Regeneration"
+
+#: characters.gd:35
+msgid "YENİLENME"
+msgstr "REGENERATE"
+
+#: characters.gd:35
+msgid "Daha bitmedi!"
+msgstr "It's not over yet!"
+
+#: characters.gd:36
+msgid "4 sn boyunca saniyede 12 can yeniler."
+msgstr "Restores 12 HP per second for 4 s."
+
+#: characters.gd:38
+msgid "Fotoğrafçı"
+msgstr "Photographer"
+
+#: characters.gd:38
+msgid "Flaş Ustası"
+msgstr "Flash Master"
+
+#: characters.gd:39
+msgid "FLAŞ PATLAT"
+msgstr "FLASH BANG"
+
+#: characters.gd:39
+msgid "Gülümse!"
+msgstr "Say cheese!"
+
+#: characters.gd:40
+msgid "Nişan aldığın yerde flaş patlar: 4 m içindekiler 2 sn kör olur (25 m menzil)."
+msgstr "A flash goes off where you aim: everyone within 4 m is blinded for 2 s (25 m range)."
+
+#: characters.gd:42
+msgid "Kurye"
+msgstr "Courier"
+
+#: characters.gd:42
+msgid "Hız Tutkunu"
+msgstr "Speed Junkie"
+
+#: characters.gd:43
+msgid "SON SÜRAT"
+msgstr "FULL THROTTLE"
+
+#: characters.gd:43
+msgid "Yetiştim!"
+msgstr "Made it!"
+
+#: characters.gd:44
+msgid "4 sn boyunca %80 daha hızlı koşar."
+msgstr "Runs 80% faster for 4 s."
+
+#: characters.gd:46
+msgid "Susturucu"
+msgstr "Silencer"
+
+#: characters.gd:46
+msgid "Sessizlik Uzmanı"
+msgstr "Silence Expert"
+
+#: characters.gd:47
+msgid "SUSTUR"
+msgstr "HUSH"
+
+#: characters.gd:47
+msgid "Şşşt!"
+msgstr "Shhh!"
+
+#: characters.gd:48
+msgid "10 m içindekiler lafa dalar: 3 sn silah ve yetenek kullanamaz."
+msgstr "Everyone within 10 m gets chatty: no weapons or skills for 3 s."
+
+#: characters.gd:50
+msgid "Golcü"
+msgstr "Striker"
+
+#: characters.gd:50
+msgid "Futbolcu"
+msgstr "Footballer"
+
+#: characters.gd:51
+msgid "ŞUT"
+msgstr "BANANA KICK"
+
+#: characters.gd:51
+msgid "Gooool!"
+msgstr "Gooool!"
+
+#: characters.gd:52
+msgid "Falsolu top en yakın düşmana gider: 25 hasar ve sert savurma."
+msgstr "A curving ball flies at the nearest enemy: 25 damage and a hard knockback."
+
+#: characters.gd:54
+msgid "Manken"
+msgstr "Mannequin"
+
+#: characters.gd:54
+msgid "Cansız Manken"
+msgstr "Lifeless Dummy"
+
+#: characters.gd:55
+msgid "KIPIRDAMA"
+msgstr "FREEZE"
+
+#: characters.gd:55
+msgid "Ben hiç kıpırdamadım ki!"
+msgstr "I didn't move a muscle!"
+
+#: characters.gd:56
+msgid "5 sn boyunca görünmez olur."
+msgstr "Turns invisible for 5 s."
+
+#: characters.gd:59
+msgid "Komiser"
+msgstr "Inspector"
+
+#: characters.gd:59
+msgid "Asayiş"
+msgstr "Law & Order"
+
+#: characters.gd:60
+msgid "DÜDÜK"
+msgstr "WHISTLE"
+
+#: characters.gd:60
+msgid "Dur! Polis!"
+msgstr "Freeze! Police!"
+
+#: characters.gd:61
+msgid "9 m içindeki herkes 1,2 sn olduğu yerde kalır."
+msgstr "Everyone within 9 m is frozen in place for 1.2 s."
+
+#: characters.gd:63
+msgid "Gardiyan"
+msgstr "Warden"
+
+#: characters.gd:63
+msgid "Gece Nöbeti"
+msgstr "Night Shift"
+
+#: characters.gd:64
+msgid "COP DARBESİ"
+msgstr "BATON BLOW"
+
+#: characters.gd:64
+msgid "Dağılın!"
+msgstr "Break it up!"
+
+#: characters.gd:65
+msgid "Önündeki 3,5 m'lik yaya cop iner: 35 hasar, uçurur."
+msgstr "Swings a baton in a 3.5 m arc ahead: 35 damage and sends them flying."
+
+#: characters.gd:67
+msgid "Pastacı"
+msgstr "Baker"
+
+#: characters.gd:67
+msgid "Tatlı Ustası"
+msgstr "Dessert Master"
+
+#: characters.gd:68
+msgid "KREMA YAĞMURU"
+msgstr "CREAM SHOWER"
+
+#: characters.gd:68
+msgid "Kim tatlı ister?"
+msgstr "Who wants dessert?"
+
+#: characters.gd:69
+msgid "Yelpaze şeklinde 5 roket birden atar."
+msgstr "Fires 5 rockets at once in a fan."
+
+#: characters.gd:71
+msgid "Aşçıbaşı"
+msgstr "Head Chef"
+
+#: characters.gd:71
+msgid "Baharat Ustası"
+msgstr "Spice Master"
+
+#: characters.gd:72
+msgid "ACI SOS"
+msgstr "HOT SAUCE"
+
+#: characters.gd:72
+msgid "Biraz baharat?"
+msgstr "A little spice?"
+
+#: characters.gd:73
+msgid "Önündeki 6 m'lik yaya acı sos fırlatır: 4 sn boyunca saniyede 8 hasar."
+msgstr "Splashes hot sauce in a 6 m arc ahead: 8 damage per second for 4 s."
+
+#: characters.gd:75
+msgid "Satır Ustası"
+msgstr "Cleaver Master"
+
+#: characters.gd:76
+msgid "SATIR DÖNÜŞÜ"
+msgstr "CLEAVER SPIN"
+
+#: characters.gd:76
+msgid "Taze et!"
+msgstr "Fresh meat!"
+
+#: characters.gd:77
+msgid "Satırıyla kendi etrafında döner: 3,5 m içindeki herkese 30 hasar."
+msgstr "Spins with the cleaver: 30 damage to everyone within 3.5 m."
+
+#: characters.gd:79
+msgid "Mühendis"
+msgstr "Engineer"
+
+#: characters.gd:79
+msgid "Şantiye Şefi"
+msgstr "Site Boss"
+
+#: characters.gd:80
+msgid "TAZE BETON"
+msgstr "WET CONCRETE"
+
+#: characters.gd:80
+msgid "Baret şart!"
+msgstr "Hard hats on!"
+
+#: characters.gd:81
+msgid "Nişan aldığın yere 6 sn'lik beton döker: içindekiler %65 yavaşlar."
+msgstr "Pours concrete where you aim for 6 s: anyone inside is slowed by 65%."
+
+#: characters.gd:83
+msgid "Duvarcı"
+msgstr "Bricklayer"
+
+#: characters.gd:83
+msgid "Usta İnşaatçı"
+msgstr "Master Builder"
+
+#: characters.gd:84
+msgid "DUVAR ÖR"
+msgstr "BUILD WALLS"
+
+#: characters.gd:84
+msgid "Bu iş bende!"
+msgstr "Leave it to me!"
+
+#: characters.gd:85
+msgid "Önüne ve iki yanına aynı anda 3 duvar çıkarır."
+msgstr "Raises 3 walls at once: in front and on both sides."
+
+#: characters.gd:87
+msgid "Patron"
+msgstr "The Boss"
+
+#: characters.gd:87
+msgid "Yönetici"
+msgstr "Manager"
+
+#: characters.gd:88
+msgid "PERFORMANS NOTU"
+msgstr "PERFORMANCE REVIEW"
+
+#: characters.gd:88
+msgid "Bunu bir toplantıda konuşalım."
+msgstr "Let's take this offline."
+
+#: characters.gd:89
+msgid "Nişan aldığın yerdekileri işaretler: 5 sn boyunca %50 fazla hasar alırlar."
+msgstr "Marks everyone where you aim: they take 50% more damage for 5 s."
+
+#: characters.gd:91
+msgid "Komisyoncu"
+msgstr "Fixer"
+
+#: characters.gd:91
+msgid "İş Bitirici"
+msgstr "Deal Closer"
+
+#: characters.gd:92
+msgid "BAĞLANTI"
+msgstr "CONNECTIONS"
+
+#: characters.gd:92
+msgid "Benim bir tanıdık var."
+msgstr "I know a guy."
+
+#: characters.gd:93
+msgid "Kalkan, duvar, atılma ve roket bekleme sürelerini anında sıfırlar, 10 can verir."
+msgstr "Instantly resets shield, wall, dash and rocket cooldowns and gives 10 HP."
+
+#: characters.gd:95
+msgid "Başhekim"
+msgstr "Chief Doctor"
+
+#: characters.gd:95
+msgid "Dahiliye"
+msgstr "Internal Medicine"
+
+#: characters.gd:96
+msgid "SERUM"
+msgstr "IV DRIP"
+
+#: characters.gd:96
+msgid "Geçmiş olsun."
+msgstr "Get well soon."
+
+#: characters.gd:97
+msgid "Anında 45 can yeniler."
+msgstr "Instantly restores 45 HP."
+
+#: characters.gd:99
+msgid "Asistan Doktor"
+msgstr "Resident"
+
+#: characters.gd:99
+msgid "Nöbetçi"
+msgstr "On Call"
+
+#: characters.gd:100
+msgid "ACİL MÜDAHALE"
+msgstr "EMERGENCY CARE"
+
+#: characters.gd:100
+msgid "Uyumadım ama ayaktayım!"
+msgstr "Haven't slept, still standing!"
+
+#: characters.gd:101
+msgid "Eksik canının yarısını yeniler ve 3 sn %30 hızlanır. Can azken daha değerli."
+msgstr "Restores half of your missing HP and speeds you up 30% for 3 s. Best at low HP."
+
+#: characters.gd:103
+msgid "Anestezist"
+msgstr "Anesthetist"
+
+#: characters.gd:103
+msgid "Narkoz Uzmanı"
+msgstr "Knockout Expert"
+
+#: characters.gd:104
+msgid "NARKOZ"
+msgstr "ANESTHESIA"
+
+#: characters.gd:104
+msgid "Ondan geriye say."
+msgstr "Count back from ten."
+
+#: characters.gd:105
+msgid "Nişan aldığın yerdekilerin 3 sn boyunca yön tuşları ters çalışır."
+msgstr "Reverses the movement keys of everyone where you aim for 3 s."
+
+#: characters.gd:107
+msgid "Stajyer"
+msgstr "Intern"
+
+#: characters.gd:107
+msgid "İlk Günü"
+msgstr "First Day"
+
+#: characters.gd:108
+msgid "YANLIŞ İĞNE"
+msgstr "WRONG NEEDLE"
+
+#: characters.gd:108
+msgid "Acımayacak... galiba."
+msgstr "This won't hurt... probably."
+
+#: characters.gd:109
+msgid "Uzaktan iğne vurur: 4 sn saniyede 6 hasar ve 3 sn %50 yavaşlık."
+msgstr "Fires a needle from range: 6 damage per second for 4 s and 50% slow for 3 s."
+
+#: characters.gd:111
+msgid "Topçu"
+msgstr "Gunner"
+
+#: characters.gd:111
+msgid "Koordinatör"
+msgstr "Coordinator"
+
+#: characters.gd:112
+msgid "HAVA DESTEĞİ"
+msgstr "AIR SUPPORT"
+
+#: characters.gd:112
+msgid "Koordinatlar verildi!"
+msgstr "Coordinates locked!"
+
+#: characters.gd:113
+msgid "Nişan aldığın bölgeyi 3 sn döver: yarım saniyede bir 8 hasar."
+msgstr "Pounds the area you aim at for 3 s: 8 damage every half second."
+
+#: characters.gd:115
+msgid "Piyade"
+msgstr "Infantry"
+
+#: characters.gd:115
+msgid "Ön Saflar"
+msgstr "Front Line"
+
+#: characters.gd:116
+msgid "TARAMA"
+msgstr "SUPPRESSING FIRE"
+
+#: characters.gd:116
+msgid "Emredersiniz!"
+msgstr "Yes, sir!"
+
+#: characters.gd:117
+msgid "4 sn boyunca her atışta 3 roket birden çıkar."
+msgstr "Every shot fires 3 rockets for 4 s."
+
+#: characters.gd:120
+msgid "Rodeo"
+msgstr "Rodeo"
+
+#: characters.gd:120
+msgid "Kement Ustası"
+msgstr "Lasso Master"
+
+#: characters.gd:121
+msgid "KEMENT"
+msgstr "LASSO"
+
+#: characters.gd:121
+msgid "Yakaladım!"
+msgstr "Gotcha!"
+
+#: characters.gd:122
+msgid "Nişan aldığın yerdekileri kementle yanına çeker (25 m menzil, 10 hasar)."
+msgstr "Lassoes everyone where you aim and yanks them over (25 m range, 10 damage)."
+
+#: characters.gd:124
+msgid "Silahşor"
+msgstr "Gunslinger"
+
+#: characters.gd:124
+msgid "Seri Atıcı"
+msgstr "Quick Shooter"
+
+#: characters.gd:125
+msgid "ALTIPATLAR"
+msgstr "SIX-SHOOTER"
+
+#: characters.gd:125
+msgid "Bu kasaba ikimize dar!"
+msgstr "This town ain't big enough for the two of us!"
+
+#: characters.gd:126
+msgid "3 sn boyunca roketleri üç kat hızlı ateşler."
+msgstr "Fires rockets three times as fast for 3 s."
+
+#: characters.gd:128
+msgid "Şerif"
+msgstr "Sheriff"
+
+#: characters.gd:128
+msgid "Hızlı Silah"
+msgstr "Quick Draw"
+
+#: characters.gd:129
+msgid "DÜELLO"
+msgstr "DUEL"
+
+#: characters.gd:129
+msgid "Öğle vakti, meydanda."
+msgstr "High noon. Town square."
+
+#: characters.gd:130
+msgid "Nişangâhın gösterdiği yere anında isabet eden kurşun: 35 hasar, 60 m menzil."
+msgstr "An instant-hit bullet where your crosshair points: 35 damage, 60 m range."
+
+#: characters.gd:132
+msgid "Kaptan"
+msgstr "Captain"
+
+#: characters.gd:132
+msgid "Korsan Reisi"
+msgstr "Pirate Chief"
+
+#: characters.gd:133
+msgid "GÜLLE"
+msgstr "CANNONBALL"
+
+#: characters.gd:133
+msgid "Borda ateş!"
+msgstr "Fire the broadside!"
+
+#: characters.gd:134
+msgid "Dev bir gülle atar: 4,5 m'lik patlama, 40 hasar."
+msgstr "Fires a giant cannonball: 4.5 m blast, 40 damage."
+
+#: characters.gd:136
+msgid "Tayfa"
+msgstr "Deckhand"
+
+#: characters.gd:136
+msgid "Güverte Faresi"
+msgstr "Deck Rat"
+
+#: characters.gd:137
+msgid "ROM FIÇISI"
+msgstr "RUM BARREL"
+
+#: characters.gd:137
+msgid "Yo ho ho... hık!"
+msgstr "Yo ho ho... hic!"
+
+#: characters.gd:138
+msgid "40 can yeniler ama 2,5 sn kafası güzel olur: yön tuşları ters çalışır."
+msgstr "Restores 40 HP but gets tipsy for 2.5 s: movement keys are reversed."
+
+#: characters.gd:141
+msgid "Valkür"
+msgstr "Valkyrie"
+
+#: characters.gd:141
+msgid "Kalkan Kızı"
+msgstr "Shieldmaiden"
+
+#: characters.gd:142
+msgid "VALKÜR SIÇRAYIŞI"
+msgstr "VALKYRIE LEAP"
+
+#: characters.gd:142
+msgid "Valhalla'ya!"
+msgstr "To Valhalla!"
+
+#: characters.gd:143
+msgid "Göğe fırlar; indiği yerde 4 m içindekilere 30 hasar verip havaya savurur."
+msgstr "Leaps skyward; on landing deals 30 damage within 4 m and launches everyone."
+
+#: characters.gd:145
+msgid "Kızıl Sakal"
+msgstr "Redbeard"
+
+#: characters.gd:145
+msgid "Berserker"
+msgstr "Berserker"
+
+#: characters.gd:146
+msgid "ÖFKE NÖBETİ"
+msgstr "BERSERK RAGE"
+
+#: characters.gd:146
+msgid "AAAARGH!"
+msgstr "AAAARGH!"
+
+#: characters.gd:147
+msgid "5 sn boyunca roketleri 40 hasar verir ama kendisi %30 fazla hasar alır."
+msgstr "Rockets deal 40 damage for 5 s, but you take 30% more damage."
+
+#: characters.gd:149
+msgid "Boynuzlu"
+msgstr "Horns"
+
+#: characters.gd:149
+msgid "Kafası Sağlam"
+msgstr "Hard-Headed"
+
+#: characters.gd:150
+msgid "DEMİR KAFA"
+msgstr "IRON HEAD"
+
+#: characters.gd:150
+msgid "Kafama bir şey olmaz!"
+msgstr "Nothing dents this head!"
+
+#: characters.gd:151
+msgid "2,5 sn boyunca hiçbir hasar almaz."
+msgstr "Takes no damage at all for 2.5 s."
+
+#: characters.gd:153
+msgid "Altın Şövalye"
+msgstr "Golden Knight"
+
+#: characters.gd:153
+msgid "Saray Muhafızı"
+msgstr "Palace Guard"
+
+#: characters.gd:154
+msgid "ALTIN KALKAN"
+msgstr "GOLDEN SHIELD"
+
+#: characters.gd:154
+msgid "Altın paslanmaz!"
+msgstr "Gold never rusts!"
+
+#: characters.gd:155
+msgid "Bekleme süresine bakmadan kalkan açar ve 4 sn yarı hasar alır."
+msgstr "Raises the shield regardless of cooldown and takes half damage for 4 s."
+
+#: characters.gd:157
+msgid "Altın Dev"
+msgstr "Golden Giant"
+
+#: characters.gd:157
+msgid "Zırhlı Dev"
+msgstr "Armored Giant"
+
+#: characters.gd:158
+msgid "DEVLEŞ"
+msgstr "GO GIANT"
+
+#: characters.gd:158
+msgid "Büyüdükçe büyüyorum!"
+msgstr "I just keep growing!"
+
+#: characters.gd:159
+msgid "6 sn boyunca devleşir: %40 az hasar alır ama vurması da kolaylaşır."
+msgstr "Grows huge for 6 s: takes 40% less damage but is easier to hit."
+
+#: characters.gd:161 balance.gd:42
+msgid "Kara Şövalye"
+msgstr "Black Knight"
+
+#: characters.gd:161
+msgid "Turnuva Şampiyonu"
+msgstr "Tourney Champion"
+
+#: characters.gd:162
+msgid "KALKAN DARBESİ"
+msgstr "SHIELD BASH"
+
+#: characters.gd:162
+msgid "Diz çök!"
+msgstr "Kneel!"
+
+#: characters.gd:163
+msgid "Önündeki 3 m'lik yaya vurur: 15 hasar ve 1,5 sn sersemletme."
+msgstr "Strikes a 3 m arc ahead: 15 damage and a 1.5 s stun."
+
+#: characters.gd:166
+msgid "Orman Elfi"
+msgstr "Forest Elf"
+
+#: characters.gd:166
+msgid "Rüzgâr Çağıran"
+msgstr "Windcaller"
+
+#: characters.gd:167
+msgid "RÜZGÂR GİRDABI"
+msgstr "WHIRLWIND"
+
+#: characters.gd:167
+msgid "Uçmayı dener misin?"
+msgstr "Fancy a flight?"
+
+#: characters.gd:168
+msgid "Nişan aldığın yerdekileri göğe fırlatır (10 hasar, 28 m menzil)."
+msgstr "Launches everyone where you aim into the sky (10 damage, 28 m range)."
+
+#: characters.gd:170
+msgid "Minik Goblin"
+msgstr "Tiny Goblin"
+
+#: characters.gd:170
+msgid "Ufak Tefek"
+msgstr "Pint-Sized"
+
+#: characters.gd:171
+msgid "UFAL"
+msgstr "SHRINK"
+
+#: characters.gd:171
+msgid "Bul beni bulabilirsen!"
+msgstr "Catch me if you can!"
+
+#: characters.gd:172
+msgid "5 sn boyunca yarı boyuna iner ve %30 hızlanır: vurması çok zor."
+msgstr "Shrinks to half size and speeds up 30% for 5 s: very hard to hit."
+
+#: characters.gd:174
+msgid "Tuzakçı Goblin"
+msgstr "Trapper Goblin"
+
+#: characters.gd:174
+msgid "Kapancı"
+msgstr "Trapsetter"
+
+#: characters.gd:175
+msgid "AYI KAPANI"
+msgstr "BEAR TRAP"
+
+#: characters.gd:175
+msgid "Bas bakalım, bas!"
+msgstr "Go on, step on it!"
+
+#: characters.gd:176
+msgid "Ayağının dibine kapan kurar; ilk basan 35 hasar alır ve 1 sn kıpırdayamaz."
+msgstr "Sets a trap at your feet; the first to step on it takes 35 damage and is stuck for 1 s."
+
+#: characters.gd:178
+msgid "Kazan Cadısı"
+msgstr "Cauldron Witch"
+
+#: characters.gd:178
+msgid "İksir Ustası"
+msgstr "Potion Master"
+
+#: characters.gd:179
+msgid "KARA KAZAN"
+msgstr "BLACK CAULDRON"
+
+#: characters.gd:179
+msgid "Kaynasın kazan!"
+msgstr "Bubble, bubble, toil and trouble!"
+
+#: characters.gd:180
+msgid "Nişan aldığın yerde 3 sn'lik girdap açar: içine çeker, yarım saniyede 5 hasar verir."
+msgstr "Opens a 3 s vortex where you aim: pulls enemies in and deals 5 damage every half second."
+
+#: characters.gd:182
+msgid "Ulu Büyücü"
+msgstr "Grand Wizard"
+
+#: characters.gd:182
+msgid "Sakalı Uzun"
+msgstr "Long Beard"
+
+#: characters.gd:183
+msgid "METEOR"
+msgstr "METEOR"
+
+#: characters.gd:183
+msgid "Gökten ne yağıyor?"
+msgstr "What's that falling from the sky?"
+
+#: characters.gd:184
+msgid "Nişan aldığın yere 1 sn sonra meteor düşer: 4,5 m içinde 50 hasar."
+msgstr "A meteor lands where you aim after 1 s: 50 damage within 4.5 m."
+
+#: characters.gd:186
+msgid "Zombi Gelin"
+msgstr "Zombie Bride"
+
+#: characters.gd:186
+msgid "Damat Kaçtı"
+msgstr "Left at the Altar"
+
+#: characters.gd:187
+msgid "SALGIN"
+msgstr "OUTBREAK"
+
+#: characters.gd:187
+msgid "Bulaşıcıyım!"
+msgstr "I'm contagious!"
+
+#: characters.gd:188
+msgid "6 m içindekilere bulaştırır: 5 sn boyunca saniyede 6 hasar."
+msgstr "Infects everyone within 6 m: 6 damage per second for 5 s."
+
+#: characters.gd:190
+msgid "Beyinsiz Zombi"
+msgstr "Brainless Zombie"
+
+#: characters.gd:190
+msgid "Aklı Açıkta"
+msgstr "Not All There"
+
+#: characters.gd:191
+msgid "CAN EMME"
+msgstr "LIFE DRAIN"
+
+#: characters.gd:191
+msgid "Beeeyiiin..."
+msgstr "Braaaains..."
+
+#: characters.gd:192
+msgid "6 m içindeki herkesten 15 can emer; emdiği kadar iyileşir."
+msgstr "Drains 15 HP from everyone within 6 m and heals that much."
+
+#: characters.gd:195
+msgid "Sakura"
+msgstr "Sakura"
+
+#: characters.gd:195
+msgid "Kiraz Çiçeği"
+msgstr "Cherry Blossom"
+
+#: characters.gd:196
+msgid "SÜZÜLÜŞ"
+msgstr "GLIDE"
+
+#: characters.gd:196
+msgid "Yaprak gibi hafifim."
+msgstr "Light as a petal."
+
+#: characters.gd:197
+msgid "4 sn boyunca tüy gibi süzülür ve %40 hızlanır."
+msgstr "Glides like a feather and speeds up 40% for 4 s."
+
+#: characters.gd:199
+msgid "Çay Ustası"
+msgstr "Tea Master"
+
+#: characters.gd:199
+msgid "Sakin Bilge"
+msgstr "Calm Sage"
+
+#: characters.gd:200
+msgid "ÇAY SEREMONİSİ"
+msgstr "TEA CEREMONY"
+
+#: characters.gd:200
+msgid "Bir çay iç, sakinleş."
+msgstr "Have some tea. Chill."
+
+#: characters.gd:201
+msgid "5 sn'lik çay halkası kurar: içinde durdukça saniyede 12 can yeniler, düşmanlar yavaşlar."
+msgstr "Sets up a tea circle for 5 s: heals 12 HP per second while you stand in it; enemies are slowed."
+
+#: characters.gd:203
+msgid "Gölge Ninja"
+msgstr "Shadow Ninja"
+
+#: characters.gd:203
+msgid "Suikastçı"
+msgstr "Assassin"
+
+#: characters.gd:204
+msgid "ARKADAN DOLAN"
+msgstr "BACKSTAB"
+
+#: characters.gd:204
+msgid "Arkana bak!"
+msgstr "Look behind you!"
+
+#: characters.gd:205
+msgid "En yakın düşmanın arkasına ışınlanır ve 25 hasarlık darbe indirir (25 m)."
+msgstr "Teleports behind the nearest enemy and strikes for 25 damage (25 m)."
+
+#: characters.gd:207
+msgid "Sis Ninja"
+msgstr "Mist Ninja"
+
+#: characters.gd:207
+msgid "Duman Ustası"
+msgstr "Smoke Master"
+
+#: characters.gd:208
+msgid "SİS BOMBASI"
+msgstr "SMOKE BOMB"
+
+#: characters.gd:208
+msgid "Puf!"
+msgstr "Poof!"
+
+#: characters.gd:209
+msgid "4 sn'lik sis bırakır: içindeki düşmanlar göremez, kendisi 2 sn görünmez olur."
+msgstr "Drops smoke for 4 s: enemies inside can't see; you turn invisible for 2 s."
+
+#: characters.gd:211
+msgid "Rüzgâr Ninja"
+msgstr "Wind Ninja"
+
+#: characters.gd:211
+msgid "Göz Açıp Kapayana"
+msgstr "Blink-and-Miss"
+
+#: characters.gd:212
+msgid "IŞINLAN"
+msgstr "BLINK"
+
+#: characters.gd:212
+msgid "Buradaydım, şimdi şuradayım."
+msgstr "Now you see me, now you don't."
+
+#: characters.gd:213
+msgid "Baktığı yöne 12 m ışınlanır."
+msgstr "Teleports 12 m in the direction you're facing."
+
+#: characters.gd:215
+msgid "Kum Ninja"
+msgstr "Sand Ninja"
+
+#: characters.gd:215
+msgid "Çöl Faresi"
+msgstr "Desert Rat"
+
+#: characters.gd:216
+msgid "KUM FIRTINASI"
+msgstr "SANDSTORM"
+
+#: characters.gd:216
+msgid "Gözüne kum kaçtı!"
+msgstr "Sand in your eyes!"
+
+#: characters.gd:217
+msgid "9 m içindekiler 3 sn %55 yavaşlar ve kısa süre göremez."
+msgstr "Everyone within 9 m is slowed 55% for 3 s and briefly blinded."
+
+#: characters.gd:219
+msgid "Serap Ninja"
+msgstr "Mirage Ninja"
+
+#: characters.gd:219
+msgid "Yanılsama"
+msgstr "Illusion"
+
+#: characters.gd:220
+msgid "YER DEĞİŞ"
+msgstr "SWITCHEROO"
+
+#: characters.gd:220
+msgid "Yerimi beğendin mi?"
+msgstr "Like my spot?"
+
+#: characters.gd:221
+msgid "En yakın düşmanla anında yer değiştirir (30 m)."
+msgstr "Instantly swaps places with the nearest enemy (30 m)."
+
+#: characters.gd:224
+msgid "Boğa"
+msgstr "Bull"
+
+#: characters.gd:224
+msgid "Takım Elbiseli İnek"
+msgstr "Cow in a Suit"
+
+#: characters.gd:225
+msgid "TOSLAMA"
+msgstr "HEADBUTT"
+
+#: characters.gd:225
+msgid "Möööö!"
+msgstr "Moooo!"
+
+#: characters.gd:226
+msgid "İleri atılır; durduğu yerde 3,5 m içindekilere 25 hasar verip savurur."
+msgstr "Charges forward; where it stops, deals 25 damage within 3.5 m and knocks everyone back."
+
+#: characters.gd:228
+msgid "Pug"
+msgstr "Pug"
+
+#: characters.gd:228
+msgid "Kravatlı Köpek"
+msgstr "Dog in a Tie"
+
+#: characters.gd:229
+msgid "HAVLAMA"
+msgstr "BARK"
+
+#: characters.gd:229
+msgid "Hav! Hav hav!"
+msgstr "Woof! Woof woof!"
+
+#: characters.gd:230
+msgid "7 m içindeki herkesi korkutup uzağa savurur (5 hasar)."
+msgstr "Scares everyone within 7 m and blows them far away (5 damage)."
+
+#: weapons.gd:12
+msgid "Can İksiri"
+msgstr "Health Potion"
+
+#: weapons.gd:12
+msgid "50 can yeniler."
+msgstr "Restores 50 HP."
+
+#: weapons.gd:13
+msgid "Bomba"
+msgstr "Bomb"
+
+#: weapons.gd:13
+msgid "Fırlatılır: 6 m içinde 120 hasar."
+msgstr "Thrown: 120 damage within 6 m."
+
+#: weapons.gd:17
+msgid "Kalkan"
+msgstr "Shield"
+
+#: weapons.gd:17
+msgid "Sol tık: bir darbeyi emen kalkan."
+msgstr "Left click: a shield that absorbs one hit."
+
+#: weapons.gd:18 balance.gd:65
+msgid "Duvar"
+msgstr "Wall"
+
+#: weapons.gd:18
+msgid "Sol tık: önüne geçici duvar çıkarır."
+msgstr "Left click: raises a temporary wall in front of you."
+
+#: weapons.gd:21
+msgid "Sıradan"
+msgstr "Common"
+
+#: weapons.gd:22
+msgid "Nadir"
+msgstr "Rare"
+
+#: weapons.gd:23
+msgid "Destansı"
+msgstr "Epic"
+
+#: weapons.gd:24
+msgid "Efsanevi"
+msgstr "Legendary"
+
+#: weapons.gd:29
+msgid "Zıplama"
+msgstr "Jump"
+
+#: weapons.gd:30
+msgid "Hız"
+msgstr "Speed"
+
+#: weapons.gd:31
+msgid "Mermi Hızı"
+msgstr "Bullet Speed"
+
+#: weapons.gd:32
+msgid "Mermi Gücü"
+msgstr "Bullet Power"
+
+#: weapons.gd:33
+msgid "Saldırı Hızı"
+msgstr "Attack Speed"
+
+#: weapons.gd:34
+msgid "Zırh"
+msgstr "Armor"
+
+#: weapons.gd:35
+msgid "Kritik"
+msgstr "Crit"
+
+#: weapons.gd:36
+msgid "Mermi Sekmesi"
+msgstr "Ricochet"
+
+#: weapons.gd:37
+msgid "Can"
+msgstr "HP"
+
+#: weapons.gd:57
+msgid "Bazuka"
+msgstr "Bazooka"
+
+#: weapons.gd:57
+msgid "Patlayan roket: 2,5 m alan hasarı."
+msgstr "Explosive rocket: 2.5 m splash damage."
+
+#: weapons.gd:59
+msgid "Tabanca"
+msgstr "Pistol"
+
+#: weapons.gd:59
+msgid "Hızlı, isabetli tek atış."
+msgstr "Fast, accurate single shots."
+
+#: weapons.gd:61
+msgid "Pompalı"
+msgstr "Shotgun"
+
+#: weapons.gd:61
+msgid "7 saçma birden: yakında ezer, uzakta dağılır."
+msgstr "7 pellets at once: crushes up close, spreads at range."
+
+#: weapons.gd:63
+msgid "Makineli"
+msgstr "SMG"
+
+#: weapons.gd:63
+msgid "Çok seri, düşük hasar, hafif saçılır."
+msgstr "Very fast, low damage, slight spread."
+
+#: weapons.gd:65
+msgid "Keskin Nişancı"
+msgstr "Sniper"
+
+#: weapons.gd:65
+msgid "Yavaş ama dev hasar; 3 yaratığı delip geçer."
+msgstr "Slow but huge damage; pierces 3 monsters."
+
+#: weapons.gd:67
+msgid "Yay"
+msgstr "Bow"
+
+#: weapons.gd:67
+msgid "Kavisli uçan ok: bir yaratığı deler, sessiz ve güçlü."
+msgstr "Arcing arrow: pierces one monster, silent and strong."
+
+#: weapons.gd:69
+msgid "Yaratığı kovalar, 2 kez seker, sonra sana döner."
+msgstr "Chases a monster, bounces twice, then flies back to you."
+
+#: weapons.gd:71
+msgid "Alev Püskürtücü"
+msgstr "Flamethrower"
+
+#: weapons.gd:71
+msgid "Kısa menzilli alev yayı: önündeki herkesi yakar."
+msgstr "Short-range arc of fire: burns everything in front of you."
+
+#: weapons.gd:73
+msgid "Kılıç"
+msgstr "Sword"
+
+#: weapons.gd:73
+msgid "Yakın dövüş: önündeki yaydaki herkese vurur, savurur."
+msgstr "Melee: hits and knocks back everyone in the arc ahead."
+
+#: weapons.gd:75
+msgid "El Bombası"
+msgstr "Grenade"
+
+#: weapons.gd:75
+msgid "Havadan atılır: 4 m'lik büyük patlama."
+msgstr "Lobbed through the air: big 4 m blast."
+
+#: weapons.gd:80
+msgid "Geniş Patlama"
+msgstr "Wide Blast"
+
+#: weapons.gd:80
+msgid "Patlama yarıçapı +0,6 m"
+msgstr "Blast radius +0.6 m"
+
+#: weapons.gd:81
+msgid "Çift Namlu"
+msgstr "Double Barrel"
+
+#: weapons.gd:81
+msgid "+1 roket"
+msgstr "+1 rocket"
+
+#: weapons.gd:82
+msgid "Hızlı Dolum"
+msgstr "Quick Reload"
+
+#: weapons.gd:82
+msgid "%15 hızlı doldurma"
+msgstr "15% faster reload"
+
+#: weapons.gd:83
+msgid "Zırh Delici"
+msgstr "Armor Piercing"
+
+#: weapons.gd:83 weapons.gd:98
+msgid "+1 yaratık deler"
+msgstr "Pierces +1 monster"
+
+#: weapons.gd:84
+msgid "Hassas Tetik"
+msgstr "Hair Trigger"
+
+#: weapons.gd:84
+msgid "%15 hızlı ateş"
+msgstr "15% faster fire"
+
+#: weapons.gd:85
+msgid "Seken Kurşun"
+msgstr "Ricochet Rounds"
+
+#: weapons.gd:85 weapons.gd:100
+msgid "+1 sekme"
+msgstr "+1 bounce"
+
+#: weapons.gd:86
+msgid "Büyük Kalibre"
+msgstr "Big Caliber"
+
+#: weapons.gd:86
+msgid "+3 hasar"
+msgstr "+3 damage"
+
+#: weapons.gd:87
+msgid "Ekstra Saçma"
+msgstr "Extra Pellets"
+
+#: weapons.gd:87
+msgid "+2 saçma"
+msgstr "+2 pellets"
+
+#: weapons.gd:88
+msgid "Şok Namlu"
+msgstr "Choke"
+
+#: weapons.gd:88
+msgid "Saçılma %25 az, menzil +4 m"
+msgstr "25% less spread, range +4 m"
+
+#: weapons.gd:89
+msgid "Ağır Saçma"
+msgstr "Heavy Shot"
+
+#: weapons.gd:89
+msgid "Saçma başına +2 hasar"
+msgstr "+2 damage per pellet"
+
+#: weapons.gd:90
+msgid "Seri Mekanizma"
+msgstr "Rapid Action"
+
+#: weapons.gd:90
+msgid "%12 hızlı ateş"
+msgstr "12% faster fire"
+
+#: weapons.gd:91
+msgid "Dengeleyici"
+msgstr "Stabilizer"
+
+#: weapons.gd:91
+msgid "Saçılma %40 az"
+msgstr "40% less spread"
+
+#: weapons.gd:92
+msgid "Oyuk Uç"
+msgstr "Hollow Point"
+
+#: weapons.gd:92
+msgid "+1 hasar"
+msgstr "+1 damage"
+
+#: weapons.gd:93
+msgid "Yakıcı Mermi"
+msgstr "Incendiary Rounds"
+
+#: weapons.gd:93
+msgid "Yakar: +2 hasar/sn"
+msgstr "Burns: +2 damage/s"
+
+#: weapons.gd:94
+msgid "Tungsten Çekirdek"
+msgstr "Tungsten Core"
+
+#: weapons.gd:94
+msgid "+2 yaratık deler"
+msgstr "Pierces +2 monsters"
+
+#: weapons.gd:95
+msgid "Anti-Materyal"
+msgstr "Anti-Materiel"
+
+#: weapons.gd:95
+msgid "+15 hasar"
+msgstr "+15 damage"
+
+#: weapons.gd:96
+msgid "Yağlı Sürgü"
+msgstr "Oiled Bolt"
+
+#: weapons.gd:96
+msgid "%18 hızlı ateş"
+msgstr "18% faster fire"
+
+#: weapons.gd:97
+msgid "Çoklu Ok"
+msgstr "Multishot"
+
+#: weapons.gd:97
+msgid "+1 ok"
+msgstr "+1 arrow"
+
+#: weapons.gd:98
+msgid "Sivri Uç"
+msgstr "Sharp Tip"
+
+#: weapons.gd:99
+msgid "Zehirli Ok"
+msgstr "Poison Arrow"
+
+#: weapons.gd:99
+msgid "Zehirler: +3 hasar/sn"
+msgstr "Poisons: +3 damage/s"
+
+#: weapons.gd:100
+msgid "Usta Atış"
+msgstr "Trick Shot"
+
+#: weapons.gd:101
+msgid "Keskin Kenar"
+msgstr "Sharp Edge"
+
+#: weapons.gd:101
+msgid "+5 hasar"
+msgstr "+5 damage"
+
+#: weapons.gd:102
+msgid "İkiz Bumerang"
+msgstr "Twin Boomerang"
+
+#: weapons.gd:102
+msgid "+1 bumerang"
+msgstr "+1 boomerang"
+
+#: weapons.gd:103
+msgid "Basınçlı Tank"
+msgstr "Pressurized Tank"
+
+#: weapons.gd:103
+msgid "Menzil +1,5 m"
+msgstr "Range +1.5 m"
+
+#: weapons.gd:104
+msgid "Mavi Alev"
+msgstr "Blue Flame"
+
+#: weapons.gd:104
+msgid "Yanık +2 hasar/sn"
+msgstr "Burn +2 damage/s"
+
+#: weapons.gd:105
+msgid "Geniş Başlık"
+msgstr "Wide Nozzle"
+
+#: weapons.gd:105
+msgid "Alev yayı genişler"
+msgstr "Wider flame arc"
+
+#: weapons.gd:106
+msgid "Uzun Namlu"
+msgstr "Long Blade"
+
+#: weapons.gd:106
+msgid "Menzil +0,5 m"
+msgstr "Range +0.5 m"
+
+#: weapons.gd:107
+msgid "Bilenmiş Çelik"
+msgstr "Honed Steel"
+
+#: weapons.gd:107
+msgid "+6 hasar"
+msgstr "+6 damage"
+
+#: weapons.gd:108
+msgid "Dönen Savuruş"
+msgstr "Spinning Slash"
+
+#: weapons.gd:108
+msgid "Yay genişler (2. seviyede tam çevre)"
+msgstr "Wider arc (full circle at level 2)"
+
+#: weapons.gd:109
+msgid "Hafif Kabza"
+msgstr "Light Hilt"
+
+#: weapons.gd:109
+msgid "%15 hızlı savurma"
+msgstr "15% faster swings"
+
+#: weapons.gd:110
+msgid "Yüksek Patlayıcı"
+msgstr "High Explosive"
+
+#: weapons.gd:110
+msgid "Patlama yarıçapı +0,7 m"
+msgstr "Blast radius +0.7 m"
+
+#: weapons.gd:111
+msgid "Salkım"
+msgstr "Cluster"
+
+#: weapons.gd:111
+msgid "+1 bomba"
+msgstr "+1 bomb"
+
+#: weapons.gd:112
+msgid "Napalm"
+msgstr "Napalm"
+
+#: weapons.gd:112
+msgid "Yakar: +4 hasar/sn"
+msgstr "Burns: +4 damage/s"
+
+#: weapons.gd:121
+msgid "Kıyamet Bazukası"
+msgstr "Doomsday Bazooka"
+
+#: weapons.gd:121
+msgid "Her patlama 3 mini patlama bırakır (%40 hasar, 1,5 m)."
+msgstr "Every blast leaves 3 mini blasts (40% damage, 1.5 m)."
+
+#: weapons.gd:123
+msgid "Altıpatlar Lordu"
+msgstr "Six-Shooter Lord"
+
+#: weapons.gd:123
+msgid "Kritik vuruş zincire 2 sekme ekler."
+msgstr "Critical hits add 2 chain bounces."
+
+#: weapons.gd:125
+msgid "Kıyım Pompalısı"
+msgstr "Carnage Shotgun"
+
+#: weapons.gd:125
+msgid "+4 saçma, saçmalar bir yaratık daha deler."
+msgstr "+4 pellets, and pellets pierce one more monster."
+
+#: weapons.gd:127
+msgid "Zincir Makinelisi"
+msgstr "Chain SMG"
+
+#: weapons.gd:127
+msgid "Mermiler seker; yanığı da taşır."
+msgstr "Bullets bounce and carry the burn with them."
+
+#: weapons.gd:129
+msgid "Ölüm Işını"
+msgstr "Death Ray"
+
+#: weapons.gd:129
+msgid "+4 delme ve 2 zincir sekme."
+msgstr "+4 pierce and 2 chain bounces."
+
+#: weapons.gd:131
+msgid "Avcı Yayı"
+msgstr "Hunter's Bow"
+
+#: weapons.gd:131
+msgid "Zehirli / yanan yaratık ölünce 4 m patlar."
+msgstr "Poisoned / burning monsters explode for 4 m on death."
+
+#: weapons.gd:133
+msgid "Kasırga Bumerangı"
+msgstr "Hurricane Boomerang"
+
+#: weapons.gd:133
+msgid "+1 bumerang ve +2 sekme."
+msgstr "+1 boomerang and +2 bounces."
+
+#: weapons.gd:135
+msgid "Ejderha Nefesi"
+msgstr "Dragon's Breath"
+
+#: weapons.gd:135
+msgid "Yanık 3 m'de yayılır."
+msgstr "Burn spreads within 3 m."
+
+#: weapons.gd:137
+msgid "Titan Kılıcı"
+msgstr "Titan Sword"
+
+#: weapons.gd:137
+msgid "Menzil +1,8 m, +14 hasar, daha sert savurur."
+msgstr "Range +1.8 m, +14 damage, harder knockback."
+
+#: weapons.gd:139
+msgid "Napalm Fırtınası"
+msgstr "Napalm Storm"
+
+#: weapons.gd:139
+msgid "Patlama +1,5 m ve +6 yanık hasarı/sn."
+msgstr "Blast +1.5 m and +6 burn damage/s."
+
+#: weapons.gd:145
+msgid "Çabuk Toparlanma"
+msgstr "Quick Recovery"
+
+#: weapons.gd:145
+msgid "%s bekleme süresi −%%15"
+msgstr "%s cooldown −15%%"
+
+#: weapons.gd:146
+msgid "Ustalık"
+msgstr "Mastery"
+
+#: weapons.gd:146
+msgid "%s etkisi +%%25 (hasar, iyileşme)"
+msgstr "%s effect +25%% (damage, healing)"
+
+#: weapons.gd:147
+msgid "Geniş Etki"
+msgstr "Wide Reach"
+
+#: weapons.gd:147
+msgid "%s alanı +%%20"
+msgstr "%s area +20%%"
+
+#: weapons.gd:148
+msgid "Seken Atış"
+msgstr "Bouncing Shot"
+
+#: weapons.gd:148
+msgid "%s +1 kez seker"
+msgstr "%s bounces +1 time"
+
+#: weapons.gd:149
+msgid "Uzun Etki"
+msgstr "Lasting Effect"
+
+#: weapons.gd:149
+msgid "%s güç süresi +%%30"
+msgstr "%s buff duration +30%%"
+
+#: weapons.gd:150
+msgid "Çeviklik"
+msgstr "Agility"
+
+#: weapons.gd:150
+msgid "%s: +%%4 sıyrılma şansı"
+msgstr "%s: +4%% dodge chance"
+
+#: weapons.gd:151
+msgid "Dayanıklılık"
+msgstr "Toughness"
+
+#: weapons.gd:151
+msgid "%s: +1 can/sn yenilenme"
+msgstr "%s: +1 HP/s regeneration"
+
+#: balance.gd:28
+msgid "Hortlak"
+msgstr "Ghoul"
+
+#: balance.gd:30
+msgid "Koşucu"
+msgstr "Runner"
+
+#: balance.gd:32
+msgid "Tükürükçü"
+msgstr "Spitter"
+
+#: balance.gd:34
+msgid "Patlak"
+msgstr "Boomer"
+
+#: balance.gd:36 balance.gd:91
+msgid "Zırhlı"
+msgstr "Armored"
+
+#: balance.gd:38
+msgid "Azman"
+msgstr "Brute"
+
+#: balance.gd:40
+msgid "Dev Goblin"
+msgstr "Giant Goblin"
+
+#: balance.gd:65
+msgid "Yolu keser. Yaratıklar yıkmak için durur."
+msgstr "Blocks the path. Monsters stop to break it."
+
+#: balance.gd:67
+msgid "Dikenli Duvar"
+msgstr "Spiked Wall"
+
+#: balance.gd:67
+msgid "Yolu keser, dokunana 0,5 sn'de 8 hasar verir."
+msgstr "Blocks the path; deals 8 damage every 0.5 s to anything touching it."
+
+#: balance.gd:69
+msgid "Tuzak"
+msgstr "Trap"
+
+#: balance.gd:69
+msgid "Üstüne basanlara 30 hasar verir ve yavaşlatır. 8 şarj."
+msgstr "Deals 30 damage to anything that steps on it and slows it. 8 charges."
+
+#: balance.gd:71
+msgid "Taret"
+msgstr "Turret"
+
+#: balance.gd:71
+msgid "12 m içindeki en yakın yaratığa ateş eder (17 hasar/sn)."
+msgstr "Shoots the nearest monster within 12 m (17 damage/s)."
+
+#: balance.gd:73
+msgid "Buz Totemi"
+msgstr "Frost Totem"
+
+#: balance.gd:73
+msgid "6 m içindeki yaratıkları %45 yavaşlatır."
+msgstr "Slows monsters within 6 m by 45%."
+
+#: balance.gd:81
+msgid "Kolay"
+msgstr "Easy"
+
+#: balance.gd:82
+msgid "Normal"
+msgstr "Normal"
+
+#: balance.gd:83
+msgid "Zor"
+msgstr "Hard"
+
+#: balance.gd:84
+msgid "Kabus"
+msgstr "Nightmare"
+
+#: balance.gd:90
+msgid "Hızlı"
+msgstr "Fast"
+
+#: balance.gd:90
+msgid "Yaratıklar %20 hızlı, %25 fazla para verir."
+msgstr "Monsters are 20% faster and drop 25% more money."
+
+#: balance.gd:91
+msgid "Tüm yaratıklara +1 zırh."
+msgstr "+1 armor on all monsters."
+
+#: balance.gd:92
+msgid "Altın"
+msgstr "Gold"
+
+#: balance.gd:92
+msgid "Ödül x2, yaratıkların canı +%30."
+msgstr "Rewards x2, monster HP +30%."
+
+#: balance.gd:93
+msgid "Sürü"
+msgstr "Swarm"
+
+#: balance.gd:93
+msgid "%40 daha çok yaratık, canları %25 az."
+msgstr "40% more monsters with 25% less HP."
+
+#: balance.gd:94
+msgid "Elit"
+msgstr "Elite"
+
+#: balance.gd:94
+msgid "Her kümede bir elit: 3 kat can, büyük, sandık bırakır."
+msgstr "One elite per group: triple HP, bigger, drops a chest."
+
+#: balance.gd:95
+msgid "Gece"
+msgstr "Night"
+
+#: balance.gd:95
+msgid "Karanlık basar, görüş kısalır."
+msgstr "Darkness falls; visibility drops."

@@ -5,6 +5,7 @@ signal status(msg: String)
 signal lobby_changed
 signal left
 signal invited(from_name: String, lobby: int)
+signal lobbies_found(list: Array) # [{id, name, mode, diff, n}, ...]
 
 const APP_ID := 480 # Spacewar test App ID'si; kendi App ID'n olunca değiştir.
 const LOCAL_PORT := 7777
@@ -14,6 +15,10 @@ var lobby_id := 0
 var names := {} # peer_id -> görünen ad
 var chars := {} # peer_id -> karakter numarası (characters.gd LIST sırası)
 var my_char := 0
+var weapons := {} # peer_id -> TD başlangıç silahı (weapons.gd LIST sırası)
+var my_weapon := 0
+var public_lobby := false # kurulacak lobi herkese açık mı
+var meta := {"mode": "arena", "diff": "normal"} # lobi verisi: host main.gd'den günceller
 
 
 func _ready() -> void:
@@ -24,22 +29,23 @@ func _ready() -> void:
 		Steam.lobby_joined.connect(_on_lobby_joined)
 		Steam.join_requested.connect(_on_join_requested)
 		Steam.lobby_invite.connect(func(inviter, lobby, _game): invited.emit(Steam.getFriendPersonaName(inviter), lobby))
+		Steam.lobby_match_list.connect(_on_match_list)
 		Steam.lobby_chat_update.connect(func(_a, _b, _c, _d): lobby_changed.emit())
 	else:
 		push_warning("Steam başlatılamadı: %s" % r)
 	multiplayer.peer_connected.connect(func(_id): lobby_changed.emit())
-	multiplayer.peer_disconnected.connect(func(id): names.erase(id); chars.erase(id); lobby_changed.emit())
+	multiplayer.peer_disconnected.connect(func(id): names.erase(id); chars.erase(id); weapons.erase(id); lobby_changed.emit())
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(func(): status.emit("Bağlantı başarısız."); leave())
 	multiplayer.server_disconnected.connect(func(): status.emit("Host ayrıldı."); leave())
 
 
 func my_name() -> String:
-	return Steam.getPersonaName() if steam_ok else "Oyuncu"
+	return Steam.getPersonaName() if steam_ok else tr("Oyuncu")
 
 
 func display_name(id: int) -> String:
-	return names.get(id, "Oyuncu %d" % id)
+	return names.get(id, tr("Oyuncu %d") % id)
 
 
 func online() -> bool:
@@ -55,7 +61,7 @@ func host_steam() -> void:
 		status.emit("Steam açık değil / başlatılamadı.")
 		return
 	leave()
-	Steam.createLobby(Steam.LOBBY_TYPE_FRIENDS_ONLY, 4)
+	Steam.createLobby(Steam.LOBBY_TYPE_PUBLIC if public_lobby else Steam.LOBBY_TYPE_FRIENDS_ONLY, 4)
 	status.emit("Lobi kuruluyor...")
 
 
@@ -83,9 +89,42 @@ func invite_friend(id: int, friend_name: String) -> void:
 		status.emit("Önce Steam lobisi kur.")
 		return
 	if Steam.inviteUserToLobby(lobby_id, id):
-		status.emit("%s davet edildi. Oyunu açıkken Steam sohbetindeki daveti kabul etsin." % friend_name)
+		status.emit(tr("%s davet edildi. Oyunu açıkken Steam sohbetindeki daveti kabul etsin.") % friend_name)
 	else:
 		status.emit("Davet gönderilemedi.")
+
+
+## Host: lobi listesinde görünen mod ve zorluk.
+func set_meta_data(mode: String, diff: String) -> void:
+	meta = {"mode": mode, "diff": diff}
+	if steam_ok and lobby_id != 0 and multiplayer.is_server():
+		Steam.setLobbyData(lobby_id, "mode", mode)
+		Steam.setLobbyData(lobby_id, "diff", diff)
+
+
+## Açık lobileri ara (yalnız aynı sürüm); sonuç lobbies_found ile gelir.
+func find_lobbies() -> void:
+	if not steam_ok:
+		lobbies_found.emit([])
+		return
+	Steam.addRequestLobbyListStringFilter("ver", Updater.version(), Steam.LOBBY_COMPARISON_EQUAL)
+	Steam.addRequestLobbyListFilterSlotsAvailable(1)
+	Steam.requestLobbyList()
+
+
+func _on_match_list(lobbies: Array) -> void:
+	var out := []
+	for id in lobbies:
+		out.append({"id": id, "name": Steam.getLobbyData(id, "name"), "mode": Steam.getLobbyData(id, "mode"),
+			"diff": Steam.getLobbyData(id, "diff"), "n": Steam.getNumLobbyMembers(id)})
+	lobbies_found.emit(out)
+
+
+## Steam'siz tek kişilik oyun: OfflineMultiplayerPeer zaten sunucu (id 1), call_local rpc çalışır.
+func solo() -> void:
+	names[1] = my_name()
+	chars[1] = my_char
+	weapons[1] = my_weapon
 
 
 func _new_steam_peer() -> SteamMultiplayerPeer:
@@ -97,10 +136,12 @@ func _new_steam_peer() -> SteamMultiplayerPeer:
 
 func _on_lobby_created(result: int, id: int) -> void:
 	if result != 1:
-		status.emit("Lobi kurulamadı (kod %d)." % result)
+		status.emit(tr("Lobi kurulamadı (kod %d).") % result)
 		return
 	lobby_id = id
-	Steam.setLobbyData(id, "name", my_name() + " lobisi")
+	Steam.setLobbyData(id, "name", tr("%s lobisi") % my_name())
+	Steam.setLobbyData(id, "ver", Updater.version())
+	set_meta_data(meta.mode, meta.diff)
 	var peer := _new_steam_peer()
 	peer.host_with_lobby(id)
 	multiplayer.multiplayer_peer = peer
@@ -116,7 +157,7 @@ func _on_join_requested(id: int, _friend: int) -> void:
 
 func _on_lobby_joined(id: int, _perm: int, _locked: bool, response: int) -> void:
 	if response != 1:
-		status.emit("Lobiye katılınamadı (kod %d)." % response)
+		status.emit(tr("Lobiye katılınamadı (kod %d).") % response)
 		return
 	if Steam.getLobbyOwner(id) == Steam.getSteamID():
 		return # kendi lobimiz, host tarafı zaten kuruldu
@@ -133,11 +174,11 @@ func host_local() -> void:
 	leave()
 	var p := ENetMultiplayerPeer.new()
 	if p.create_server(LOCAL_PORT, 4) != OK:
-		status.emit("Port %d açılamadı." % LOCAL_PORT)
+		status.emit(tr("Port %d açılamadı.") % LOCAL_PORT)
 		return
 	multiplayer.multiplayer_peer = p
 	_register_self()
-	status.emit("Yerel host açık (port %d)." % LOCAL_PORT)
+	status.emit(tr("Yerel host açık (port %d).") % LOCAL_PORT)
 
 
 func join_local() -> void:
@@ -161,6 +202,7 @@ func leave() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	names.clear()
 	chars.clear()
+	weapons.clear()
 	left.emit()
 
 
@@ -176,9 +218,11 @@ func _register_self() -> void:
 	if multiplayer.is_server():
 		names[1] = n
 		chars[1] = my_char
+		weapons[1] = my_weapon
 		lobby_changed.emit()
 	else:
 		register_name.rpc_id(1, n, my_char)
+		register_weapon.rpc_id(1, my_weapon)
 
 
 ## Karakter değişince lobiye bildir (bağlı değilsek sadece hatırla).
@@ -214,4 +258,30 @@ func register_char(c: int) -> void:
 func sync_names(d: Dictionary, c: Dictionary) -> void:
 	names = d
 	chars = c
+	lobby_changed.emit()
+
+
+## TD silah seçimi: karakter seçimiyle aynı yol, ayrı rpc'ler (register_name imzası değişmesin).
+func set_weapon(i: int) -> void:
+	my_weapon = i
+	if not online():
+		return
+	if multiplayer.is_server():
+		weapons[1] = i
+		sync_weapons.rpc(weapons)
+		lobby_changed.emit()
+	else:
+		register_weapon.rpc_id(1, i)
+
+
+@rpc("any_peer", "reliable")
+func register_weapon(i: int) -> void:
+	weapons[multiplayer.get_remote_sender_id()] = i
+	sync_weapons.rpc(weapons)
+	lobby_changed.emit()
+
+
+@rpc("authority", "reliable")
+func sync_weapons(w: Dictionary) -> void:
+	weapons = w
 	lobby_changed.emit()

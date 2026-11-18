@@ -3,6 +3,7 @@ extends Node3D
 ## Çarpışan her şey sabit tohumla (rng) ve aynı sırayla yerleşir -> herkeste aynı harita.
 ## Yalnızca görüntü olan her şey ayrı üreteçten (_vis) gelir: rng sırasına dokunmaz.
 
+const ChickenScript := preload("res://chicken.gd")
 const HALF := 30.0 # oyun alanı 60 x 60 m
 const MASK_HALF := 50.0 # zemin maskesinin kapladığı yarı kenar (m)
 const MASK_N := 128
@@ -121,6 +122,7 @@ func _ready() -> void:
 		hills.append([Transform3D(Basis(Vector3.UP, _vis.randf() * TAU).scaled(Vector3(75, _vis.randf_range(22, 40), 75)),
 			Vector3(cos(a) * d, -6, sin(a) * d)), Color(0.1, 0.2, 0.12)])
 	_multimesh(_blob_mesh(14, 6, 0.25, 1.2), hills, leaf_mat, false)
+	_chickens()
 
 
 func _environment() -> void:
@@ -129,20 +131,21 @@ func _environment() -> void:
 	env.sky = Sky.new()
 	env.sky.sky_material = _smat("res://shaders/sky.gdshader")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 1.1 # gölgedeki karakterler seçilsin
+	env.ambient_light_energy = 1.2 # gölgedeki karakterler seçilsin
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_white = 6.0
 	env.glow_enabled = true # yalnızca çok parlak şeyler (güneş, patlama) parlar
-	env.glow_intensity = 0.45
-	env.glow_bloom = 0.03
-	env.glow_hdr_threshold = 1.1
+	env.glow_intensity = 0.6
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 1.4 # güneşli yapraklar değil, yalnız patlama / kıvılcım parlasın
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.06
 	env.adjustment_saturation = 1.12
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
-	env.ssao_intensity = 2.2
+	env.ssao_intensity = 1.6 # çimenin altı kapkara olmasın
+	env.ssao_power = 1.5
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.86, 0.74, 0.6)
 	env.fog_density = 0.004
@@ -171,11 +174,20 @@ func _environment() -> void:
 	var fill := DirectionalLight3D.new() # karşıdan soğuk dolgu: gölge tarafı kapkara kalmaz
 	fill.rotation_degrees = Vector3(-25, 220, 0)
 	fill.light_color = Color(0.6, 0.72, 1.0)
-	fill.light_energy = 0.3
+	fill.light_energy = 0.42
 	fill.light_specular = 0.0
 	fill.light_volumetric_fog_energy = 0.0
 	fill.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY # gökte ikinci güneş çizilmesin
 	add_child(fill)
+	var apply := func() -> void: # Ayarlar > Grafik kalitesi
+		var q: int = Settings.quality
+		env.ssao_enabled = q >= 1
+		env.volumetric_fog_enabled = q >= 2
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if q >= 1 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		sun.directional_shadow_max_distance = 80.0 if q >= 1 else 50.0
+	apply.call()
+	Settings.changed.connect(apply)
+	tree_exiting.connect(func() -> void: Settings.changed.disconnect(apply))
 
 
 ## Doğma noktalarından ve diğer nesnelerden uzak boş bir nokta bulur; bulamazsa null.
@@ -484,6 +496,21 @@ func _ambient() -> void:
 		p.visibility_aabb = AABB(Vector3(-HALF - 3, -10, -HALF - 3), Vector3(HALF * 2 + 6, 16, HALF * 2 + 6))
 		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(p)
+
+
+## Süs tavukları: birkaç tavuk, her birinin peşinde bir iki civciv (chicken.gd, yalnızca görüntü).
+func _chickens() -> void:
+	for i in 9:
+		var home := _rand_ground(_vis) * 0.9
+		if Vector2(home.x, home.z).length() < 7.0:
+			continue
+		for j in 1 + (_vis.randi() % 3 if i < 4 else 0): # ilk dördü civcivli
+			var c: Node3D = ChickenScript.new()
+			c.name = "Chicken%d_%d" % [i, j] # sabit ad: ölüm ağda adla eşitlenir
+			c.chick = j > 0
+			c.rng.seed = _vis.randi()
+			c.position = home + Vector3(_vis.randf_range(-1, 1), 0, _vis.randf_range(-1, 1)) * float(j)
+			add_child(c)
 
 
 ## items: [[Transform3D, Color], ...] -> tek çizimde binlerce örnek.
