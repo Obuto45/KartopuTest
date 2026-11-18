@@ -31,7 +31,7 @@ func _ready() -> void:
 	# Saf Balance denetimleri
 	var b1 := Balance.wave(3, 1)
 	var bh := Balance.wave(3, 1, "hard")
-	_ok("zorluk çarpanları", is_equal_approx(bh.hp_mult, b1.hp_mult * 1.35) and is_equal_approx(bh.dmg_mult, b1.dmg_mult * 1.25)
+	_ok("zorluk çarpanları", is_equal_approx(bh.hp_mult, b1.hp_mult * Balance.DIFFS.hard.hp) and is_equal_approx(bh.dmg_mult, b1.dmg_mult * Balance.DIFFS.hard.dmg)
 		and Balance.wave(3, 1, "easy").hp_mult < b1.hp_mult)
 	var m1 := Balance.roll_mods(7, "normal", 123)
 	_ok("roll_mods deterministik, dalga 1-2 boş", m1 == Balance.roll_mods(7, "normal", 123) and Balance.roll_mods(1, "normal", 5).is_empty()
