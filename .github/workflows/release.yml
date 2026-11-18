@@ -22,7 +22,7 @@ jobs:
           ver=$(sed -n 's/^config\/version="\(.*\)"/\1/p' project.godot)
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           test -f "docs/surum-notlari/v$ver.md" # notsuz sürüm çıkmasın
-          ! gh release view "v$ver" >/dev/null 2>&1 # aynı sürüm iki kez yayınlanmasın
+          if gh release view "v$ver" >/dev/null 2>&1; then echo "v$ver zaten yayında"; exit 1; fi
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -42,7 +42,7 @@ jobs:
           ./godot --headless --path . --import > import.log 2>&1 || true
           mkdir -p build
           ./godot --headless --path . --export-release "Windows Desktop" build/KartopuTest.exe 2>&1 | tee export.log
-          ! grep -E "SCRIPT ERROR|Parse Error" export.log
+          if grep -E "SCRIPT ERROR|Parse Error" export.log; then exit 1; fi
           test -f build/KartopuTest.exe && test -f build/steam_api64.dll
 
       - name: Zip ve Release
