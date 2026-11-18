@@ -68,7 +68,7 @@ func _on_release(result: int, code: int, _h: PackedStringArray, body: PackedByte
 			url = str(a.get("browser_download_url", ""))
 	if not url.begins_with(DOWNLOAD_PREFIX): # yalnızca kendi depomuzdan indir
 		return
-	status.emit("Yeni sürüm %s indiriliyor..." % tag)
+	status.emit(tr("Yeni sürüm %s indiriliyor...") % tag)
 	var dl := HTTPRequest.new()
 	dl.download_file = OS.get_user_data_dir().path_join("update.zip")
 	add_child(dl)
@@ -85,9 +85,9 @@ func _on_download(result: int, code: int, _h: PackedStringArray, _b: PackedByteA
 	var err := _install(zip_path)
 	DirAccess.remove_absolute(zip_path)
 	if err != "":
-		status.emit("Güncelleme kurulamadı (%s), eski sürümle devam." % err)
+		status.emit(tr("Güncelleme kurulamadı (%s), eski sürümle devam.") % err)
 		return
-	status.emit("%s kuruldu, oyun yeniden başlıyor..." % tag)
+	status.emit(tr("%s kuruldu, oyun yeniden başlıyor...") % tag)
 	await get_tree().create_timer(1.5).timeout
 	OS.create_process(OS.get_executable_path(), [])
 	get_tree().quit()
@@ -98,7 +98,7 @@ func _on_download(result: int, code: int, _h: PackedStringArray, _b: PackedByteA
 func _install(zip_path: String) -> String:
 	var zip := ZIPReader.new()
 	if zip.open(zip_path) != OK:
-		return "zip açılamadı"
+		return tr("zip açılamadı")
 	var dir := _exe_dir()
 	var moved: Array = []
 	for f in zip.get_files():
@@ -112,13 +112,13 @@ func _install(zip_path: String) -> String:
 			if DirAccess.rename_absolute(target, target + ".old") != OK:
 				zip.close()
 				_rollback(moved)
-				return "%s değiştirilemedi" % fname
+				return tr("%s değiştirilemedi") % fname
 			moved.append(target)
 		var fa := FileAccess.open(target, FileAccess.WRITE)
 		if fa == null:
 			zip.close()
 			_rollback(moved)
-			return "%s yazılamadı" % fname
+			return tr("%s yazılamadı") % fname
 		fa.store_buffer(data)
 		fa.close()
 	zip.close()

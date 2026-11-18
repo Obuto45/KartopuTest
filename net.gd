@@ -41,11 +41,11 @@ func _ready() -> void:
 
 
 func my_name() -> String:
-	return Steam.getPersonaName() if steam_ok else "Oyuncu"
+	return Steam.getPersonaName() if steam_ok else tr("Oyuncu")
 
 
 func display_name(id: int) -> String:
-	return names.get(id, "Oyuncu %d" % id)
+	return names.get(id, tr("Oyuncu %d") % id)
 
 
 func online() -> bool:
@@ -89,7 +89,7 @@ func invite_friend(id: int, friend_name: String) -> void:
 		status.emit("Önce Steam lobisi kur.")
 		return
 	if Steam.inviteUserToLobby(lobby_id, id):
-		status.emit("%s davet edildi. Oyunu açıkken Steam sohbetindeki daveti kabul etsin." % friend_name)
+		status.emit(tr("%s davet edildi. Oyunu açıkken Steam sohbetindeki daveti kabul etsin.") % friend_name)
 	else:
 		status.emit("Davet gönderilemedi.")
 
@@ -136,10 +136,10 @@ func _new_steam_peer() -> SteamMultiplayerPeer:
 
 func _on_lobby_created(result: int, id: int) -> void:
 	if result != 1:
-		status.emit("Lobi kurulamadı (kod %d)." % result)
+		status.emit(tr("Lobi kurulamadı (kod %d).") % result)
 		return
 	lobby_id = id
-	Steam.setLobbyData(id, "name", my_name() + " lobisi")
+	Steam.setLobbyData(id, "name", tr("%s lobisi") % my_name())
 	Steam.setLobbyData(id, "ver", Updater.version())
 	set_meta_data(meta.mode, meta.diff)
 	var peer := _new_steam_peer()
@@ -157,7 +157,7 @@ func _on_join_requested(id: int, _friend: int) -> void:
 
 func _on_lobby_joined(id: int, _perm: int, _locked: bool, response: int) -> void:
 	if response != 1:
-		status.emit("Lobiye katılınamadı (kod %d)." % response)
+		status.emit(tr("Lobiye katılınamadı (kod %d).") % response)
 		return
 	if Steam.getLobbyOwner(id) == Steam.getSteamID():
 		return # kendi lobimiz, host tarafı zaten kuruldu
@@ -174,11 +174,11 @@ func host_local() -> void:
 	leave()
 	var p := ENetMultiplayerPeer.new()
 	if p.create_server(LOCAL_PORT, 4) != OK:
-		status.emit("Port %d açılamadı." % LOCAL_PORT)
+		status.emit(tr("Port %d açılamadı.") % LOCAL_PORT)
 		return
 	multiplayer.multiplayer_peer = p
 	_register_self()
-	status.emit("Yerel host açık (port %d)." % LOCAL_PORT)
+	status.emit(tr("Yerel host açık (port %d).") % LOCAL_PORT)
 
 
 func join_local() -> void:

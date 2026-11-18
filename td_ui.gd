@@ -33,6 +33,7 @@ var rarity: Dictionary = consts("res://weapons.gd").get("RARITY", {})
 var stat_defs: Array = consts("res://weapons.gd").get("STATS", [])
 var items: Dictionary = consts("res://weapons.gd").get("ITEMS", {}) # yaratıktan düşen eşyalar
 var equips: Dictionary = consts("res://weapons.gd").get("EQUIPS", {})
+var wconsts: Dictionary = consts("res://weapons.gd") # kart yazılarını çevirirken CHAR_UPS / UPS / EVOS
 var shop: Array = consts("res://balance.gd").get("SHOP", [])
 var wave_count: int = consts("res://balance.gd").get("WAVE_COUNT", 10)
 var respawn_time: float = consts("res://balance.gd").get("RESPAWN_TIME", 8.0)
@@ -567,12 +568,12 @@ func _process(dt: float) -> void:
 			shop_wrap.hide()
 			var bt: String = Balance.wave(maxi(wave, 1), 1).boss
 			var final := wave >= wave_count and not endless
-			var sub := (_boss_title(bt) + " geliyor!") if bt != "" else ("Son dalga: kuleyi ne pahasına olursa olsun koru." if final else "Yaratıklar geliyor!")
-			_banner("SON DALGA!" if final else "DALGA %d" % wave, sub, RED if bt != "" or final else ORANGE, _mods_text(mods, false))
+			var sub := (tr("%s geliyor!") % _boss_title(bt)) if bt != "" else ("Son dalga: kuleyi ne pahasına olursa olsun koru." if final else "Yaratıklar geliyor!")
+			_banner("SON DALGA!" if final else tr("DALGA %d") % wave, sub, RED if bt != "" or final else ORANGE, _mods_text(mods, false))
 			cards_at = Time.get_ticks_msec() + 1500 # kartlar afişin üstüne binmesin
 		elif st == "break" and state == "fight":
 			_banner("DALGA TEMİZLENDİ", "Mola: B ile mağaza, TAB ile stat puanları.", Color(0.5, 1.0, 0.6),
-				("Sıradaki dalga:  " + _mods_text(mods, false)) if not mods.is_empty() else "")
+				(tr("Sıradaki dalga:  %s") % _mods_text(mods, false)) if not mods.is_empty() else "")
 		elif ended and not end_wrap.visible:
 			_show_end(st == "won", wave)
 		state = st
@@ -592,12 +593,12 @@ func _process(dt: float) -> void:
 	tower_title.add_theme_color_override("font_color", RED.lerp(Color.WHITE, 0.5 * pulse) if low else Color(1.0, 0.9, 0.7))
 	tower_txt.text = "%d / %d" % [thp, tmax]
 	# td.wave son başlayan dalgadır: molada sıradaki gösterilir.
-	wave_lbl.text = "DALGA %d / ∞" % maxi(wave + int(st == "break"), 1) if endless \
-		else "DALGA %d / %d" % [clampi(wave + int(st == "break"), 1, wave_count), wave_count]
+	wave_lbl.text = tr("DALGA %d / ∞") % maxi(wave + int(st == "break"), 1) if endless \
+		else tr("DALGA %d / %d") % [clampi(wave + int(st == "break"), 1, wave_count), wave_count]
 	var diff: String = _g(td, "difficulty", "normal")
 	if diff != diff_seen:
 		diff_seen = diff
-		diff_lbl.text = str(Balance.DIFFS.get(diff, {}).get("name", diff)).to_upper()
+		diff_lbl.text = tr(str(Balance.DIFFS.get(diff, {}).get("name", diff))).to_upper()
 		(diff_lbl.get_parent().get_theme_stylebox("panel") as StyleBoxFlat).bg_color = DIFF_COLORS.get(diff, GREY)
 	var msig := str(mods)
 	if msig != mods_sig:
@@ -605,8 +606,8 @@ func _process(dt: float) -> void:
 		for n in mod_row.get_children():
 			n.queue_free()
 		for m in mods:
-			_chip(mod_row, "%s %s" % [MOD_ICONS.get(m, "•"), str(Balance.MODS.get(m, {}).get("name", m)).to_upper()], Color(0.22, 0.1, 0.32, 0.85), Color(0.92, 0.82, 1.0), 15)
-		mods_lbl.text = "Sıradaki dalga:  " + _mods_text(mods, true) if not mods.is_empty() else ""
+			_chip(mod_row, "%s %s" % [MOD_ICONS.get(m, "•"), tr(str(Balance.MODS.get(m, {}).get("name", m))).to_upper()], Color(0.22, 0.1, 0.32, 0.85), Color(0.92, 0.82, 1.0), 15)
+		mods_lbl.text = tr("Sıradaki dalga:  %s") % _mods_text(mods, true) if not mods.is_empty() else ""
 	mod_row.visible = st == "fight" and not mods.is_empty()
 	mods_lbl.visible = st == "break" and not mods.is_empty()
 	# Boss: td._by_id'deki yaratık düğümü (her makinede _spawn ile dolar), canı hp / max_hp.
@@ -618,11 +619,11 @@ func _process(dt: float) -> void:
 		boss_fill.offset_right = -3.0 * bf
 		boss_name.text = _boss_title(boss.type).to_upper()
 		boss_txt.text = "%d / %d" % [boss.hp, boss.max_hp]
-	left_lbl.text = "Kalan yaratık: %d" % _g(td, "enemies_left", 0) if st == "fight" else "Öldürülen: %d" % _g(td, "kills", 0)
+	left_lbl.text = tr("Kalan yaratık: %d") % _g(td, "enemies_left", 0) if st == "fight" else tr("Öldürülen: %d") % _g(td, "kills", 0)
 	money_lbl.text = "₺ %d" % money
 	break_lbl.visible = st == "break"
 	ready_lbl.visible = st == "break"
-	break_lbl.text = "MOLA   •   sıradaki dalgaya %d sn" % ceili(_g(td, "time_left", 0.0))
+	break_lbl.text = tr("MOLA   •   sıradaki dalgaya %d sn") % ceili(_g(td, "time_left", 0.0))
 
 	# XP: yumuşak dolar; seviye atlayınca sıfırdan başlar ve parlar.
 	var lv: int = _g(td, "level", 1)
@@ -631,7 +632,7 @@ func _process(dt: float) -> void:
 			xp_f = 0.0
 			_flash_xp()
 		level = lv
-		lvl_lbl.text = "SV %d" % lv
+		lvl_lbl.text = tr("SV %d") % lv
 	var target := clampf(float(_g(td, "xp", 0)) / maxi(_g(td, "xp_next", 1), 1), 0.0, 1.0)
 	xp_f = lerpf(xp_f, target, 1.0 - exp(-8.0 * dt))
 	xp_fill.anchor_right = xp_f
@@ -640,7 +641,7 @@ func _process(dt: float) -> void:
 	var alive: bool = _g(player, "hp", 1) > 0
 	dead_lbl.visible = not alive and not ended
 	if dead_lbl.visible:
-		dead_lbl.text = "ÖLDÜN\nYeniden doğuş: %d sn" % maxi(ceili(_g(player, "respawn_t", respawn_time - _g(player, "dead_t", 0.0))), 0)
+		dead_lbl.text = tr("ÖLDÜN\nYeniden doğuş: %d sn") % maxi(ceili(_g(player, "respawn_t", respawn_time - _g(player, "dead_t", 0.0))), 0)
 
 	# Kartlar: liste değişince yeniden kurulur.
 	var cards: Array = _g(player, "cards", [])
@@ -659,9 +660,9 @@ func _process(dt: float) -> void:
 	cards_hint.text = "Elemek istediğin kartı seç: bu maçta bir daha çıkmaz" if banish_mode \
 		else "1 / 2 / 3 tuşuyla ya da tıklayarak seç" if st == "break" else "1 / 2 / 3 tuşuyla seç"
 	if cards_box.visible:
-		reroll_btn.text = "↻  Yeniden Çek  [4]   •   %d hak" % rerolls
+		reroll_btn.text = tr("↻  Yeniden Çek  [4]   •   %d hak") % rerolls
 		reroll_btn.disabled = rerolls <= 0
-		banish_btn.text = "✕  Hangisi? 1 / 2 / 3   ([5] vazgeç)" if banish_mode else "✕  Ele  [5]   •   %d hak" % banishes
+		banish_btn.text = "✕  Hangisi? 1 / 2 / 3   ([5] vazgeç)" if banish_mode else tr("✕  Ele  [5]   •   %d hak") % banishes
 		banish_btn.disabled = banishes <= 0
 		cards_row.modulate = Color(1.0, 0.6, 0.55) if banish_mode else Color.WHITE
 	_tut_tick(st, ended, cards_box.visible)
@@ -773,7 +774,7 @@ func _item(d: Dictionary) -> Dictionary:
 	var c: Color = src.get("color", Color.WHITE)
 	if src.has("rarity"):
 		c = rarity.get(src.rarity, {}).get("color", c)
-	return {"name": str(src.get("name", id)).capitalize() if src.is_empty() else str(src.name), "color": c}
+	return {"name": str(src.get("name", id)).capitalize() if src.is_empty() else tr(str(src.name)), "color": c}
 
 
 func _update_inv() -> void:
@@ -803,7 +804,7 @@ func _update_inv() -> void:
 					mag = w.get("mag", 0)
 		if mag > 0: # şarjör: "12 / ∞" (alevde yakıt yüzdesi); azalınca turuncu, boşken kırmızı yanıp söner
 			var am: int = d.get("ammo", mag)
-			c.count.text = "%%%d" % roundi(am * 100.0 / mag) if d.id == "flame" else "%d / ∞" % am
+			c.count.text = tr("%%%d") % roundi(am * 100.0 / mag) if d.id == "flame" else "%d / ∞" % am
 			if am <= 0:
 				c.count.modulate = Color(1.0, 0.25, 0.2, 0.55 + 0.45 * sin(Time.get_ticks_msec() * 0.012))
 			elif am <= mag / 4:
@@ -815,7 +816,7 @@ func _update_inv() -> void:
 		c.sb.shadow_size = 12 if sel == i + 1 else 0
 	var ch: Dictionary = _g(player, "ch", {})
 	var cd: float = _g(player, "skill_cd", 0.0)
-	cells[5].name.text = "%s\n%s" % [ch.get("skill_name", ""), main._cd_text(cd)]
+	cells[5].name.text = "%s\n%s" % [tr(ch.get("skill_name", "")), main._cd_text(cd)]
 	cells[5].sb.border_color = ch.get("color", GREY) if cd <= 0.0 else Color(GREY, 0.6)
 
 
@@ -835,7 +836,7 @@ func _refresh_ready(st: String) -> void:
 	for id in Net.names:
 		names.append(("✔ " if _is_ready(id) else "○ ") + Net.display_name(id))
 	var mine := _is_ready(multiplayer.get_unique_id())
-	ready_lbl.text = ("Hazırsın" if mine else "G: Hazır") + "      " + "    ".join(names)
+	ready_lbl.text = (tr("Hazırsın") if mine else tr("G: Hazır")) + "      " + "    ".join(names)
 
 
 ## Stat değeri yazısı: çarpanlar "+%20", oranlar "%15", sayılar düz (weapons.gd stat_text ile aynı kural).
@@ -843,7 +844,7 @@ func _num(id: String, v: float) -> String:
 	if id in ["hp", "bounce"]:
 		return str(int(v))
 	if id in ["armor", "crit"]:
-		return "%%%d" % roundi(v * 100.0)
+		return tr("%%%d") % roundi(v * 100.0) # Türkçe "%10", İngilizce "10%"
 	return "%+d%%" % roundi((v - 1.0) * 100.0)
 
 
@@ -883,9 +884,9 @@ func _refresh_stats(st: String) -> void:
 		# görünmez olunca yer kaplamaya devam etsin: satırlar zıplamasın
 		r.btn.modulate.a = 1.0 if st == "break" and pts > 0 and v < r.bar.max_value - 0.0001 else 0.0
 		r.btn.disabled = r.btn.modulate.a < 1.0
-	stats_sub.text = "%s   •   Seviye %d" % [_g(player, "ch", {}).get("name", "Oyuncu"), _g(player, "level", level)]
-	points_lbl.text = ("Harcanacak stat puanı: %d   (+ ile dağıt)" % pts) if st == "break" and pts > 0 \
-		else ("Stat puanı: %d   (molada harcanır)" % pts)
+	stats_sub.text = tr("%s   •   Seviye %d") % [tr(_g(player, "ch", {}).get("name", "Oyuncu")), _g(player, "level", level)]
+	points_lbl.text = (tr("Harcanacak stat puanı: %d   (+ ile dağıt)") % pts) if st == "break" and pts > 0 \
+		else (tr("Stat puanı: %d   (molada harcanır)") % pts)
 	var inv: Array = _g(player, "inv", [])
 	if str(inv) != inv_sig:
 		inv_sig = str(inv)
@@ -895,7 +896,7 @@ func _refresh_stats(st: String) -> void:
 			if d is Dictionary and d.get("kind", "") in ["weapon", "equip"]:
 				var it := _item(d)
 				var lvl := int(d.get("lvl", 1))
-				_t(weap_box, "%s    Sv %d   %s" % [it.name, lvl, "●".repeat(clampi(lvl, 0, 8))], 17, it.color.lightened(0.2))
+				_t(weap_box, tr("%s    Sv %d   %s") % [it.name, lvl, "●".repeat(clampi(lvl, 0, 8))], 17, it.color.lightened(0.2))
 
 
 func _spend(id: String) -> void:
@@ -945,10 +946,11 @@ func _make_cards(cards: Array) -> void:
 		var ty := _t(head, "" if evo else TYPES.get(d.get("type", ""), "KART"), 13)
 		ty.modulate.a = 0.8
 		ty.size_flags_horizontal = SIZE_EXPAND_FILL
-		_t(head, str(r.get("name", "")).to_upper(), 13, c)
-		var title := _t(v, str(d.get("title", "?")), 25, c.lightened(0.3), true)
+		_t(head, tr(str(r.get("name", ""))).to_upper(), 13, c)
+		var txt := card_text(d)
+		var title := _t(v, txt[0], 25, c.lightened(0.3), true)
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		var desc := _t(v, str(d.get("desc", "")), 16)
+		var desc := _t(v, txt[1], 16)
 		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		desc.size_flags_vertical = SIZE_EXPAND_FILL
 		desc.modulate.a = 0.9
@@ -958,6 +960,47 @@ func _make_cards(cards: Array) -> void:
 		tw.tween_property(card, "modulate:a", 1.0, 0.2).set_delay(0.05 + i * 0.08)
 		tw.tween_property(card, "scale", Vector2.ONE, 0.35).from(Vector2(0.6, 0.6)).set_delay(0.05 + i * 0.08) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Kartın [başlık, açıklama] çevirisi. weapons.gd yazıyı Türkçe birleştirir; burada id'den tablolara dönülüp
+## parçalar ayrı ayrı çevrilir. Tanınmayan kartta düz tr().
+func card_text(d: Dictionary) -> Array:
+	var title := str(d.get("title", "?"))
+	var desc := str(d.get("desc", ""))
+	var a := str(d.get("id", "")).split(":")
+	var lv := ""
+	var m := RegEx.create_from_string("\\(sv\\. (\\d+)/(\\d+)\\)$").search(desc)
+	if m:
+		lv = tr("  (sv. %d/%d)") % [int(m.get_string(1)), int(m.get_string(2))]
+	if a.size() >= 2:
+		match str(d.get("type", "")):
+			"stat": # weapons.pool ile aynı: "Can: 100 → 115" (oyuncunun şimdiki statından)
+				for s in stat_defs:
+					if s.get("id") == a[1] and a.size() >= 3:
+						var v := float(_g(player, "stats", {}).get(s.id, s.base))
+						return [tr(s.name), "%s: %s → %s" % [tr(s.name), _num(s.id, v), _num(s.id, minf(v + s.step * int(a[2]), s.max))]]
+			"char":
+				for u in wconsts.get("CHAR_UPS", []):
+					if u.id == a[1]:
+						var ch: Dictionary = _g(player, "ch", {})
+						var who := tr(str(ch.get("name" if u.get("passive", false) else "skill_name", "")))
+						return [tr(u.name), tr(u.desc) % who + lv]
+			"weapon":
+				var src: Dictionary = equips.get(a[1], {}) if a[0] == "equip" else {}
+				for w in weapons:
+					if a[0] == "weapon" and w.get("id") == a[1]:
+						src = w
+				if src.has("name"):
+					return [(tr("EKİPMAN: %s") if a[0] == "equip" else tr("YENİ SİLAH: %s")) % tr(src.name), tr(str(src.get("desc", "")))]
+			"weapon_up":
+				for u in wconsts.get("UPS", {}).get(a[1], []):
+					if a.size() >= 3 and u.id == a[2]:
+						return ["%s: %s" % [_item({"kind": "weapon", "id": a[1]}).name, tr(u.name)], tr(u.desc) + lv]
+			"evo":
+				var ev: Dictionary = wconsts.get("EVOS", {}).get(a[1], {})
+				if ev.has("name"):
+					return [tr("EVRİM: %s") % tr(ev.name), tr(str(ev.get("desc", "")))]
+	return [tr(title), tr(desc)]
 
 
 func _choose(i: int) -> void:
@@ -1005,8 +1048,8 @@ func _open_shop() -> void:
 			var v := VBoxContainer.new()
 			v.size_flags_horizontal = SIZE_EXPAND_FILL
 			h.add_child(v)
-			_t(v, str(it.get("name", it.get("id", "?"))).to_upper(), 23, c.lightened(0.35), true)
-			var d := _t(v, str(it.get("desc", "")), 14)
+			_t(v, tr(str(it.get("name", it.get("id", "?")))).to_upper(), 23, c.lightened(0.35), true)
+			var d := _t(v, tr(str(it.get("desc", ""))), 14)
 			d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			d.modulate.a = 0.8
 			var b := Button.new() # _buy düğmenin kendisini ister, o yüzden _button ile kurulmaz
@@ -1035,7 +1078,7 @@ func _buy(it: Dictionary, b: Button) -> void:
 		if i < inv.size() and (inv[i].is_empty() or inv[i].get("id") == it.get("id")):
 			room = true
 	if money < price:
-		_shop_say("Para yetmiyor: %d ₺ eksik." % (price - money), RED)
+		_shop_say(tr("Para yetmiyor: %d ₺ eksik.") % (price - money), RED)
 		var x := b.position.x
 		var tw := create_tween()
 		for dx in [8, -8, 5, -5, 0]:
@@ -1043,7 +1086,7 @@ func _buy(it: Dictionary, b: Button) -> void:
 	elif not room:
 		_shop_say("Envanter dolu: 4. ve 5. slotta yer yok. Önce elindeki yapıyı yerleştir.", RED)
 	elif td and td.has_method("buy") and td.buy(str(it.get("id", ""))) != false:
-		_shop_say("%s alındı." % it.get("name", ""), Color(0.5, 1.0, 0.6))
+		_shop_say(tr("%s alındı.") % tr(str(it.get("name", ""))), Color(0.5, 1.0, 0.6))
 	else:
 		_shop_say("Şu an alınamıyor.", RED)
 
@@ -1057,7 +1100,7 @@ func _shop_say(text: String, c: Color) -> void:
 # ---------- Boss, modifikatör, gece ----------
 
 func _boss_title(type: String) -> String:
-	return ("BOSS: " if type == "boss" else "ARA BOSS: ") + str(Balance.ENEMIES.get(type, {}).get("name", type))
+	return (tr("BOSS: %s") if type == "boss" else tr("ARA BOSS: %s")) % tr(str(Balance.ENEMIES.get(type, {}).get("name", type)))
 
 
 ## Kısa: "⚡ Hızlı   ☾ Gece"; uzun: her biri "⚡ Hızlı — açıklama" satırı.
@@ -1065,7 +1108,7 @@ func _mods_text(ms: Array, long: bool) -> String:
 	var out := PackedStringArray()
 	for m in ms:
 		var d: Dictionary = Balance.MODS.get(m, {})
-		out.append("%s %s" % [MOD_ICONS.get(m, "•"), d.get("name", m)] + (" — " + str(d.get("desc", "")) if long else ""))
+		out.append("%s %s" % [MOD_ICONS.get(m, "•"), tr(str(d.get("name", m)))] + (" — " + tr(str(d.get("desc", ""))) if long else ""))
 	return ("\n" if long else "     ").join(out)
 
 
@@ -1105,7 +1148,7 @@ func _tut_show() -> void:
 	for k in TUT[tut][0]:
 		_key(tut_keys, k)
 	tut_txt.text = TUT[tut][1]
-	tut_step.text = "İLK MAÇ REHBERİ   %d / %d" % [tut + 1, TUT.size()]
+	tut_step.text = tr("İLK MAÇ REHBERİ   %d / %d") % [tut + 1, TUT.size()]
 	create_tween().tween_property(tut_card, "modulate", Color.WHITE, 0.5).from(Color(1.8, 1.6, 1.0))
 
 
@@ -1189,14 +1232,14 @@ func _show_end(won: bool, wave: int) -> void:
 	center.add_child(v)
 	var endless: bool = summary.get("endless", _g(td, "endless", false))
 	var diff: String = summary.get("difficulty", _g(td, "difficulty", "normal"))
-	var title := "ZAFER!" if won else ("SONSUZ: DALGA %d" % wave if endless else "KULE DÜŞTÜ")
+	var title := tr("ZAFER!") if won else (tr("SONSUZ: DALGA %d") % wave if endless else tr("KULE DÜŞTÜ"))
 	_t(v, title, 92, GOLD if won else RED, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_t(v, "Rapunzel güvende. Kule tüm dalgalara dayandı." if won else ("Kule %d. dalgada düştü." % wave if endless else "Yaratıklar kuleyi ele geçirdi."), 24).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_t(v, tr("Rapunzel güvende. Kule tüm dalgalara dayandı.") if won else (tr("Kule %d. dalgada düştü.") % wave if endless else tr("Yaratıklar kuleyi ele geçirdi.")), 24).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 18)
 	v.add_child(row)
-	for s in [["DALGA", str(wave) if endless else "%d / %d" % [wave, wave_count]], ["ZORLUK", str(Balance.DIFFS.get(diff, {}).get("name", diff))],
+	for s in [["DALGA", str(wave) if endless else "%d / %d" % [wave, wave_count]], ["ZORLUK", tr(str(Balance.DIFFS.get(diff, {}).get("name", diff)))],
 			["ÖLDÜRME", str(_g(td, "kills", 0))], ["SEVİYE", str(_g(td, "level", 1))]]:
 		var p := PanelContainer.new()
 		p.custom_minimum_size.x = 200
@@ -1249,10 +1292,10 @@ func _end_players(parent: Node, ps: Dictionary, mvp: int) -> void:
 				hi = x
 				top = peer
 		if top != 0:
-			titles[top].append(t[0])
+			titles[top].append(tr(t[0]))
 	for peer in ps:
 		if int(ps[peer].get("deaths", 0)) == 0:
-			titles[peer].append("Ölümsüz")
+			titles[peer].append(tr("Ölümsüz"))
 	var widths := [250, 110, 110, 100, 90, 90, 330]
 	var rows := [["OYUNCU", "HASAR", "ÖLDÜRME", "KRİTİK", "YAPI", "ÖLÜM", "UNVAN"]]
 	var peers := ps.keys()
@@ -1302,10 +1345,10 @@ func _end_profile(parent: Node) -> void:
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 18)
 	v.add_child(h)
-	_t(h, "+%d ALTIN SAÇ" % run_gold, 34, GOLD, true)
-	_t(h, "Toplam: %d" % Profile.gold(), 18).size_flags_vertical = SIZE_SHRINK_CENTER
+	_t(h, tr("+%d ALTIN SAÇ") % run_gold, 34, GOLD, true)
+	_t(h, tr("Toplam: %d") % Profile.gold(), 18).size_flags_vertical = SIZE_SHRINK_CENTER
 	if not run_new.is_empty(): # tek satır (çok açılımda kaydırarak): "YENİ: Yay, Bumerang açıldı!"
-		var l := _t(v, "YENİ: %s açıldı!" % ", ".join(PackedStringArray(run_new.map(_unlock_name))), 22, Color(0.5, 1.0, 0.6), true)
+		var l := _t(v, tr("YENİ: %s açıldı!") % ", ".join(PackedStringArray(run_new.map(_unlock_name))), 22, Color(0.5, 1.0, 0.6), true)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = 720
@@ -1315,7 +1358,7 @@ func _end_profile(parent: Node) -> void:
 		if q[0] < q[1] and prog.size() < 3:
 			prog.append("%s: %d/%d" % [_unlock_name(id), q[0], q[1]])
 	if not prog.is_empty():
-		var l := _t(v, "Sıradaki açılımlar:   " + "     ".join(prog), 16)
+		var l := _t(v, tr("Sıradaki açılımlar:   %s") % "     ".join(prog), 16)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.modulate.a = 0.85
 
@@ -1326,9 +1369,9 @@ func _unlock_name(id: String) -> String:
 	if id.begins_with("weapon:"):
 		for w in weapons:
 			if w.get("id") == k:
-				return str(w.name)
+				return tr(str(w.name))
 	elif id.begins_with("diff:"):
-		return "%s zorluğu" % Balance.DIFFS.get(k, {}).get("name", k)
+		return tr("%s zorluğu") % tr(str(Balance.DIFFS.get(k, {}).get("name", k)))
 	elif id == "mode:endless":
-		return "Sonsuz mod"
+		return tr("Sonsuz mod")
 	return k.capitalize()

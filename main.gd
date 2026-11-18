@@ -9,6 +9,12 @@ const TdUi := preload("res://td_ui.gd")
 const Profile := preload("res://profile.gd")
 const Balance := preload("res://balance.gd")
 const UPGRADES := {"tower_hp": "Kule Zırhı", "start_money": "Başlangıç Altını", "reroll": "Yeniden Çekme", "banish": "Eleme"}
+const UPGRADE_DESC := {"tower_hp": "Kule canı +%4 / kademe", "start_money": "Maç başı parası +10 ₺ / kademe",
+	"reroll": "Maç başına +1 kart yeniden çekme hakkı", "banish": "Maç başına +1 kart eleme hakkı"}
+## Profile.QUESTS istatistiği -> açılma koşulu ("%d" hedef). wins_<zorluk> ayrıca _quest_text'te.
+const QUEST_TEXT := {"best_match_kills": "Tek maçta %d öldürme", "best_wave": "%d. dalgaya ulaş", "builds": "Toplam %d yapı kur",
+	"hard_best_wave": "Zor ya da Kabus'ta %d. dalgaya ulaş", "wins": "%d maç kazan"}
+const LANG_NAMES := ["Otomatik (sistem dili)", "Türkçe", "English"] # Settings.LANGUAGES sırasıyla; dil adları çevrilmez
 const HP_W := 316.0 # can barının iç genişliği (px)
 const STATUS := {"stun": "SERSEMLEDİN", "blind": "KÖR OLDUN", "silence": "SUSTURULDUN", "confuse": "YÖNLER TERS",
 	"slow": "YAVAŞLADIN", "vuln": "İŞARETLENDİN", "burn": "YANIYORSUN", "haste": "HIZLI", "power": "GÜÇLÜ ROKET",
@@ -66,6 +72,7 @@ var hp_txt: Label
 var trail_f := 1.0
 var char_btn: Button
 var char_wrap: ColorRect
+var char_grid: HFlowContainer
 var char_cards := [] # ızgaradaki her karakter kutusunun StyleBoxFlat'ı
 var char_sel := 0 # seçim ekranında incelenen karakter
 var char_view: Node3D # önizleme sahnesinde modelin durduğu yer
@@ -80,6 +87,10 @@ var settings_wrap: ColorRect
 var vol_lbl: Label
 var res_opt: OptionButton
 var close_btn: Button
+var ver_lbl: Label
+var chars_title: Label
+var shake_slider: HSlider
+var intro_logo: Label
 var ingame_box: VBoxContainer
 var world: Node3D
 var players: Node3D
@@ -371,7 +382,7 @@ func _update_hp_bar(me: Node, dt: float) -> void:
 			line.size = Vector2(2, 26)
 			line.position.x = HP_W * (k + 1) * 20.0 / me.max_hp - 1.0
 			hp_ticks.add_child(line)
-	char_lbl.text = "%s  •  %s" % [me.ch.name, me.ch.role]
+	char_lbl.text = "%s  •  %s" % [tr(me.ch.name), tr(me.ch.role)]
 	char_lbl.modulate = me.ch.color.lightened(0.3)
 
 
@@ -415,7 +426,8 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	iv.alignment = BoxContainer.ALIGNMENT_CENTER
 	iv.add_theme_constant_override("separation", 4)
 	intro.add_child(iv)
-	_logo(iv, "BAZUKA SAVAŞI", 124).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intro_logo = _logo(iv, "BAZUKA SAVAŞI", 124)
+	intro_logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_txt(iv, "R O K E T L E R    •    K A O S    •    A R K A D A Ş L A R", 20).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = _txt(intro, "BAŞLAMAK İÇİN BİR TUŞA BAS", 24, 1.0)
 	prompt.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -472,11 +484,14 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	var lv := _column(_page("lobby"))
 	lobby_title = _logo(lv, "ARENA", 72)
 	lobby_sub = _txt(lv, MODES.arena[1], 17, 0.75)
-	lv.add_child(_gap(14))
+	lv.add_child(_gap(8))
 	var panel := PanelContainer.new()
+	var ps: StyleBoxFlat = theme.get_stylebox("panel", "PanelContainer").duplicate()
+	ps.set_content_margin_all(16) # 720p: TD lobisi (zorluk + sonsuz satırı) ekrana sığsın
+	panel.add_theme_stylebox_override("panel", ps)
 	lv.add_child(panel)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 9)
+	v.add_theme_constant_override("separation", 7)
 	panel.add_child(v)
 	var hrow := HBoxContainer.new()
 	hrow.add_theme_constant_override("separation", 9)
@@ -491,6 +506,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	friends_box = VBoxContainer.new()
 	friends_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(friends_box)
+	scroll.visible = false # liste boşken ayırma boşluğu da kalmasın
 	v.add_child(scroll)
 	var crow := HBoxContainer.new()
 	crow.add_theme_constant_override("separation", 9)
@@ -559,10 +575,10 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	info = _txt(ui, "", 15, 0.8)
 	info.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	info.offset_left = 40; info.offset_right = -260; info.offset_top = -78; info.offset_bottom = -42
-	var ver := _txt(ui, "sürüm " + Updater.version(), 14, 0.55)
-	ver.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	ver.offset_left = -200; ver.offset_right = -24; ver.offset_top = -64; ver.offset_bottom = -42
-	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ver_lbl = _txt(ui, tr("sürüm %s") % Updater.version(), 14, 0.55)
+	ver_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver_lbl.offset_left = -200; ver_lbl.offset_right = -24; ver_lbl.offset_top = -64; ver_lbl.offset_bottom = -42
+	ver_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	invite_box = VBoxContainer.new() # gelen davetler sağ üstte çıkar
 	invite_box.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	invite_box.offset_left = -380; invite_box.offset_right = -30; invite_box.offset_top = 60
@@ -663,6 +679,9 @@ func set_mode(m: String) -> void:
 
 func _show_page(n: String) -> void:
 	page = n
+	if n == "intro": # İngilizce ad ("BAZOOKA BUDDIES") daha uzun: 720p'de ekrana sığsın
+		var w := intro_logo.get_theme_font("font").get_string_size(intro_logo.atr(intro_logo.text), HORIZONTAL_ALIGNMENT_LEFT, -1, 124).x
+		intro_logo.add_theme_font_size_override("font_size", mini(124, int(124.0 * (get_viewport().get_visible_rect().size.x - 80.0) / maxf(w, 1.0))))
 	for k in pages:
 		pages[k].visible = k == n
 	var p: Control = pages[n]
@@ -765,8 +784,8 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 14)
 	margin.add_child(v)
-	var title := _lbl(v, "KARAKTERİNİ SEÇ   •   %d karakter" % Chars.LIST.size(), 30)
-	title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	chars_title = _lbl(v, tr("KARAKTERİNİ SEÇ   •   %d karakter") % Chars.LIST.size(), 30)
+	chars_title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 	var row := HBoxContainer.new()
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 20)
@@ -778,6 +797,7 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	row.add_child(scroll)
 	var grid := HFlowContainer.new()
+	char_grid = grid
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
@@ -793,7 +813,6 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 		b.text = c.name
 		b.add_theme_font_size_override("font_size", 11)
 		b.clip_text = true
-		b.tooltip_text = "%s – %s" % [c.name, c.skill_name]
 		var sb := _sb(Color(c.color.darkened(0.72), 0.95), 10, 6)
 		sb.set_border_width_all(3)
 		for st in ["normal", "hover", "pressed", "focus"]:
@@ -867,16 +886,39 @@ func _show_char(i: int) -> void:
 	var ap: AnimationPlayer = m.find_children("*", "AnimationPlayer", true, false)[0]
 	ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
 	ap.play("Idle")
-	char_info.name.text = c.name
+	char_info.name.text = tr(c.name)
 	char_info.name.add_theme_color_override("font_color", c.color.lightened(0.3))
-	char_info.role.text = c.role
-	char_info.stats.text = "Can %d   •   Hız %%%d   •   Kalkan %d sn" % [c.get("hp", 100), roundi(c.get("speed", 1.0) * 100.0), c.get("shield_cd", 8.0)]
-	char_info.passive.text = "Pasif: " + Chars.passive_text(c)
-	char_info.skill.text = "Q – %s (%d sn)\n%s" % [c.skill_name, c.cd, c.skill_desc]
-	char_info.quote.text = "\"%s\"" % c.quote
+	char_info.role.text = tr(c.role)
+	char_info.stats.text = tr("Can %d   •   Hız %%%d   •   Kalkan %d sn") % [c.get("hp", 100), roundi(c.get("speed", 1.0) * 100.0), c.get("shield_cd", 8.0)]
+	char_info.passive.text = tr("Pasif: %s") % passive_text(c)
+	char_info.skill.text = tr("Q – %s (%d sn)\n%s") % [tr(c.skill_name), c.cd, tr(c.skill_desc)]
+	char_info.quote.text = "\"%s\"" % tr(c.quote)
+
+
+## Chars.passive_text'in çevrilen kopyası (characters.gd veri dosyası değişmesin diye burada).
+## i18n_test, Türkçe'de ikisinin aynı çıktığını 52 karakterde denetler.
+func passive_text(c: Dictionary) -> String:
+	var p := PackedStringArray()
+	if c.has("hp"): p.append(tr("%d can") % c.hp)
+	if c.has("speed"): p.append(tr("%+d%% hız") % roundi((c.speed - 1.0) * 100.0))
+	if c.has("shield_cd"): p.append(tr("kalkan %d sn'de dolar") % c.shield_cd)
+	if c.has("dodge"): p.append(tr("%%%d şansla hasardan sıyrılır") % roundi(c.dodge * 100.0))
+	if c.has("throw_mult"): p.append(tr("roketleri %%%d hızlı") % roundi((c.throw_mult - 1.0) * 100.0))
+	if c.has("fire_cd"): p.append(tr("%%%d seri ateş") % roundi((1.0 / c.fire_cd - 1.0) * 100.0))
+	if c.has("rocket_dmg"): p.append(tr("roket hasarı %d") % c.rocket_dmg)
+	if c.has("sword_dmg"): p.append(tr("kılıç hasarı %d") % c.sword_dmg)
+	if c.has("regen"): p.append(tr("saniyede %s can yeniler") % str(c.regen))
+	if c.has("jump"): p.append(tr("%%%d yüksek zıplar") % roundi((c.jump - 1.0) * 100.0))
+	if c.has("air_jumps"): p.append(tr("havada %d kez zıplar") % c.air_jumps)
+	if c.has("wall_cd"): p.append(tr("duvar %d sn'de dolar") % c.wall_cd)
+	if c.get("sit_shield", false): p.append(tr("2 sn durunca kendiliğinden kalkan alır"))
+	return " • ".join(p) if not p.is_empty() else tr("Dengeli: zaafı da yok, üstünlüğü de.")
 
 
 func _open_chars() -> void:
+	for i in char_grid.get_child_count(): # ipucu: dil değişebildiği için her açılışta
+		var c := Chars.get_char(i)
+		char_grid.get_child(i).tooltip_text = "%s – %s" % [tr(c.name), tr(c.skill_name)]
 	_show_char(Net.my_char)
 	char_wrap.show()
 
@@ -891,7 +933,7 @@ func _pick_char(i: int) -> void:
 
 func _update_char_btn() -> void:
 	var c := Chars.get_char(Net.my_char)
-	char_btn.text = "KARAKTER  ·  %s" % c.name.to_upper()
+	char_btn.text = tr("KARAKTER  ·  %s") % tr(c.name).to_upper()
 
 
 # ---------- Silah seçimi (TD) ----------
@@ -980,7 +1022,7 @@ func _open_weapons() -> void:
 	var rar: Dictionary = TdUi.consts("res://weapons.gd").get("RARITY", {})
 	# Çubuklar en iyi silaha göre dolar. rate atış arası süre olduğu için tersi alınır.
 	var bars := [["Hasar", func(w): return float(w.get("dmg", 0)) * w.get("n", 1), "%d"],
-		["Atış hızı", func(w): return 1.0 / maxf(w.get("rate", 1.0), 0.05), "%.1f/sn"], ["Menzil", func(w): return float(w.get("range", 60.0)), "%d m"]]
+		["Atış hızı", func(w): return 1.0 / maxf(w.get("rate", 1.0), 0.05), tr("%.1f/sn")], ["Menzil", func(w): return float(w.get("range", 60.0)), "%d m"]]
 	var wide := get_viewport().get_visible_rect().size.x >= 1560.0
 	weapon_grid.columns = 5 if wide else 4 # dar pencerede taşmasın
 	var order := range(weapon_list.size()) # nadirliğe göre: sıradan -> efsanevi (seçim numarası değişmez)
@@ -990,7 +1032,7 @@ func _open_weapons() -> void:
 		var r: Dictionary = rar.get(w.get("rarity", ""), {})
 		var c: Color = r.get("color", Color(0.75, 0.78, 0.85))
 		var b := Button.new() # tıklanabilir kart: içindekiler fareyi yutmaz
-		b.custom_minimum_size = Vector2(290, 280)
+		b.custom_minimum_size = Vector2(290, 300)
 		var sb := _sb(Color(c.darkened(0.8), 0.95), 12, 0)
 		sb.set_border_width_all(4 if i == _my_weapon() else 2)
 		sb.border_color = Color(1, 0.85, 0.2) if i == _my_weapon() else Color(c, 0.7)
@@ -1014,8 +1056,8 @@ func _open_weapons() -> void:
 		var cv := VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 4)
 		m.add_child(cv)
-		_logo(cv, str(w.get("name", "?")).to_upper(), 22, c.lightened(0.25)).clip_text = true
-		var tag := _lbl(cv, str(r.get("name", "")).to_upper() + ("   ✔ SEÇİLİ" if i == _my_weapon() else ""), 13)
+		_logo(cv, tr(str(w.get("name", "?"))).to_upper(), 22, c.lightened(0.25)).clip_text = true
+		var tag := _lbl(cv, tr(str(r.get("name", ""))).to_upper() + (tr("   ✔ SEÇİLİ") if i == _my_weapon() else ""), 13)
 		tag.add_theme_color_override("font_color", c)
 		var pic := TextureRect.new()
 		pic.texture = weapon_icon(str(w.get("id", "")))
@@ -1023,13 +1065,15 @@ func _open_weapons() -> void:
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		cv.add_child(pic)
-		var d := _lbl(cv, str(w.get("desc", "")), 15)
+		var d := _lbl(cv, tr(str(w.get("desc", ""))), 15)
 		d.modulate.a = 0.85
 		d.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		d.custom_minimum_size.y = 42 # iki satır: clip_text tek satıra indirmesin
 		d.clip_text = true
-		if locked:
-			var pr = _pf("unlock_progress", ["weapon:" + str(w.get("id", ""))], null)
-			d.text = "🔒 KİLİTLİ" + ("\nİlerleme: %d/%d" % [pr[0], pr[1]] if pr is Array and pr.size() == 2 else "\nKazanarak aç.")
+		if locked: # açma koşulu: "Tek maçta 150 öldürme (112/150)"
+			pic.custom_minimum_size.y = 56
+			d.text = tr("🔒 KİLİTLİ") + "\n" + _quest_text("weapon:" + str(w.get("id", "")))
+			d.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
 		for st in bars:
 			var row := HBoxContainer.new()
 			cv.add_child(row)
@@ -1090,7 +1134,7 @@ func _diff_keys() -> Array:
 ## "🔒 Normal'i kazan": Balance.DIFFS[...].unlock = "win_<önceki>".
 func _diff_lock_text(k: String) -> String:
 	var u: String = Balance.DIFFS[k].get("unlock", "")
-	return "🔒 %s'i kazan" % Balance.DIFFS[u.trim_prefix("win_")].name if u.begins_with("win_") and Balance.DIFFS.has(u.trim_prefix("win_")) else "🔒 Kilitli"
+	return tr("🔒 %s'i kazan") % tr(Balance.DIFFS[u.trim_prefix("win_")].name) if u.begins_with("win_") and Balance.DIFFS.has(u.trim_prefix("win_")) else tr("🔒 Kilitli")
 
 
 func _update_diff_ui() -> void:
@@ -1098,7 +1142,7 @@ func _update_diff_ui() -> void:
 	for i in keys.size():
 		var ok := _unlocked("diff:" + keys[i])
 		diff_opt.set_item_disabled(i, not ok)
-		diff_opt.set_item_text(i, Balance.DIFFS[keys[i]].name + ("" if ok else "  " + _diff_lock_text(keys[i])))
+		diff_opt.set_item_text(i, tr(Balance.DIFFS[keys[i]].name) + ("" if ok else "  " + _diff_lock_text(keys[i])))
 	diff_opt.select(maxi(keys.find(diff_id), 0))
 	var host := not Net.online() or multiplayer.is_server()
 	diff_opt.disabled = not host
@@ -1149,8 +1193,8 @@ func _on_lobbies(list: Array) -> void:
 	if list.is_empty():
 		_lbl(find_box, "Açık lobi yok — sen kur!", 18)
 	for l in list:
-		var d: String = Balance.DIFFS.get(l.diff, {}).get("name", "-")
-		var m: String = MODES.get(l.mode, ["?"])[0]
+		var d: String = tr(Balance.DIFFS.get(l.diff, {}).get("name", "-"))
+		var m: String = tr(MODES.get(l.mode, ["?"])[0])
 		_btn(find_box, "▶ %s  •  %s  •  %s  •  %d/4" % [l.name, m, d, l.n], Net.join_lobby.bind(l.id))
 
 
@@ -1162,34 +1206,74 @@ func _open_growth() -> void:
 	if gold == null:
 		_lbl(growth_box, "Yakında", 22)
 		return
-	_lbl(growth_box, "Altın Saç: %d" % int(gold), 24).add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
-	for id in UPGRADES:
+	_lbl(growth_box, tr("Altın Saç: %d") % int(gold), 24).add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	for id in UPGRADES: # [ad + açıklama + kademe ●●○○○]  [Satın Al · fiyat]
 		var lvl := int(_pf("upgrade_level", [id], 0))
 		var mx := int(_pf("upgrade_max", [id], 5))
 		var cost := int(_pf("upgrade_cost", [id], [60, 120, 200, 300, 450][clampi(lvl, 0, 4)] if lvl < mx else -1))
-		var b := _btn(growth_box, "%s  %d/%d  —  %s" % [UPGRADES[id], lvl, mx, "AZAMİ" if cost < 0 else "Satın Al (%d)" % cost], func():
+		var row := PanelContainer.new()
+		row.add_theme_stylebox_override("panel", _sb(Color(0.07, 0.08, 0.13, 0.88), 8, 10))
+		growth_box.add_child(row)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 10)
+		row.add_child(h)
+		var tv := VBoxContainer.new()
+		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tv.add_theme_constant_override("separation", 0)
+		h.add_child(tv)
+		_lbl(tv, UPGRADES[id], 19)
+		_lbl(tv, UPGRADE_DESC.get(id, ""), 14).modulate.a = 0.72
+		var pips := _lbl(tv, "●".repeat(lvl) + "○".repeat(maxi(mx - lvl, 0)) + "   %d/%d" % [lvl, mx], 18)
+		pips.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+		var b := _btn(h, tr("AZAMİ") if cost < 0 else tr("Satın Al  ·  %d") % cost, func():
 			if _pf("buy_upgrade", [id], false):
 				Sfx.play2d(Sfx.hurt, -6.0)
 			_open_growth())
+		b.custom_minimum_size.x = 140
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		b.disabled = cost < 0 or cost > int(_pf("gold", [], 0)) or not _pf_names.has("buy_upgrade")
 	_lbl(growth_box, "Açılımlar", 20)
 	var rows := []
 	for w in weapon_list:
-		rows.append(["weapon:" + str(w.get("id", "")), str(w.get("name", "?"))])
+		rows.append(["weapon:" + str(w.get("id", "")), tr(str(w.get("name", "?")))])
 	for k in _diff_keys():
 		if Balance.DIFFS[k].get("unlock", "") != "":
-			rows.append(["diff:" + k, "Zorluk: " + Balance.DIFFS[k].name])
-	rows.append(["mode:endless", "Sonsuz Mod"])
+			rows.append(["diff:" + k, tr("Zorluk: %s") % tr(Balance.DIFFS[k].name)])
+	rows.append(["mode:endless", tr("Sonsuz Mod")])
 	for r in rows:
 		_lbl(growth_box, _unlock_line(r[0], r[1]), 15)
 
 
-## "✔ Ad" ya da "🔒 Ad  (ilerleme 3/10)".
+## "✔ Ad" ya da "🔒 Ad  —  Tek maçta 150 öldürme  (3/150)".
 func _unlock_line(id: String, name: String) -> String:
 	if _unlocked(id):
 		return "✔ " + name
+	return "🔒 " + name + "  —  " + _quest_text(id)
+
+
+## Açma koşulu ve ilerleme: "Tek maçta 150 öldürme  (112/150)"; koşul bilinmiyorsa "Kazanarak aç."
+func _quest_text(id: String) -> String:
+	var q: Array = Profile.QUESTS.get(id, [])
+	if q.size() != 2:
+		return tr("Kazanarak aç.")
+	var key: String = q[0]
+	var d := key.trim_prefix("wins_")
+	var t: String = tr("%s zorluğunda kazan") % tr(Balance.DIFFS[d].name) if key.begins_with("wins_") and Balance.DIFFS.has(d) \
+		else tr(QUEST_TEXT.get(key, "%d")) % q[1]
 	var pr = _pf("unlock_progress", [id], null)
-	return "🔒 " + name + ("  (%d/%d)" % [pr[0], pr[1]] if pr is Array and pr.size() == 2 else "")
+	return t + ("  (%d/%d)" % [pr[0], pr[1]] if pr is Array and pr.size() == 2 else "")
+
+
+## Dil değişince koddan biçimlenen yazılar yeniden kurulur (düz metinleri Control'ler kendisi çevirir).
+func _retranslate() -> void:
+	ver_lbl.text = tr("sürüm %s") % Updater.version()
+	chars_title.text = tr("KARAKTERİNİ SEÇ   •   %d karakter") % Chars.LIST.size()
+	_update_char_btn()
+	_on_volume(Settings.volume)
+	shake_slider.value_changed.emit(shake_slider.value)
+	set_mode(mode) # lobi yazıları, zorluk listesi, silah düğmesi, üyeler
+	if page == "growth":
+		_open_growth()
 
 
 ## Seçili silah kilitliyse varsayılan tabancaya düş.
@@ -1203,11 +1287,11 @@ func _fix_weapon() -> void:
 
 
 func _weapon_name(i: int) -> String:
-	return str(weapon_list[i].get("name", "?")) if i >= 0 and i < weapon_list.size() else "?"
+	return tr(str(weapon_list[i].get("name", "?"))) if i >= 0 and i < weapon_list.size() else "?"
 
 
 func _update_weapon_btn() -> void:
-	weapon_btn.text = "Silah Seç  ·  %s" % _weapon_name(_my_weapon())
+	weapon_btn.text = tr("Silah Seç  ·  %s") % _weapon_name(_my_weapon())
 
 
 func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
@@ -1261,14 +1345,25 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 		Settings.save())
 	v.add_child(q)
 	var shake_lbl := _lbl(v, "", 17)
-	var shake := HSlider.new()
-	shake.min_value = 0.0; shake.max_value = 1.0; shake.step = 0.1
-	shake.value_changed.connect(func(x: float) -> void:
+	shake_slider = HSlider.new()
+	shake_slider.min_value = 0.0; shake_slider.max_value = 1.0; shake_slider.step = 0.1
+	shake_slider.value_changed.connect(func(x: float) -> void:
 		Settings.shake = x
-		shake_lbl.text = "Kamera sarsıntısı: %d%%" % roundi(x * 100.0))
-	shake.value = Settings.shake
-	shake.value_changed.emit(shake.value)
-	v.add_child(shake)
+		shake_lbl.text = tr("Kamera sarsıntısı: %d%%") % roundi(x * 100.0))
+	shake_slider.value = Settings.shake
+	shake_slider.value_changed.emit(shake_slider.value)
+	v.add_child(shake_slider)
+	_lbl(v, "Dil / Language", 17)
+	var lang := OptionButton.new()
+	for n in LANG_NAMES:
+		lang.add_item(n)
+	lang.selected = maxi(Settings.LANGUAGES.find(Settings.language), 0)
+	lang.item_selected.connect(func(i: int) -> void:
+		Settings.language = Settings.LANGUAGES[i]
+		Settings.apply_language()
+		_retranslate()
+		Settings.save())
+	v.add_child(lang)
 
 	v.add_child(HSeparator.new())
 	ingame_box = VBoxContainer.new()
@@ -1281,7 +1376,7 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 func _on_volume(x: float) -> void:
 	Settings.volume = x
 	Settings.apply_audio()
-	vol_lbl.text = "Ses: %d%%" % roundi(x * 100.0)
+	vol_lbl.text = tr("Ses: %d%%") % roundi(x * 100.0)
 
 
 func _on_mode(i: int) -> void:
@@ -1318,22 +1413,23 @@ func _show_friends() -> void:
 	var n := 0
 	for f in list:
 		if f[2] != 0 and f[2] != Net.lobby_id:
-			_btn(friends_box, "▶ Lobisine katıl: " + f[1], Net.join_lobby.bind(f[2]))
+			_btn(friends_box, tr("▶ Lobisine katıl: %s") % f[1], Net.join_lobby.bind(f[2]))
 			n += 1
 		if Net.lobby_id != 0:
-			_btn(friends_box, "Davet et: " + f[1], Net.invite_friend.bind(f[0], f[1]))
+			_btn(friends_box, tr("Davet et: %s") % f[1], Net.invite_friend.bind(f[0], f[1]))
 			n += 1
 	if list.is_empty():
 		info.text = "Çevrimiçi Steam arkadaşı yok."
 	elif Net.lobby_id == 0:
 		info.text = "Davet için önce 'Steam Lobisi Kur'a bas. Lobisi olan arkadaşa ▶ ile katılabilirsin."
 	(friends_box.get_parent() as Control).custom_minimum_size.y = min(n, 5) * 40
+	(friends_box.get_parent() as Control).visible = n > 0
 
 
 func _on_invited(from_name: String, lobby: int) -> void:
 	for c in invite_box.get_children():
 		c.queue_free()
-	_lbl(invite_box, "%s seni lobisine davet etti!" % from_name, 18)
+	_lbl(invite_box, tr("%s seni lobisine davet etti!") % from_name, 18)
 	_btn(invite_box, "✔ Daveti Kabul Et", func():
 		for c in invite_box.get_children():
 			c.queue_free()
@@ -1348,11 +1444,12 @@ func _refresh() -> void:
 	var lines := PackedStringArray()
 	var wsel = Net.get("weapons") # peer -> silah no (net.gd'de varsa)
 	for id in Net.names:
-		var line: String = ("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + Chars.get_char(Net.chars.get(id, 0)).name
+		var line: String = ("★ " if id == 1 else "• ") + str(Net.names[id]) + "  –  " + tr(Chars.get_char(Net.chars.get(id, 0)).name)
 		if mode == "td" and wsel is Dictionary and wsel.has(id):
 			line += "  •  " + _weapon_name(wsel[id])
 		lines.append(line)
-	members.text = "Lobidekiler:\n" + "\n".join(lines) if Net.online() else ""
+	members.text = tr("Lobidekiler:") + "\n" + "\n".join(lines) if Net.online() else ""
+	members.visible = members.text != "" # boşken sütunda yer kaplamasın (720p'de Geri sığsın)
 	start_btn.disabled = not (Net.online() and multiplayer.is_server())
 	if not Net.online():
 		start_btn.disabled = mode != "td"
@@ -1380,9 +1477,9 @@ func _process(dt: float) -> void:
 		dmg_rect.color.a = me.flash * 1.2
 		crosshair.visible = me.hp > 0
 		blind_rect.color.a = clampf(me.bt("blind") * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
-		var sh := "AKTİF" if me.shield_on else ("%d sn" % ceili(me.shield_cd) if me.shield_cd > 0.0 else "HAZIR")
-		var texts := ["1\nBAZUKA", "2\nKALKAN\n" + sh, "3\nDUVAR\n" + _cd_text(me.wall_cd), "4\nKILIÇ",
-			"Q\n%s\n%s" % [me.ch.skill_name, _cd_text(me.skill_cd)]]
+		var sh := tr("AKTİF") if me.shield_on else _cd_text(me.shield_cd)
+		var texts := ["1\n" + tr("BAZUKA"), "2\n%s\n%s" % [tr("KALKAN"), sh], "3\n%s\n%s" % [tr("DUVAR"), _cd_text(me.wall_cd)], "4\n" + tr("KILIÇ"),
+			"Q\n%s\n%s" % [tr(me.ch.skill_name), _cd_text(me.skill_cd)]]
 		var left := [me.cd, me.shield_cd, me.wall_cd, me.sword_cd, me.skill_cd]
 		for i in 5:
 			var s: Array = slots[i]
@@ -1392,7 +1489,7 @@ func _process(dt: float) -> void:
 					s[2].texture = weapon_icon("bazooka" if i == 0 else "sword")
 				s[1].text = "%d
 
-%s" % [i + 1, "BAZUKA" if i == 0 else "KILIÇ"]
+%s" % [i + 1, tr("BAZUKA") if i == 0 else tr("KILIÇ")]
 				s[1].vertical_alignment = VERTICAL_ALIGNMENT_TOP
 			else:
 				s[1].text = texts[i]
@@ -1402,9 +1499,9 @@ func _process(dt: float) -> void:
 		var st := PackedStringArray()
 		for k in me.buffs:
 			if STATUS.has(k) and me.hp > 0:
-				st.append("%s %.1f" % [STATUS[k], me.buffs[k][1]])
+				st.append("%s %.1f" % [tr(STATUS[k]), me.buffs[k][1]])
 		status_lbl.text = "   ".join(st)
-		spec_lbl.text = "İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir" \
+		spec_lbl.text = tr("İZLENİYOR: %s\nSol tık / Sağ tık: oyuncu değiştir") \
 			% Net.display_name(me.spec_target.name.to_int()) if me.hp <= 0 and is_instance_valid(me.spec_target) else ""
 	var s := PackedStringArray()
 	for p in players.get_children():
@@ -1413,7 +1510,7 @@ func _process(dt: float) -> void:
 
 
 func _cd_text(t: float) -> String:
-	return "%d sn" % ceili(t) if t > 0.0 else "HAZIR"
+	return tr("%d sn") % ceili(t) if t > 0.0 else tr("HAZIR")
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -1529,7 +1626,7 @@ func end_round(winner: String) -> void:
 	for t in [3, 2, 1]:
 		if not round_over:
 			return
-		center_lbl.text = "%s KAZANDI!\nYeni tur %d sn içinde..." % [winner, t]
+		center_lbl.text = tr("%s KAZANDI!\nYeni tur %d sn içinde...") % [tr(winner), t]
 		await get_tree().create_timer(1.0).timeout
 
 
