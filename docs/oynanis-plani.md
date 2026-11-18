@@ -38,8 +38,14 @@ Faz 0 sözleşmeleri (commit `a9bd3d7`): `start_td(ids, opts)`, `td.gd` durum di
 - [x] Faz 2 birleşti: TD arayüzü (rehber, maç sonu özeti, boss barı, modifikatör afişi, yeniden çek/ele, evrim kartı)
 - [x] Denge: kule 3000 (+%35/oyuncu), yaratık hasarı x0.55, canı x0.85, kalabalık 0.4/0.25, zorluklar yumuşatıldı. Simde 1 oyuncu artık 10. dalgaya ulaşıyor/kazanıyor; 4 oyunculu ölçüm yeniden yapılıyor.
 - [x] Faz 3 birleşti: İngilizce yerelleştirme (705 metin, I18N_TEST 853/853, Ayarlar > Dil), menü cilası
-- [ ] Süren: tutuş 2. tur (parmaklar silah başına, sol kol açısı)
-- [ ] Aşama 3: son birleştirme; tüm testler, Vulkan/OpenGL ekran görüntüleri, iki süreçli ağ testi
-- [ ] Aşama 4: commit, push, rapor
+- [x] Tutuş 2. tur birleşti (GRIP_TEST 111/120; yayda kollar ekranı kaplamasın diye yay biraz uzakta)
+- [x] Aşama 3: kod incelemesi (2 yüksek, 6 orta bulgu düzeltildi), tüm testler, Vulkan ekran görüntüleri, iki süreçli TD ve Arena ağ testleri
+- [x] Aşama 4: commit, push, rapor
+
+## Sonraki adımlar (kullanıcı tarafında)
+
+- Gerçek oyun testi: özellikle 4 kişilik co-op dengesi (simülasyon kötümser; 8-9. dalga zor olabilir) ve Kabus.
+- Steam: gerçek App ID, başarımları Steamworks'e girme (`docs/steam/basarimlar.md`), mağaza sayfası (`docs/steam/magaza-sayfasi.md`).
+- Müzik yok (Steam paketi önerisi); Arena'da bot yok (arkadaşsız oyuncu yalnız TD oynayabilir).
 
 Devam ederken: `git worktree list` ve `git branch` ile ajan dallarını gör. Bitmiş dalları sırayla birleştir: profil, dalga, silah, giriş, tutuş. Yarım kalan ajanların işini aynı sahiplik kurallarıyla yeniden başlat.
