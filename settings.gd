@@ -11,6 +11,8 @@ var resolution := 0 # RESOLUTIONS indeksi
 const QUALITIES := ["Düşük", "Orta", "Yüksek"]
 var quality := 2 # QUALITIES indeksi: Düşük = SSAO / hacimsel sis kapalı, 2 bölmeli gölge, FXAA
 var shake := 1.0 # kamera sarsıntısı çarpanı 0..1 (mide bulantısı yapanlar için)
+const LANGUAGES := ["auto", "tr", "en"]
+var language := "auto" # auto: sistem dili Türkçe ise tr, değilse en
 
 signal changed # grafik kalitesi değişti: ortam (forest.gd) kendini günceller
 
@@ -23,6 +25,10 @@ func _ready() -> void:
 		resolution = clampi(int(c.get_value("display", "resolution", resolution)), 0, RESOLUTIONS.size() - 1)
 		quality = clampi(int(c.get_value("graphics", "quality", quality)), 0, QUALITIES.size() - 1)
 		shake = clampf(float(c.get_value("graphics", "shake", shake)), 0.0, 1.0)
+		language = str(c.get_value("general", "language", language))
+		if not language in LANGUAGES:
+			language = "auto"
+	apply_language()
 	apply_audio()
 	apply_display()
 	apply_quality()
@@ -34,6 +40,15 @@ func apply_quality() -> void:
 	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][quality]
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if quality == 0 else Viewport.SCREEN_SPACE_AA_DISABLED
 	changed.emit()
+
+
+## Kaynak dil Türkçe (msgid = Türkçe metin); İngilizce locale/en.po'dan gelir.
+func apply_language() -> void:
+	var l := language if language != "auto" else ("tr" if OS.get_locale_language() == "tr" else "en")
+	for a in OS.get_cmdline_user_args(): # testler: -- --lang=en (ayara yazılmaz)
+		if a.begins_with("--lang="):
+			l = a.trim_prefix("--lang=")
+	TranslationServer.set_locale(l)
 
 
 func apply_audio() -> void:
@@ -66,4 +81,5 @@ func save() -> void:
 	c.set_value("display", "resolution", resolution)
 	c.set_value("graphics", "quality", quality)
 	c.set_value("graphics", "shake", shake)
+	c.set_value("general", "language", language)
 	c.save(PATH)
