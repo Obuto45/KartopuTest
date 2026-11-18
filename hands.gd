@@ -99,7 +99,8 @@ static func _chain(j: Node3D, lens: Array, radii: Array, glove: Material, pad: M
 			j = n
 
 
-static func pose(hand: Node3D, name: String, blend := false) -> void:
+## name: POSES adı ya da aynı biçimde sözlük (silah başına uydurulmuş poz, weapon_anims.FIT).
+static func pose(hand: Node3D, name: Variant, blend := false) -> void:
 	var to := _targets(hand, name)
 	hand.set_meta("pose_to", to)
 	if blend:
@@ -120,8 +121,8 @@ static func update(hand: Node3D, dt: float) -> void:
 
 
 ## Eklem sırasıyla (f0 a b, f1 a b, ..., thumb a b) hedef açılar.
-static func _targets(hand: Node3D, name: String) -> Array:
-	var p: Dictionary = POSES[name]
+static func _targets(hand: Node3D, name: Variant) -> Array:
+	var p: Dictionary = name if name is Dictionary else POSES[name]
 	var sx: float = hand.get_meta("sx")
 	var out := []
 	for i in 4:

@@ -19,7 +19,7 @@ const HOLD_R := {
 	"grenade": [Vector3(0, -0.008, -0.15), Z], # "bottle" avucu gövdeyi sarar
 	"item:bomb": [Vector3(0, -0.008, -0.15), Z],
 	"sword": [Vector3(0, 0, 0.1), Vector3(-PI / 2, 0, 0)], # başparmak namluya (−Z), avuç sola, sap avuçta
-	"boomerang": [Vector3(0.2, 0, -0.145), Vector3(0, -0.86, PI / 2)], # avuç aşağı, kanat ucunu üstten kavrar
+	"boomerang": [Vector3(0.2, 0, -0.145), Vector3(0, -0.35, PI / 2)], # avuç aşağı, kanat ucunu üstten kavrar
 	"item:potion": [Z, Vector3(0, 0, -0.6)], # "bottle" gövde ortasında; avuç yukarı-sola: şişe parmaklara oturur
 }
 const BUILD_R := [Vector3(0.06, 0.06, 0.0), Vector3(0, 0, 1.2)] # yapı: boş el, ekranın sağ altında, avuç aşağı-içe
@@ -27,11 +27,11 @@ const BUILD_R := [Vector3(0.06, 0.06, 0.0), Vector3(0, 0, 1.2)] # yapı: boş el
 ## [ön yüz z, el ortası y, yarı genişlik, eğim (rad, + = kabza altı öne)].
 const GRIPS := {
 	"pistol": [-0.009, -0.082, 0.021, 0.19],
-	"smg": [0.008, -0.085, 0.021, -0.13],
+	"smg": [0.008, -0.075, 0.021, -0.13],
 	"shotgun": [0.010, -0.092, 0.026, 0.3],
-	"sniper": [0.065, -0.1, 0.032, 0.35],
+	"sniper": [0.065, -0.115, 0.032, 0.35],
 	"bazooka": [-0.01, -0.12, 0.02, -0.14],
-	"flame": [0.005, -0.08, 0.02, -0.11],
+	"flame": [0.005, -0.075, 0.02, -0.11],
 }
 ## Aşağıdaki üç nokta el boyu 0.85 iken uydurulmuştu (değer / 0.85 = birim el); el büyüyünce HS ile ölçeklenmezse
 ## el kabzaya göre yanlış yerde durur (parmaklar açılır, serçe kabzaya girer).
@@ -41,6 +41,26 @@ const BOTTLE_C := Vector3(-0.0625, 0, -0.0595) * HS / FIT_HS # "bottle" pozunun 
 const PINCH_R := Vector3(-0.064, 0.02, -0.094) * HS # sağ el "pinch" ucu
 const PINCH := Vector3(0.064, 0.02, -0.094) * HS # sol el "pinch" ucu (işaret-başparmak arası)
 const CORK := Vector3(0.044, 0.023, -0.1006) * HS / FIT_HS # sol el "cork" uçlarının ortası (aralarındaki doğru ~ -Z boyunca)
+
+## Silah başına uydurulmuş el (taraf "R"/"L"): "o" bilek kayması (el çerçevesinde, m), "f"/"s"/"t" kavrama pozu
+## (hands.gd POSES biçimi). tests/grip_fit.gd yazar: avuç yüzeye yaslanır, her parmak zinciri silahın üçgenlerine
+## değene dek kapanır. Elle düzenleme; aracı yeniden çalıştır.
+# FIT:begin
+const FIT := {
+	"smg": {"R": {"o": Vector3(0.0010, 0.0000, 0.0000), "f": [[-0.866, 0.000, 0.000], [-1.320, -0.525, -0.390], [-1.237, -0.525, -0.390], [-0.990, -0.455, -0.338]], "s": 0.000, "t": [-1.361, -0.937, -2.862, -0.575, -0.650]}, "L": {"o": Vector3(0.0058, 0.0000, 0.0000), "f": [[-0.330, -0.665, -0.494], [-0.949, 0.000, 0.000], [-0.866, -0.350, -0.260], [-1.155, 0.000, 0.000]], "s": 0.030, "t": [-0.521, -0.513, -0.719, -0.239, -0.298]}},
+	"pistol": {"R": {"o": Vector3(0.0030, 0.0000, 0.0000), "f": [[0.000, -0.805, -0.598], [-1.196, -0.700, -0.520], [-1.196, -0.595, -0.442], [-1.073, -0.385, -0.286]], "s": 0.000, "t": [-1.384, -0.944, -2.900, -0.050, -0.100]}, "L": {"o": Vector3(0.0012, 0.0000, 0.0000), "f": [[-1.196, -0.700, -0.520], [-1.155, -0.770, -0.572], [-0.907, -0.770, -0.572], [-0.495, -0.700, -0.520]], "s": 0.030, "t": [-0.250, -0.600, -1.000, -0.050, -0.100]}},
+	"shotgun": {"R": {"o": Vector3(0.0032, 0.0000, 0.0000), "f": [[-1.237, -0.035, -0.026], [-0.619, 0.000, 0.000], [-1.402, -0.175, -0.130], [-1.114, -0.350, -0.260]], "s": 0.000, "t": [-1.384, -0.944, -1.900, -0.050, -0.100]}, "L": {"o": Vector3(-0.0189, 0.0000, 0.0000), "f": [[0.000, 0.000, 0.000], [-0.825, -0.525, -0.390], [-1.320, 0.000, 0.000], [-1.320, -0.070, -0.052]], "s": 0.030, "t": [-0.163, -0.878, -0.778, -0.050, -0.100]}},
+	"sniper": {"R": {"o": Vector3(-0.0016, 0.0000, 0.0000), "f": [[-0.041, -0.840, -0.624], [-0.165, -0.140, -0.104], [-0.412, -0.490, -0.364], [-0.371, -0.420, -0.312]], "s": 0.000, "t": [-1.055, -0.276, -1.639, -0.050, -0.100]}, "L": {"o": Vector3(0.0122, 0.0000, 0.0000), "f": [[0.206, -0.805, -0.598], [-0.247, -0.735, -0.546], [-0.742, -0.315, -0.234], [-0.949, -0.210, -0.156]], "s": 0.030, "t": [-0.205, -0.745, -1.047, -0.050, -0.100]}},
+	"bazooka": {"R": {"o": Vector3(0.0020, 0.0000, 0.0000), "f": [[-0.577, -1.295, -0.962], [-1.361, -0.490, -0.364], [-1.279, -0.525, -0.390], [-1.031, -0.455, -0.338]], "s": 0.000, "t": [-1.373, -0.941, -2.881, -0.554, -0.628]}, "L": {"o": Vector3(0.0122, 0.0000, 0.0000), "f": [[-0.825, -0.945, -0.702], [-1.031, -0.980, -0.728], [-0.949, -0.910, -0.676], [-0.742, -0.665, -0.494]], "s": 0.000, "t": [-1.052, -0.277, -1.990, -0.680, -0.760]}},
+	"flame": {"R": {"o": Vector3(0.0013, 0.0000, 0.0000), "f": [[-1.320, 0.000, 0.000], [0.144, 0.000, 0.000], [-1.320, -0.070, -0.052], [-0.990, -0.490, -0.364]], "s": 0.000, "t": [-1.384, -0.944, -1.900, -0.050, -0.100]}, "L": {"o": Vector3(0.0271, 0.0000, 0.0000), "f": [[-1.196, -0.140, -0.104], [-1.196, -0.070, -0.052], [-1.073, -0.105, -0.078], [-0.412, -1.225, -0.910]], "s": 0.000, "t": [-0.533, -0.586, -1.350, -0.050, -0.100]}},
+	"bow": {"L": {"o": Vector3(0.0109, 0.0000, 0.0000), "f": [[-0.083, -0.735, -0.546], [-0.165, -0.840, -0.624], [-0.165, -0.700, -0.520], [-0.330, 0.000, 0.000]], "s": 0.000, "t": [0.019, -0.518, -0.549, -0.050, -0.100]}},
+	"sword": {"R": {"o": Vector3(-0.0187, 0.0000, 0.0000), "f": [[-1.031, -1.155, -0.858], [-1.155, -1.190, -0.884], [-1.073, -1.155, -0.858], [-0.701, -0.910, -0.676]], "s": 0.000, "t": [-0.964, -0.313, -2.197, -0.701, -0.782]}},
+	"boomerang": {"R": {"o": Vector3(-0.0181, 0.0000, 0.0000), "f": [[-0.289, -0.805, -0.598], [-0.495, -1.260, -0.936], [-0.619, -1.330, -0.988], [-0.577, -0.980, -0.728]], "s": 0.000, "t": [-0.930, -0.326, -2.140, -0.722, -0.804]}},
+	"grenade": {"R": {"o": Vector3(-0.0050, 0.0000, 0.0000), "f": [[-0.990, 0.000, 0.000], [-0.907, -0.350, -0.260], [-0.907, -0.245, -0.182], [-0.949, -0.070, -0.052]], "s": 0.000, "t": [-0.270, -0.503, -1.145, -0.050, -0.100]}},
+	"item:bomb": {"R": {"o": Vector3(-0.0050, 0.0000, 0.0000), "f": [[-0.990, 0.000, 0.000], [-0.907, -0.350, -0.260], [-0.907, -0.245, -0.182], [-0.949, -0.070, -0.052]], "s": 0.000, "t": [-0.270, -0.503, -1.145, -0.050, -0.100]}},
+	"item:potion": {"R": {"o": Vector3(-0.0161, 0.0000, 0.0000), "f": [[-1.130, 0.000, 0.000], [-1.040, -0.050, -0.120], [-1.030, 0.000, -0.060], [-1.020, 0.000, 0.000]], "s": 0.000, "t": [-0.360, -0.282, -1.534, -0.050, -0.100]}},
+}
+# FIT:end
 
 static var _clips := {}
 static var _rest := {}
@@ -91,7 +111,7 @@ static func rest(id: String) -> Dictionary:
 		var rot := Vector3(0, -1.2, -PI / 2)
 		r["HandL"] = _hold(gl, rot, Vector3(-GRIP_C.x, 0, GRIP_C.z))
 	elif id in UNDER: # avuç yukarı (z 90°), parmaklar sağ-ileri (y -1): önü alttan sarar
-		var rot := Vector3(0, -1.0, PI / 2)
+		var rot := Vector3(0.6, -0.85, PI / 2)
 		r["HandL"] = [gl + Vector3(0, -0.027, 0) - Basis.from_euler(rot) * Vector3(0.017, 0, -0.047) * HS, rot]
 	elif id == "bow": # yay gövdesini yumrukla tutar ("grip", sağ elin aynası)
 		r["HandL"] = [gl + Vector3(GRIP_C.x, 0, -GRIP_C.z), Z]
@@ -99,6 +119,9 @@ static func rest(id: String) -> Dictionary:
 		r["HandL"] = [gl - PINCH, Z]
 	else: # tabanca: sol avuç kabzanın solunda (sağ parmakların üstünde), parmaklar önden sarar
 		r["HandL"] = [r["Rig/HandR"][0] + Vector3(-0.094, 0.012, -0.008) * HS, Vector3(-0.25, -0.2, 0)]
+	for s: String in FIT.get(id, {}):
+		var hp := "Rig/HandR" if s == "R" else "HandL"
+		r[hp] = [r[hp][0] + Basis.from_euler(r[hp][1]) * FIT[id][s].get("o", Z), r[hp][1]]
 	if r["Rig"] != [Z, Z]: # sol el Rig'in dışında (Base'de): kaydırılmış silahla birlikte taşınır
 		var rb := Basis.from_euler(r["Rig"][1])
 		r["HandL"] = [r["Rig"][0] + rb * r["HandL"][0], (rb * Basis.from_euler(r["HandL"][1])).get_euler()]
@@ -116,6 +139,12 @@ static func _wrap(g: Array) -> Array:
 ## Pozun tuttuğu nokta (c, el kökünde) silah uzayında a'ya gelsin: bilek konumu.
 static func _hold(a: Vector3, rot: Vector3, c: Vector3) -> Array:
 	return [a - Basis.from_euler(rot) * c, rot]
+
+
+## Dinlenme pozu: uydurulmuşsa FIT sözlüğü, yoksa hold_r/hold_l adı.
+static func pose_of(id: String, side: String) -> Variant:
+	var f: Dictionary = FIT.get(id, {}).get(side, {})
+	return f if f.has("f") else (hold_r(id) if side == "R" else hold_l(id))
 
 
 ## Sağ elin dinlenme pozu.
@@ -212,8 +241,8 @@ static func _k(t: float, p := Z, r := Z) -> Array:
 
 
 static func _make(id: String) -> Dictionary:
-	var hold := hold_l(id)
-	var hr := hold_r(id)
+	var hold: Variant = pose_of(id, "L")
+	var hr: Variant = pose_of(id, "R")
 	var c := {}
 	var low := Vector3(0, -0.22, 0.05)
 	var down := Vector3(-0.7, 0, 0.25)
@@ -227,23 +256,23 @@ static func _make(id: String) -> Dictionary:
 			c["fire"] = _fire(0.18, 0.35, {"Rig/Weapon/slide": [_k(0), _k(0.03, Vector3(0, 0, 0.045)), _k(0.09)],
 				"Rig/Weapon/hammer": [_k(0), _k(0.03, Z, Vector3(0.7, 0, 0)), _k(0.1)]})
 			c["dry"] = _dry({"Rig/Weapon/hammer": [_k(0), _k(0.05, Z, Vector3(0.4, 0, 0)), _k(0.1)]})
-			c["reload"] = _mag_reload(1.3, "Rig/Weapon/mag", {})
+			c["reload"] = _mag_reload(1.3, "Rig/Weapon/mag", {}, hold)
 			var back := Vector3(0, 0, 0.045)
 			c["reload_empty"] = _mag_reload(1.6, "Rig/Weapon/mag", {
-				"Rig/Weapon/slide": [_k(0, back), _k(1.6 * 0.88, back), _k(1.6 * 0.92)]}) # sonda sürgü bırakılır
+				"Rig/Weapon/slide": [_k(0, back), _k(1.6 * 0.88, back), _k(1.6 * 0.92)]}, hold) # sonda sürgü bırakılır
 		"smg":
 			c["fire"] = _fire(0.09, 0.25, {})
 			c["dry"] = _dry({})
 			var cp := Vector3(0, 0, 0.05)
 			c["reload"] = _mag_reload(1.8, "Rig/Weapon/mag", {
-				"Rig/Weapon/charging": [_k(0), _k(1.8 * 0.88), _k(1.8 * 0.93, cp), _k(1.8 * 0.98)]})
+				"Rig/Weapon/charging": [_k(0), _k(1.8 * 0.88), _k(1.8 * 0.93, cp), _k(1.8 * 0.98)]}, hold)
 		"sniper":
 			var bolt := _bolt(0.35)
 			c["fire"] = _fire(1.0, 1.4, {"Rig/Weapon/bolt": bolt})
 			c["fire"].events.append([0.8, "chamber"])
 			c["fire"].tracks["Rig"].append_array([_k(0.35, Vector3(-0.02, 0.0, 0.02), Vector3(0.05, 0, 0.15)), _k(0.85), _k(1.0)])
 			c["dry"] = _dry({})
-			c["reload"] = _mag_reload(2.4, "Rig/Weapon/mag", {"Rig/Weapon/bolt": _bolt(2.4 * 0.86)})
+			c["reload"] = _mag_reload(2.4, "Rig/Weapon/mag", {"Rig/Weapon/bolt": _bolt(2.4 * 0.86)}, hold)
 		"shotgun":
 			var pb := Vector3(0, 0, 0.09)
 			c["fire"] = _fire(0.8, 1.1, {
@@ -263,7 +292,7 @@ static func _make(id: String) -> Dictionary:
 				"vis": [[0.0, "Rig/Weapon/shell", true], [0.36, "Rig/Weapon/shell", false]],
 				"poses": [[0.0, "L", "pinch"]], "events": [[0.35, "shell"]]}
 			c["reload_end"] = {"len": 0.35, "tracks": {"Rig": [_k(0, tilt[0], tilt[1]), _k(0.35)],
-				"HandL": [_k(0, pocket), _k(0.35)]}, "poses": [[0.2, "L", "support"]], "events": [[0.35, "done"]]}
+				"HandL": [_k(0, pocket), _k(0.35)]}, "poses": [[0.2, "L", hold]], "events": [[0.35, "done"]]}
 		"bazooka":
 			c["fire"] = _fire(0.5, 2.2, {})
 			c["fire"]["vis"] = [[0.0, "Rig/Weapon/rocket", false]]
@@ -299,19 +328,19 @@ static func _make(id: String) -> Dictionary:
 					"Rig/Weapon/arrow": [_k(0), _k(0.6, nock)],
 					"Rig/HandR": [_k(0), _k(0.6, nock)],
 					"Rig": [_k(0), _k(0.6, Vector3(-0.03, 0.01, 0), Vector3(0, 0, 0.12))]},
-				"poses": [[0.0, "R", "pinch"]]}
+				"poses": [[0.0, "R", hr]]}
 			c["release"] = {"len": 0.3, "tracks": {
 					"Rig/Weapon/string_top": [_k(0, Z, Vector3(-0.31, 0, 0)), _k(0.04, Z, Vector3(0.06, 0, 0)), _k(0.1)],
 					"Rig/Weapon/string_bot": [_k(0, Z, Vector3(0.31, 0, 0)), _k(0.04, Z, Vector3(-0.06, 0, 0)), _k(0.1)],
 					"Rig/HandR": [_k(0, nock), _k(0.08, nock + Vector3(0.04, 0.02, 0.04)), _k(0.3)],
 					"Rig": [_k(0, Vector3(-0.03, 0.01, 0), Vector3(0, 0, 0.12)), _k(0.06, Vector3(0, 0.01, 0.02), Vector3(0.05, 0, 0)), _k(0.3)]},
 				"vis": [[0.02, "Rig/Weapon/arrow", false]],
-				"poses": [[0.0, "R", "open"], [0.25, "R", "pinch"]], "events": [[0.02, "release"], [0.3, "done"]]}
+				"poses": [[0.0, "R", "open"], [0.25, "R", hr]], "events": [[0.02, "release"], [0.3, "done"]]}
 			c["reload"] = {"len": 0.35, "tracks": {
 					"Rig/Weapon/arrow": [_k(0, Vector3(0.06, -0.15, 0.2)), _k(0.3)],
 					"Rig/HandR": [_k(0, Vector3(0.06, -0.15, 0.2)), _k(0.3)]},
 				"vis": [[0.0, "Rig/Weapon/arrow", true]],
-				"poses": [[0.0, "R", "pinch"]], "events": [[0.35 * 0.85, "mag_in"], [0.35, "done"]]}
+				"poses": [[0.0, "R", hr]], "events": [[0.35 * 0.85, "mag_in"], [0.35, "done"]]}
 		"grenade", "item:bomb":
 			var pull := Vector3(0.12, 0.02, 0.0)
 			var cock := [Vector3(0.06, 0.1, 0.16), Vector3(0.45, 0, -0.2)]
@@ -321,7 +350,7 @@ static func _make(id: String) -> Dictionary:
 					"HandL": [_k(0), _k(0.04), _k(0.15, pull), _k(0.5, Vector3(-0.05, -0.25, 0.1))],
 					"Rig": [_k(0), _k(0.15), _k(0.5, cock[0], cock[1])]},
 				"vis": [[0.0, "Rig/Weapon/pin", true], [0.0, "Rig/Weapon/ring", true], [0.25, "Rig/Weapon/pin", false], [0.25, "Rig/Weapon/ring", false]],
-				"poses": [[0.0, "L", "pinch"], [0.25, "L", "open"]], "events": [[0.15, "pin"]]}
+				"poses": [[0.0, "L", hold], [0.25, "L", "open"]], "events": [[0.15, "pin"]]}
 			c["throw"] = {"len": 0.4, "tracks": {
 					"Rig": [_k(0, cock[0], cock[1]), _k(0.12, Vector3(-0.02, 0.06, -0.35), Vector3(-0.5, 0, 0.1)), _k(0.4, Vector3(0, -0.3, 0), Vector3(-0.6, 0, 0))],
 					"HandL": [_k(0, Vector3(-0.05, -0.25, 0.1))],
@@ -331,7 +360,7 @@ static func _make(id: String) -> Dictionary:
 			c["reload"] = {"len": 0.8, "tracks": {
 					"Rig": [_k(0, Vector3(0, -0.3, 0.05), Vector3(-0.6, 0, 0)), _k(0.6)],
 					"HandL": [_k(0, Vector3(-0.05, -0.25, 0.1)), _k(0.6)]},
-				"poses": [[0.0, "R", hr], [0.5, "L", "pinch"]], "events": [[0.8 * 0.85, "mag_in"], [0.8, "done"]]}
+				"poses": [[0.0, "R", hr], [0.5, "L", hold]], "events": [[0.8 * 0.85, "mag_in"], [0.8, "done"]]}
 		"boomerang":
 			c["throw"] = {"len": 0.35, "tracks": {
 					"Rig": [_k(0), _k(0.1, Vector3(0.1, 0.05, 0.15), Vector3(0, 0.6, 0.2)), _k(0.2, Vector3(-0.1, 0.02, -0.3), Vector3(0, -0.8, -0.2)),
@@ -340,7 +369,7 @@ static func _make(id: String) -> Dictionary:
 				"poses": [[0.2, "R", "open"]], "events": [[0.2, "release"], [0.35, "done"]]}
 			c["catch"] = {"len": 0.3, "tracks": {
 					"Rig": [_k(0, Vector3(0.05, 0.05, -0.15), Vector3(0.2, 0.3, 0)), _k(0.08, Vector3(0.03, 0.0, 0.03)), _k(0.3)]},
-				"poses": [[0.0, "R", "grip"]], "events": [[0.0, "caught"], [0.3, "done"]]}
+				"poses": [[0.0, "R", hr]], "events": [[0.0, "caught"], [0.3, "done"]]}
 		"sword":
 			c["swing1"] = _swing(0.45, Vector3(0.1, 0.05, 0.05), Vector3(0.2, 1.1, 0.3), Vector3(-0.15, -0.02, -0.15), Vector3(-0.1, -1.2, -0.3))
 			c["swing2"] = _swing(0.45, Vector3(-0.15, 0.08, 0.02), Vector3(0.3, -1.0, -0.9), Vector3(0.12, -0.08, -0.15), Vector3(-0.3, 1.0, 0.5))
@@ -430,7 +459,7 @@ static func _dry(extra: Dictionary) -> Dictionary:
 
 
 ## Şarjörlü doldurma: silah 25° içe yatar, şarjör düşer, sol el cepten yenisini getirip takar, tokat.
-static func _mag_reload(L: float, mag: String, extra: Dictionary) -> Dictionary:
+static func _mag_reload(L: float, mag: String, extra: Dictionary, rest_pose: Variant) -> Dictionary:
 	var tilt := Vector3(0.15, 0, 0.44)
 	var tp := Vector3(-0.03, 0.03, 0)
 	var drop := Vector3(0, -0.28, 0.02)
@@ -444,7 +473,7 @@ static func _mag_reload(L: float, mag: String, extra: Dictionary) -> Dictionary:
 	tr.merge(extra)
 	return {"len": L, "tracks": tr,
 		"vis": [[0.0, mag, true], [0.33 * L, mag, false], [0.5 * L, mag, true]],
-		"poses": [[0.2 * L, "L", "grip"], [0.9 * L, "L", "open"], [L, "L", "support"]],
+		"poses": [[0.2 * L, "L", "grip"], [0.9 * L, "L", "open"], [L, "L", rest_pose]],
 		"events": [[0.85 * L, "mag_in"], [L, "done"]]}
 
 

@@ -38,6 +38,8 @@ func _ready() -> void:
 	sc.near = 0.01
 	side.add_child(sc)
 	for id in IDS:
+		if args.size() > 1 and id not in args.slice(1): # -- <klasör> smg bow: yalnız bunlar
+			continue
 		await GT.hold(vm, id)
 		await _save(get_viewport(), id + "_fp")
 		var c: Vector3 = vm.weapon.global_position if id != "build" else vm.hand_r.global_position

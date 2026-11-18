@@ -65,7 +65,7 @@ const LIST := [
 	{"id": "sniper", "name": "Keskin Nişancı", "desc": "Yavaş ama dev hasar; 3 yaratığı delip geçer.", "rarity": "legendary",
 		"dmg": 60, "rate": 1.5, "kind": "shot", "range": 120.0, "pierce": 3, "knock": 5.0, "kick": 1.4, "color": Color(0.6, 0.9, 1.0), "mag": 5, "reload": 2.4, "view": [Vector3(0.21, -0.015, -0.36), Vector3.ZERO]},
 	{"id": "bow", "name": "Yay", "desc": "Kavisli uçan ok: bir yaratığı deler, sessiz ve güçlü.", "rarity": "rare",
-		"dmg": 30, "rate": 0.7, "speed": 42.0, "kind": "rocket", "look": "arrow", "grav": 9.0, "pierce": 1, "kick": 0.3, "mag": 1, "reload": 0.35, "charge": 0.6, "view": [Vector3(-0.03, -0.06, -0.27), Vector3.ZERO]},
+		"dmg": 30, "rate": 0.7, "speed": 42.0, "kind": "rocket", "look": "arrow", "grav": 9.0, "pierce": 1, "kick": 0.3, "mag": 1, "reload": 0.35, "charge": 0.6, "view": [Vector3(0.03, -0.07, -0.24), Vector3.ZERO]},
 	{"id": "boomerang", "name": "Bumerang", "desc": "Yaratığı kovalar, 2 kez seker, sonra sana döner.", "rarity": "rare",
 		"dmg": 16, "rate": 1.0, "speed": 20.0, "kind": "homing", "bounce": 2, "knock": 4.0, "range": 30.0, "kick": 0.3, "view": [Vector3(0.1, -0.2, -0.27), Vector3(0.35, 0, 0)]},
 	{"id": "flame", "name": "Alev Püskürtücü", "desc": "Kısa menzilli alev yayı: önündeki herkesi yakar.", "rarity": "epic",

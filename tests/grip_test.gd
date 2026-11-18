@@ -37,7 +37,10 @@ func _ready() -> void:
 		for s in ["L", "R"]:
 			_arm[s] = [sk.global_transform * sk.get_bone_global_pose(sk.find_bone("LowerArm." + s)).origin,
 				sk.global_transform * sk.get_bone_global_pose(sk.find_bone("Fist." + s)).origin])
+	var only := Array(OS.get_cmdline_user_args()).filter(func(a): return a != "quick") # -- smg bow: yalnız bunlar
 	for id in IDS:
+		if only.size() > 0 and id not in only:
+			continue
 		await hold(vm, id)
 		measure(id)
 	print("GRIP_TEST: %d/%d" % [good, total])
@@ -51,8 +54,8 @@ static func hold(v: Node3D, id: String) -> void:
 	v.ap.advance(0.5)
 	v.sway_offset = Vector3.ZERO
 	v.sway_tilt = Vector3.ZERO
-	Hands.pose(v.hand_r, WA.hold_r(id))
-	Hands.pose(v.hand_l, WA.hold_l(id))
+	Hands.pose(v.hand_r, WA.pose_of(id, "R"))
+	Hands.pose(v.hand_l, WA.pose_of(id, "L"))
 	for i in 3:
 		await v.get_tree().process_frame
 
