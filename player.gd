@@ -11,6 +11,7 @@ const HomingScript := preload("res://slipper.gd")
 const ZoneScript := preload("res://zone.gd")
 const Weapons := preload("res://weapons.gd")
 const WeaponAnims := preload("res://weapon_anims.gd")
+const Profile := preload("res://profile.gd")
 const BUILD_DIST := 3.0 # TD: yapı önizlemesi önümüzde bu mesafede
 const SIT_TIME := 2.0 # sit_shield pasifi: bu kadar durunca kalkan alır
 const SPEED := 7.0
@@ -159,6 +160,7 @@ var inv: Array = [{}, {}, {}, {}, {}] # 1–3 silah/ekipman, 4–5 yapı/eşya
 var ups := {} # yükseltme seviyeleri: "<silah>:<id>" ve "char:<id>"
 var cards: Array = [] # seçim bekleyen kartlar
 var pending := 0 # kartı seçilmemiş seviye sayısı
+var banished: Array = [] # bu maçta elenen kart grupları (bir daha çıkmaz)
 var respawn_t := 0.0
 var burns := {} # yaratık adı -> [yaratık, hasar/sn, kalan sn, etki sözlüğü (evrim alanları), son konum]
 var _last_crit := false # son td_dmg kritik miydi (evrim: kritik zinciri)
@@ -1944,6 +1946,7 @@ func td_dmg(e: Node, dmg: float, can_crit := true) -> void:
 ## shortcut: tavukların konumu ağda eşit değil; başka oyuncular kendi ekranlarındaki kopyanın öldüğünü görür.
 func _hunt(c: Node) -> void:
 	chicken_die.rpc(str(c.name))
+	Profile.stat_add("chickens")
 	if not (td and add_item({"kind": "item", "id": "potion"})):
 		gain(25)
 
@@ -1998,17 +2001,46 @@ func level_up() -> void:
 	stat_points += Weapons.POINTS_PER_LEVEL
 	pending += 1
 	if cards.is_empty():
-		cards = Weapons.roll_cards(self)
+		cards = _roll()
 	_td_changed()
 
 
 func choose_card(i: int) -> void:
 	if i < 0 or i >= cards.size():
 		return
+	if cards[i].type == "evo":
+		Profile.achieve("ACH_EVOLVED")
 	Weapons.apply_card(self, cards[i])
 	pending -= 1
-	cards = Weapons.roll_cards(self) if pending > 0 else []
+	cards = _roll() if pending > 0 else []
 	_td_changed()
+
+
+## 3 kart; elenen gruplar atlanır (fazladan çekip süzer).
+func _roll() -> Array:
+	return Weapons.roll_cards(self, 3 + banished.size()).filter(func(c): return not banished.has(Weapons._group(c))).slice(0, 3)
+
+
+## Yeniden çekme hakkı (sayacı td_ui tutar): eldeki kartlar yenilenir.
+func reroll_cards() -> void:
+	if not cards.is_empty():
+		cards = _roll()
+
+
+## Eleme: kart bu maçta bir daha çıkmaz, yerine yenisi gelir (yeni yoksa düşer; son kart elenmez). Olduysa true.
+func banish_card(i: int) -> bool:
+	if i < 0 or i >= cards.size():
+		return false
+	var keep := cards.map(func(c): return Weapons._group(c))
+	var fresh := _roll().filter(func(c): return not keep.has(Weapons._group(c)))
+	if fresh.is_empty() and cards.size() == 1:
+		return false
+	banished.append(Weapons._group(cards[i]))
+	if fresh.is_empty():
+		cards.remove_at(i)
+	else:
+		cards[i] = fresh[0]
+	return true
 
 
 ## Stat puanı harcar; yalnızca dalga arası molada.

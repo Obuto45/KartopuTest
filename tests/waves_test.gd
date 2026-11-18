@@ -27,6 +27,7 @@ func _until(cond: Callable, t: float) -> bool:
 
 
 func _ready() -> void:
+	preload("res://profile.gd").use_path("user://test_profile.cfg") # kalıcı profil kirlenmesin (tavuk, maç sonu)
 	# Saf Balance denetimleri
 	var b1 := Balance.wave(3, 1)
 	var bh := Balance.wave(3, 1, "hard")

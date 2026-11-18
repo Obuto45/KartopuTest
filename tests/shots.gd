@@ -32,6 +32,10 @@ var tower_hp := 1500
 var tower_max := 1500
 var enemies_left := 0
 var kills := 27
+var difficulty := "hard"
+var mods := ["fast"]
+var boss_eid := 0
+var endless := false
 func is_ready(id): return id == 1
 func can_place(_id, _p): return true
 func _ready(): add_to_group("td")

@@ -62,6 +62,7 @@ func _kill_all() -> void:
 
 
 func _ready() -> void:
+	preload("res://profile.gd").use_path("user://test_profile.cfg") # kalıcı profil kirlenmesin (tavuk, maç sonu)
 	main = load("res://main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)
 	await _wait(0.3)
