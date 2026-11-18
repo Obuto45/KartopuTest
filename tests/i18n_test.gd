@@ -103,6 +103,8 @@ func _ready() -> void:
 
 	# TD maçı (Steam'siz tek kişilik)
 	main._solo_td()
+	_scan(main.ui, "solo_zorluk")
+	main._solo_start("normal")
 	await _wait(1.5)
 	var ui = main.td_ui
 	var td = get_tree().get_first_node_in_group("td")

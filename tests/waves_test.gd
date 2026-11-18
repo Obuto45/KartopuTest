@@ -47,13 +47,7 @@ func _ready() -> void:
 		mono = mono and Balance.wave(n + 1, 1).hp_mult > Balance.wave(n, 1).hp_mult
 	_ok("sonsuz: wave(15) boss, hp monoton", w15.boss == "boss" and Balance.wave(11, 1).boss == "" and mono
 		and Balance.roll_mods(15, "normal", 1).size() == 2)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 42
-	var potions := 0
-	for i in 2000:
-		potions += int(Balance.roll_drop(rng.randf(), false) == "potion")
-	var rate := potions / 2000.0
-	_ok("düşme oranı %3±%1", absf(rate - 0.03) <= 0.01 and Balance.roll_drop(0.9, true) == "chest", "oran %.3f" % rate)
+	_ok("yaratıktan eşya düşmez (roll_drop / DROPS kalktı)", not Balance.new().has_method("roll_drop") and not Balance.new().get_script().get_script_constant_map().has("DROPS"))
 
 	# Oyun içi
 	main = load("res://main.tscn").instantiate()
@@ -67,25 +61,16 @@ func _ready() -> void:
 	await get_tree().create_timer(0.5).timeout
 	var me: Node = main.players.get_node("1")
 
-	# Aynı eşya iki kez verilmez
-	var m0: int = td.money
-	td.drop(me.global_position, "chest")
-	var n: int = td._did
-	var a: bool = td._take(n, me)
-	var b: bool = td._take(n, me)
-	_ok("eşya bir kez verilir", a and not b and td.money == m0 + td.CHEST_MONEY and td._drops.is_empty())
-
-	# Envanter doluyken iksir yerde kalır (kaybolmaz)
-	var inv0: Array = me.inv.duplicate(true)
-	me.inv[3] = {"kind": "build", "id": "wall", "count": 1, "lvl": 1}
-	me.inv[4] = {"kind": "build", "id": "trap", "count": 1, "lvl": 1}
-	td.plist = [me]
-	td.drop(me.global_position, "potion")
-	td._drops_tick(0.01)
-	_ok("dolu envanterde eşya yerde kalır", td._drops.has(td._did))
-	me.inv = inv0
-	td._drops_tick(0.01)
-	_ok("yer açılınca eşya alınır", not td._drops.has(td._did))
+	# Mola: seçilmemiş kart varken (tek kişilik) geri sayım durur, kartlar bitince akar; BREAK_TIME 40 sn
+	_ok("mola süresi 40 sn", Balance.BREAK_TIME >= 40.0 and td.state == "break")
+	me.cards = [{"type": "stat"}]
+	td.time_left = 30.0
+	await get_tree().create_timer(0.5).timeout
+	_ok("kart açıkken mola süresi akmaz", is_equal_approx(td.time_left, 30.0), "kalan %.2f" % td.time_left)
+	me.cards = []
+	await get_tree().create_timer(0.5).timeout
+	_ok("kart bitince mola süresi akar", td.time_left < 30.0, "kalan %.2f" % td.time_left)
+	td.time_left = Balance.BREAK_TIME
 
 	# Boss
 	td.endless = true

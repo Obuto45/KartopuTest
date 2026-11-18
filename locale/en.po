@@ -2814,8 +2814,8 @@ msgid "Elit"
 msgstr "Elite"
 
 #: balance.gd:94
-msgid "Her kümede bir elit: 3 kat can, büyük, sandık bırakır."
-msgstr "One elite per group: triple HP, bigger, drops a chest."
+msgid "Her kümede bir elit: 3 kat can, büyük, öldürünce bonus para ve XP verir."
+msgstr "One elite per group: triple HP, bigger, gives bonus money and XP on kill."
 
 #: balance.gd:95
 msgid "Gece"
@@ -2824,3 +2824,19 @@ msgstr "Night"
 #: balance.gd:95
 msgid "Karanlık basar, görüş kısalır."
 msgstr "Darkness falls; visibility drops."
+
+#: main.gd
+msgid "Kuleyi hangi zorlukta savunacaksın?"
+msgstr "Which difficulty will you defend the tower on?"
+
+#: main.gd
+msgid "Yaratık canı %%%d  •  hasar %%%d  •  para %%%d"
+msgstr "Enemy HP %d%%  •  damage %d%%  •  money %d%%"
+
+#: td_ui.gd
+msgid "Seviye atladın: %d kart molada seçilecek"
+msgstr "Level up: %d card(s) to pick at the break"
+
+#: td_ui.gd
+msgid "MOLA   •   sıradaki dalgaya %d sn   (kart seçerken süre durur)"
+msgstr "BREAK   •   next wave in %d s   (timer pauses while picking a card)"

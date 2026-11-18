@@ -552,7 +552,7 @@ func _local(dt: float) -> void:
 		for s in [1, 2, 3, 4, 5] if td else [1, 2, 3, 4]:
 			if td:
 				# kart açıkken 1/2/3 kartı seçer, slotu değiştirmez
-				if InputMap.has_action("slot%d" % s) and Input.is_action_just_pressed("slot%d" % s) and cards.is_empty():
+				if InputMap.has_action("slot%d" % s) and Input.is_action_just_pressed("slot%d" % s) and (cards.is_empty() or td.state != "break"):
 					slot = s
 			elif Input.is_action_just_pressed("slot%d" % s):
 				_set_slot(s)

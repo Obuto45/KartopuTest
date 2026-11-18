@@ -53,6 +53,8 @@ var diff_hint: Label
 var endless_chk: CheckBox
 var td_box: VBoxContainer # yalnız TD lobisinde: zorluk + sonsuz mod
 var find_box: VBoxContainer
+var solo_box: VBoxContainer # tek başına zorluk seçimi
+var solo_free_diff := false # tek başına seçilen zorluk kilit denetimine takılmaz (yalnız _on_start bir kez okur)
 var growth_box: VBoxContainer
 var _pf_names := {} # Profile'ın var olan statik fonksiyonları (iskelet/gerçek farkı)
 var info: Label
@@ -542,6 +544,15 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lv.add_child(_gap(6))
 	_btn(lv, "◀  Geri", _show_page.bind("modes"))
+
+	# Tek başına: zorluk seçimi
+	var sv := _column(_page("solo"))
+	_logo(sv, "ZORLUK", 44)
+	_txt(sv, "Kuleyi hangi zorlukta savunacaksın?", 17, 0.75)
+	solo_box = VBoxContainer.new()
+	solo_box.add_theme_constant_override("separation", 6)
+	sv.add_child(solo_box)
+	_btn(sv, "◀  Geri", _show_page.bind("modes"))
 
 	# Açık lobi bul
 	var fv := _column(_page("find"))
@@ -1174,10 +1185,28 @@ func set_opts(d: String, e: bool) -> void:
 	_update_diff_ui()
 
 
+## Tek başına: önce zorluk seçilir (kilitsiz; Kabus listede yok), sonra maç başlar.
 func _solo_td() -> void:
 	if Net.online():
 		Net.leave()
 	set_mode("td")
+	for c in solo_box.get_children():
+		c.queue_free()
+	for k in ["easy", "normal", "hard"]:
+		var d: Dictionary = Balance.DIFFS[k]
+		var b := _btn(solo_box, "%s   •   %s" % [tr(d.name), _diff_effect(d)], _solo_start.bind(k))
+		b.custom_minimum_size = Vector2(560, 46)
+	_show_page("solo")
+
+
+## "Yaratık canı %75 • hasar %80 • para %115 • ödül %50": DIFFS çarpanlarının kısa özeti.
+func _diff_effect(d: Dictionary) -> String:
+	return tr("Yaratık canı %%%d  •  hasar %%%d  •  para %%%d") % [roundi(d.hp * 100.0), roundi(d.dmg * 100.0), roundi(d.money * 100.0)]
+
+
+func _solo_start(k: String) -> void:
+	diff_id = k
+	solo_free_diff = true
 	_on_start()
 
 
@@ -1524,8 +1553,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			_show_page("main")
 			get_viewport().set_input_as_handled()
 			return
-		if e.is_action_pressed("ui_cancel") and page in ["modes", "lobby"]:
-			_show_page("modes" if page == "lobby" else "main")
+		if e.is_action_pressed("ui_cancel") and page in ["modes", "lobby", "solo"]:
+			_show_page("main" if page == "modes" else "modes")
 			return
 	if e.is_action_pressed("ui_cancel"):
 		if char_wrap.visible:
@@ -1559,7 +1588,8 @@ func _on_start() -> void:
 	if Net.steam_ok and Net.lobby_id != 0: # maç sürerken gelen katılmasın (dünyası yok, rpc'ler boşa düşer)
 		Steam.setLobbyJoinable(Net.lobby_id, false)
 	if mode == "td":
-		var d := diff_id if _unlocked("diff:" + diff_id) else "normal"
+		var d := diff_id if solo_free_diff or _unlocked("diff:" + diff_id) else "normal"
+		solo_free_diff = false
 		start_td.rpc(ids, {"difficulty": d, "endless": endless and _unlocked("mode:endless")})
 	else:
 		start_game.rpc(ids)
