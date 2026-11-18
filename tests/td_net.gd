@@ -52,7 +52,7 @@ func _ready() -> void:
 		_ok("HOST", "istemci duvar aldı: para düştü", await _until(func(): return td.money < 200, 10.0), "para %d" % td.money)
 		_ok("HOST", "istemci yapıyı kurdu", await _until(func(): return td.builds.get_child_count() >= 1, 10.0))
 		var lv: int = td.level
-		for i in 80: # seviye atlayana dek yaratıkları öldür
+		for i in 400: # seviye atlayana dek yaratıkları öldür (dalga ~30 sn'ye yayılarak doğar)
 			for e in td.elist.duplicate():
 				td.damage_enemy(e.name, 999999, false)
 			if td.level > lv:
