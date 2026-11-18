@@ -267,7 +267,7 @@ func _ev_of(clip: String, name: String) -> void:
 		_ev(name)
 
 
-func _pose(side: String, name: String) -> void:
+func _pose(side: String, name: Variant) -> void: # ad ya da weapon_anims.FIT sözlüğü
 	Hands.pose(hand_l if side == "L" else hand_r, name, true)
 
 

@@ -2790,8 +2790,8 @@ msgid "Yaratıklar %20 hızlı, %25 fazla para verir."
 msgstr "Monsters are 20% faster and drop 25% more money."
 
 #: balance.gd:91
-msgid "Tüm yaratıklara +3 zırh."
-msgstr "+3 armor on all monsters."
+msgid "Tüm yaratıklara +1 zırh."
+msgstr "+1 armor on all monsters."
 
 #: balance.gd:92
 msgid "Altın"

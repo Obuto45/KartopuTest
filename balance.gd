@@ -88,7 +88,7 @@ const DIFFS := {
 ## Dalga modifikatörleri (roll_mods): arayüz ad / açıklamayı buradan okur. "night" yalnız bayrak (görünüm başka yerde).
 const MODS := {
 	"fast": {"name": "Hızlı", "desc": "Yaratıklar %20 hızlı, %25 fazla para verir."},
-	"armored": {"name": "Zırhlı", "desc": "Tüm yaratıklara +3 zırh."},
+	"armored": {"name": "Zırhlı", "desc": "Tüm yaratıklara +1 zırh."},
 	"gold": {"name": "Altın", "desc": "Ödül x2, yaratıkların canı +%30."},
 	"swarm": {"name": "Sürü", "desc": "%40 daha çok yaratık, canları %25 az."},
 	"elite": {"name": "Elit", "desc": "Her kümede bir elit: 3 kat can, büyük, sandık bırakır."},

@@ -119,6 +119,12 @@ func _ready() -> void:
 	Profile.reload()
 	check("clamp", Profile.gold() == 0 and Profile.upgrade_level("tower_hp") == 5 and Profile.stat("kills") == 0)
 
+	# Sonsuz modda 10. dalgayı geçmek zafer sayılır (Zor -> Kabus açılır)
+	_clear()
+	Profile.reload()
+	Profile.add_run(_run(false, 13, "hard", 0, 99, {"endless": true}), 1)
+	check("sonsuz zafer: Zor -> Kabus açık", Profile.is_unlocked("diff:nightmare"))
+
 	_clear()
 	Profile.use_path("")
 	print("PROFILE_TEST: %d/%d" % [good, total])

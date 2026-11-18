@@ -284,6 +284,7 @@ static func add_run(summary: Dictionary, me: int) -> Array:
 	var wave := clampi(int(summary.get("wave", 0)), 0, 1000)
 	var diff: String = str(summary.get("difficulty", "normal"))
 	var endless: bool = summary.get("endless") is bool and summary.endless
+	won = won or (endless and wave > BALANCE.WAVE_COUNT) # sonsuzda 10. dalgayı geçen kazanmış sayılır
 	var players: Dictionary = summary.get("players", {}) if summary.get("players") is Dictionary else {}
 	var mine: Dictionary = players.get(me, players.get(str(me), {}))
 	var kills: int = _num(mine.get("kills"), 0, MAX_STAT)

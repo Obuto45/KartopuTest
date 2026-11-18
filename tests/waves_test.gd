@@ -75,6 +75,18 @@ func _ready() -> void:
 	var b: bool = td._take(n, me)
 	_ok("eşya bir kez verilir", a and not b and td.money == m0 + td.CHEST_MONEY and td._drops.is_empty())
 
+	# Envanter doluyken iksir yerde kalır (kaybolmaz)
+	var inv0: Array = me.inv.duplicate(true)
+	me.inv[3] = {"kind": "build", "id": "wall", "count": 1, "lvl": 1}
+	me.inv[4] = {"kind": "build", "id": "trap", "count": 1, "lvl": 1}
+	td.plist = [me]
+	td.drop(me.global_position, "potion")
+	td._drops_tick(0.01)
+	_ok("dolu envanterde eşya yerde kalır", td._drops.has(td._did))
+	me.inv = inv0
+	td._drops_tick(0.01)
+	_ok("yer açılınca eşya alınır", not td._drops.has(td._did))
+
 	# Boss
 	td.endless = true
 	td.wave = 4

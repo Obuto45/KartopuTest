@@ -1212,8 +1212,9 @@ func _on_summary(d: Dictionary) -> void:
 	if run_gold < 0:
 		var g0 := Profile.gold()
 		var d2 := d.duplicate()
-		d2["tower_hp"] = _g(td, "tower_hp", 0) # ACH_FLAWLESS için
-		d2["tower_max"] = _g(td, "tower_max", 0)
+		if not d2.has("tower_hp"): # ACH_FLAWLESS için; host özetle gönderir
+			d2["tower_hp"] = _g(td, "tower_hp", 0)
+			d2["tower_max"] = _g(td, "tower_max", 0)
 		run_new = Profile.add_run(d2, multiplayer.get_unique_id())
 		run_gold = Profile.gold() - g0
 	_show_end(bool(d.get("won", false)), int(d.get("wave", _g(td, "wave", 0))))

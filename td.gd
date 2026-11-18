@@ -18,6 +18,7 @@ const BuildScript := preload("res://build.gd")
 const TowerScript := preload("res://tower.gd")
 const Fx := preload("res://explosion.gd")
 const Profile := preload("res://profile.gd")
+const Weapons := preload("res://weapons.gd")
 const HALF := 30.0 # forest.gd HALF
 const SYNC_DT := 1.0 / 12.0 # yaratık konum yayını
 const STATE_DT := 0.1 # durum yayını en sık bu aralıkla (kule dövülürken kare başı rpc gitmesin)
@@ -282,6 +283,8 @@ func _drops_tick(dt: float) -> void:
 			continue
 		for p in plist:
 			if is_instance_valid(p) and p.hp > 0 and Vector2(p.global_position.x - d[0].x, p.global_position.z - d[0].z).length() < DROP_R:
+				if d[1] != "chest" and Weapons.find_slot(p.inv, {"kind": "item", "id": d[1]}) < 0:
+					continue # envanteri dolu: eşya yerde kalsın, başkası alabilsin
 				_take(n, p)
 				break
 
@@ -346,7 +349,8 @@ func _finish(won: bool) -> void:
 		if sc > best:
 			best = sc
 			mvp = peer
-	_summary.rpc({"won": won, "wave": wave, "difficulty": difficulty, "endless": endless, "players": pstats, "mvp": mvp})
+	_summary.rpc({"won": won, "wave": wave, "difficulty": difficulty, "endless": endless, "players": pstats, "mvp": mvp,
+		"tower_hp": tower_hp, "tower_max": tower_max}) # istemcinin son _state'i gecikebilir (ACH_FLAWLESS)
 
 
 # ---------- Dalga (host) ----------
@@ -553,7 +557,7 @@ func damage(e: Node3D, dmg: int, crit: bool, n := 0, by := 0) -> void:
 	if e.hp <= 0 or state != "fight":
 		return
 	if n == 0:
-		n = maxi(dmg - e.armor, ceili(dmg * 0.4)) # zırh hasarın en fazla %60'ını keser: hızlı silahlar geç dalgada da işe yarar
+		n = maxi(maxi(dmg - e.armor, ceili(dmg * 0.4)), 1) # zırh hasarın en fazla %60'ını keser: hızlı silahlar geç dalgada da işe yarar
 	var hp := maxi(e.hp - maxi(n, 0), 0) if n > 0 else 0
 	var was: int = e.hp # _hit apply_hit'te e.hp'yi düşürür
 	_hit.rpc(e.eid, hp, n, crit)

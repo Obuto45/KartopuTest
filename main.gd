@@ -1145,6 +1145,11 @@ func _update_diff_ui() -> void:
 		diff_opt.set_item_text(i, tr(Balance.DIFFS[keys[i]].name) + ("" if ok else "  " + _diff_lock_text(keys[i])))
 	diff_opt.select(maxi(keys.find(diff_id), 0))
 	var host := not Net.online() or multiplayer.is_server()
+	if host and not _unlocked("diff:" + diff_id): # katıldığın lobinin kilitli zorluğu sende kalmasın
+		diff_id = "normal"
+		diff_opt.select(maxi(keys.find(diff_id), 0))
+	if host and not _unlocked("mode:endless"):
+		endless = false
 	diff_opt.disabled = not host
 	endless_chk.disabled = not host or not _unlocked("mode:endless")
 	endless_chk.set_pressed_no_signal(endless)
@@ -1544,14 +1549,18 @@ func _unhandled_input(e: InputEvent) -> void:
 # ---------- Oyun akışı ----------
 
 func _on_start() -> void:
+	if mode == "td":
+		_fix_weapon() # Net.solo seçili silahı yazmadan önce: kilitliyse tabancaya düşsün
 	if not Net.online():
 		Net.solo() # Steam'siz tek kişilik: OfflineMultiplayerPeer zaten sunucu, call_local rpc çalışır
 	var ids := [1]
 	ids.append_array(Array(multiplayer.get_peers()))
 	ids.sort()
+	if Net.steam_ok and Net.lobby_id != 0: # maç sürerken gelen katılmasın (dünyası yok, rpc'ler boşa düşer)
+		Steam.setLobbyJoinable(Net.lobby_id, false)
 	if mode == "td":
-		_fix_weapon()
-		start_td.rpc(ids, {"difficulty": diff_id, "endless": endless and _unlocked("mode:endless")})
+		var d := diff_id if _unlocked("diff:" + diff_id) else "normal"
+		start_td.rpc(ids, {"difficulty": d, "endless": endless and _unlocked("mode:endless")})
 	else:
 		start_game.rpc(ids)
 
@@ -1661,6 +1670,8 @@ func _clear_world() -> void:
 
 
 func _back_to_menu() -> void:
+	if Net.steam_ok and Net.lobby_id != 0 and multiplayer.is_server():
+		Steam.setLobbyJoinable(Net.lobby_id, true)
 	_clear_world()
 	round_over = false
 	hud.hide()
