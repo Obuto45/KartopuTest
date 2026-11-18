@@ -50,6 +50,8 @@ var run_anim := "Run"
 var atk_anim := "Punch"
 var bar: MeshInstance3D
 var flash_t := 0.0
+var model_scale := Vector3.ONE # doğma büyümesinin hedefi
+var hit_tw: Tween # darbe sekmesi; üst üste vuruşta öncekini keser
 var swing_t := 0.0 # > 0: vuruş animasyonu oynuyor
 var moving := false
 var net_pos := Vector3.ZERO
@@ -165,8 +167,9 @@ func _ready() -> void:
 	bar = make_bar(clampf(0.9 * s, 0.8, 2.4), height + 0.45)
 	add_child(bar)
 	# Yerden büyüyerek çıkar.
-	model.scale = Vector3.ONE * MODEL_SCALE * s * 0.15
-	create_tween().tween_property(model, "scale", Vector3.ONE * MODEL_SCALE * s, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	model_scale = Vector3.ONE * MODEL_SCALE * s
+	model.scale = model_scale * 0.15
+	create_tween().tween_property(model, "scale", model_scale, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 
 func _physics_process(dt: float) -> void:
@@ -345,6 +348,13 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 		float_text(world, global_position + Vector3(randf_range(-0.3, 0.3), height + 0.3, randf_range(-0.3, 0.3)),
 			str(n), Color(1.0, 0.85, 0.15) if crit else Color.WHITE, 0.013 if crit else 0.008)
 		flash_t = 0.12
+		if hp > 0: # darbe: kısa ezilip geri sekme (doğma büyümesi bitmişse)
+			var base := model_scale
+			if hit_tw:
+				hit_tw.kill()
+			hit_tw = create_tween()
+			hit_tw.tween_property(model, "scale", base * Vector3(1.12, 0.86, 1.12), 0.05)
+			hit_tw.tween_property(model, "scale", base, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		_overlay(shared("flash", func() -> Resource:
 			var m := StandardMaterial3D.new()
 			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
