@@ -1825,8 +1825,46 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 					_td_arc(w, origin, d)
 			"melee":
 				swing_t = SWING_T
+				_slash_fx(origin, d, k)
 				if mine:
 					_td_arc(w, origin, d)
+
+
+## Kılıç izi: oyuncunun önünde ince, parlak bir yay; uçlara doğru incelir, hızla söner. k > 1: serinin son vuruşu.
+func _slash_fx(at: Vector3, d: Vector3, k: float) -> void:
+	var m := ImmediateMesh.new()
+	m.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	var n := 16
+	for i in n + 1:
+		var f := float(i) / n
+		var a := lerpf(-1.1, 1.1, f)
+		var w := sin(f * PI) * 0.12 * k
+		var c := Color(1.0, 0.95, 0.8, sin(f * PI) * 0.8)
+		var dir := Vector3(sin(a), 0, -cos(a))
+		m.surface_set_color(c)
+		m.surface_add_vertex(dir * (1.3 - w))
+		m.surface_set_color(c)
+		m.surface_add_vertex(dir * (1.3 + w))
+	m.surface_end()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.vertex_color_use_as_albedo = true
+	var mi := MeshInstance3D.new()
+	mi.mesh = m
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_world().add_child(mi)
+	var flat := Vector3(d.x, 0, d.z)
+	mi.global_position = at + Vector3.DOWN * 0.3
+	if flat.length_squared() > 0.001:
+		mi.look_at(mi.global_position + flat)
+	mi.rotate_object_local(Vector3.FORWARD, 0.35) # hafif çapraz savuruş
+	var tw := mi.create_tween()
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.18)
+	tw.tween_callback(mi.queue_free)
 
 
 ## Namlu ateşi: parlak alev çiçeği + kısa ışık; mermili silahta sağa sekip düşen pirinç kovan.
