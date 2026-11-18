@@ -1787,6 +1787,8 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 	kick = w.kick
 	shake(origin, w.kick * 0.2)
 	Sfx.play3d(Sfx.fire if w.kind in ["shot", "rocket"] else Sfx.whoosh, origin, -8.0 if w.rate < 0.2 else -2.0)
+	if w.kind in ["shot", "rocket"] and dirs.size() > 0:
+		_muzzle_fx(_muzzle(), dirs[0], w.kind == "shot")
 	for i in dirs.size():
 		var d := dirs[i]
 		match w.kind:
@@ -1825,6 +1827,40 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 				swing_t = SWING_T
 				if mine:
 					_td_arc(w, origin, d)
+
+
+## Namlu ateşi: parlak alev çiçeği + kısa ışık; mermili silahta sağa sekip düşen pirinç kovan.
+func _muzzle_fx(at: Vector3, d: Vector3, casing: bool) -> void:
+	var p := ExplosionScript.parts(ExplosionScript.quad("glow", 0.35), 6, 0.08, 1.0, 4.0,
+		[Color(1.0, 0.9, 0.5, 0.9), Color(1.0, 0.5, 0.1, 0.0)], 1.0, 0.3)
+	p.direction = d
+	p.spread = 25.0
+	p.position = at
+	p.finished.connect(p.queue_free)
+	_world().add_child(p)
+	p.emitting = true
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.75, 0.4)
+	l.light_energy = 3.0
+	l.omni_range = 4.0
+	l.position = at
+	_world().add_child(l)
+	l.create_tween().tween_property(l, "light_energy", 0.0, 0.06)
+	l.create_tween().tween_callback(l.queue_free).set_delay(0.08)
+	if casing:
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.012, 0.012, 0.03)
+		bm.material = ExplosionScript.mat("chunk")
+		var c := ExplosionScript.parts(bm, 1, 0.6, 1.5, 2.2, [Color(0.85, 0.65, 0.2), Color(0.7, 0.5, 0.15)], 1.0, 1.0)
+		c.direction = (d.cross(Vector3.UP).normalized() + Vector3.UP).normalized() # sağa-yukarı
+		c.spread = 15.0
+		c.gravity = Vector3(0, -9.8, 0)
+		c.angular_velocity_min = 360.0
+		c.angular_velocity_max = 720.0
+		c.position = at - d * 0.25
+		c.finished.connect(c.queue_free)
+		_world().add_child(c)
+		c.emitting = true
 
 
 ## Anında isabet: yol üstündeki yaratıkları (pierce + 1 tane) vurur, sonra yakındakilere seker.
