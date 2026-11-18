@@ -534,6 +534,13 @@ func _ready() -> void:
 	pot.free()
 	for id in ["pistol", "shotgun", "smg", "sniper", "bazooka", "flame", "bow", "grenade", "boomerang", "sword", "item:potion", "item:bomb"]:
 		chk("%s draw" % id, WA.has(id, "draw"))
+	# Geri tepmenin en uç anında sol el, silaha göre dinlenmedeki yerinde kalır (kabzadan kopmaz).
+	var fr: Dictionary = WA.clips("smg").fire.tracks
+	var rk: Array = fr["Rig"][1]
+	var hk: Array = fr["HandL"][1]
+	var hl0: Array = WA.rest("smg")["HandL"]
+	var rel := Transform3D(Basis.from_euler(rk[2]), rk[1]).affine_inverse() * Transform3D(Basis.from_euler(hl0[1] + hk[2]), hl0[0] + hk[1])
+	chk("smg ateşte sol el silaha bağlı", rel.origin.distance_to(hl0[0]) < 0.001, rel.origin.distance_to(hl0[0]))
 	var an := WA.build("pistol", "reload")
 	chk("tabanca reload süresi 1.3", is_equal_approx(an.length, 1.3), an.length)
 	var ev := []
