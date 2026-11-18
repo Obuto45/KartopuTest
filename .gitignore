@@ -20,3 +20,6 @@ _referans/
 
 # Claude alt ajan çalışma kopyaları
 .claude/worktrees/
+
+# Python önbelleği
+__pycache__/
