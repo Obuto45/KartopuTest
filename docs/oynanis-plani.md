@@ -32,14 +32,13 @@ Faz 0 sözleşmeleri (commit `a9bd3d7`): `start_td(ids, opts)`, `td.gd` durum di
 
 ## Durum
 
-- [x] Aşama 1: tasarım denetimi bitti; Steam paketi ve denge simülasyonu ajanları çalışıyor (`docs/steam/`, `tests/balance_sim.gd`)
-- [x] Faz 0: sözleşmeler commit'lendi ve push'landı
-- [x] Faz 1 birleşti: Profil (PROFILE_TEST 32/32), Silah evrimleri (EVO_TEST 15/15), Dalga sistemi (WAVES_TEST 10/10). Ana dalda tüm testler geçti.
-- [ ] Faz 1 süren: Giriş/lobi (main.gd, net.gd), Silah tutuşu (hands/weapon_anims/viewmodel), Denge simülasyonu (tests/balance_sim.*). 23:30 UTC kullanım sınırına takıldılar, devam ettirildi.
-- [ ] Faz 2 süren: Arayüz ajanı (td_ui.gd: rehber, maç sonu özeti, boss barı, modifikatör afişi, reroll/banish, evrim kartı görünümü; profil bağlantıları)
-- [x] Steam paketi bitti: `docs/steam/` (mağaza sayfası, 34 başarım, pazarlama planı, görsel/fragman brifi)
-- [ ] Faz 3 (birleştirmeden sonra, çakışmasın diye): İngilizce yerelleştirme (`tr()` + çeviri dosyası). Steam ajanının 1 numaralı önerisi.
-- [ ] Aşama 3: worktree dallarını birleştir; tüm testler, ekran görüntüleri, iki süreçli ağ testi
+- [x] Aşama 1: tasarım denetimi, Steam paketi (`docs/steam/`), denge simülasyonu (`tests/balance_sim.gd`)
+- [x] Faz 0: sözleşmeler
+- [x] Faz 1 birleşti: profil (32/32), silah evrimleri (15/15), dalga sistemi (10/10), giriş/lobi (tek başına oyna, açık lobi, zorluk, kilitler, GELİŞİM), tutuş 1. tur (silahlar düz, bilekler doğal; GRIP_TEST 76/120)
+- [x] Faz 2 birleşti: TD arayüzü (rehber, maç sonu özeti, boss barı, modifikatör afişi, yeniden çek/ele, evrim kartı)
+- [x] Denge: kule 3000 (+%35/oyuncu), yaratık hasarı x0.55, canı x0.85, kalabalık 0.4/0.25, zorluklar yumuşatıldı. Simde 1 oyuncu artık 10. dalgaya ulaşıyor/kazanıyor; 4 oyunculu ölçüm yeniden yapılıyor.
+- [ ] Süren: tutuş 2. tur (parmaklar silah başına, sol kol açısı), Faz 3 İngilizce yerelleştirme + menü cilası
+- [ ] Aşama 3: son birleştirme; tüm testler, Vulkan/OpenGL ekran görüntüleri, iki süreçli ağ testi
 - [ ] Aşama 4: commit, push, rapor
 
 Devam ederken: `git worktree list` ve `git branch` ile ajan dallarını gör. Bitmiş dalları sırayla birleştir: profil, dalga, silah, giriş, tutuş. Yarım kalan ajanların işini aynı sahiplik kurallarıyla yeniden başlat.
