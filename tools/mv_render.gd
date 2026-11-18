@@ -39,7 +39,9 @@ func _initialize():
 	cam.current = true
 	var d := aabb.size.length() * 2.0
 	# Model +Z'ye bakar varsayımı (Godot glTF): ön = +Z'den bakış. Hunyuan: front, left, back, right.
-	var views := {"front": Vector3(0, 0, 1), "left": Vector3(-1, 0, 0), "back": Vector3(0, 0, -1), "right": Vector3(1, 0, 0)}
+	# three_quarter: tek görüntülü modeller (Hunyuan3D 2.1) için çapraz-üstten bakış; derinliği en iyi bu açı gösterir.
+	var views := {"front": Vector3(0, 0, 1), "left": Vector3(-1, 0, 0), "back": Vector3(0, 0, -1), "right": Vector3(1, 0, 0),
+		"three_quarter": Vector3(-0.75, 0.45, 0.55).normalized()}
 	for k in views:
 		cam.position = views[k] * d
 		cam.look_at(Vector3.ZERO, Vector3.UP)
