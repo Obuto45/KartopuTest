@@ -31,7 +31,7 @@ var player: Node # yerel oyuncu (testte yerine sahte düğüm konabilir)
 var weapons: Array = consts("res://weapons.gd").get("LIST", [])
 var rarity: Dictionary = consts("res://weapons.gd").get("RARITY", {})
 var stat_defs: Array = consts("res://weapons.gd").get("STATS", [])
-var items: Dictionary = consts("res://weapons.gd").get("ITEMS", {}) # yaratıktan düşen eşyalar
+var items: Dictionary = consts("res://weapons.gd").get("ITEMS", {}) # eşya tanımları (can iksiri, bomba)
 var equips: Dictionary = consts("res://weapons.gd").get("EQUIPS", {})
 var wconsts: Dictionary = consts("res://weapons.gd") # kart yazılarını çevirirken CHAR_UPS / UPS / EVOS
 var shop: Array = consts("res://balance.gd").get("SHOP", [])
@@ -64,6 +64,7 @@ var inv_msg: Label
 var inv_cells := [] # birleşik indeks sırası: 0–4 el, 5.. çanta; {sb, icon, name, info}
 var cards_box: VBoxContainer
 var cards_hint: Label
+var cards_wait_lbl: Label # savaşta: engellemeyen küçük "kart molada" notu
 var hint_lbl: Label # kısayollar; yalnız molada
 var cards_row: HBoxContainer
 var shop_wrap: ColorRect
@@ -603,6 +604,12 @@ func _build_cards() -> void:
 	cards_box.hide()
 	add_child(cards_box)
 	_t(cards_box, "SEVİYE ATLADIN!", 34, GOLD, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cards_wait_lbl = _t(self, "", 18, GOLD)
+	cards_wait_lbl.set_anchors_preset(PRESET_CENTER_BOTTOM)
+	cards_wait_lbl.grow_horizontal = GROW_DIRECTION_BOTH
+	cards_wait_lbl.grow_vertical = GROW_DIRECTION_BEGIN
+	cards_wait_lbl.offset_bottom = -176
+	cards_wait_lbl.hide()
 	cards_hint = _t(cards_box, "", 16)
 	cards_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cards_row = HBoxContainer.new()
@@ -683,8 +690,8 @@ func _process(dt: float) -> void:
 			var final := wave >= wave_count and not endless
 			var sub := (tr("%s geliyor!") % _boss_title(bt)) if bt != "" else ("Son dalga: kuleyi ne pahasına olursa olsun koru." if final else "Yaratıklar geliyor!")
 			_banner("SON DALGA!" if final else tr("DALGA %d") % wave, sub, RED if bt != "" or final else ORANGE, _mods_text(mods, false))
-			cards_at = Time.get_ticks_msec() + 1500 # kartlar afişin üstüne binmesin
 		elif st == "break" and state == "fight":
+			cards_at = Time.get_ticks_msec() + 1500 # kartlar afişin üstüne binmesin
 			_banner("DALGA TEMİZLENDİ", "Mola: B ile mağaza, E ile çanta.", Color(0.5, 1.0, 0.6),
 				(tr("Sıradaki dalga:  %s") % _mods_text(mods, false)) if not mods.is_empty() else "")
 		elif ended and not end_wrap.visible:
@@ -737,6 +744,8 @@ func _process(dt: float) -> void:
 	break_lbl.visible = st == "break"
 	ready_lbl.visible = st == "break"
 	break_lbl.text = tr("MOLA   •   sıradaki dalgaya %d sn") % ceili(_g(td, "time_left", 0.0))
+	if cards_box.visible and multiplayer.get_peers().is_empty(): # tek kişilikte kart açıkken geri sayım durur
+		break_lbl.text = tr("MOLA   •   sıradaki dalgaya %d sn   (kart seçerken süre durur)") % ceili(_g(td, "time_left", 0.0))
 
 	# XP: yumuşak dolar; seviye atlayınca sıfırdan başlar ve parlar.
 	var lv: int = _g(td, "level", 1)
@@ -763,7 +772,9 @@ func _process(dt: float) -> void:
 		card_sig = sig
 		_make_cards(cards)
 	var was := cards_box.visible
-	cards_box.visible = not cards.is_empty() and not ended and Time.get_ticks_msec() >= cards_at
+	cards_box.visible = not cards.is_empty() and st == "break" and Time.get_ticks_msec() >= cards_at # savaşta açılmaz, molaya kalır
+	cards_wait_lbl.visible = not cards.is_empty() and st == "fight"
+	cards_wait_lbl.text = tr("Seviye atladın: %d kart molada seçilecek") % _g(player, "pending", 1)
 	if cards_box.visible and not was and banner.modulate.a > 0.0: # kartlar gelince afiş hemen çekilir: üst üste binmez
 		banner_tw.kill()
 		banner_tw = create_tween()
