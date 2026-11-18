@@ -1,10 +1,24 @@
 extends Control
 ## Tower Defense arayüzü: XP çubuğu, kule canı, dalga bilgisi, 5 slotluk envanter, TAB stat paneli,
-## seviye kartları, mağaza, ölüm sayacı ve oyun sonu. Veriyi "td" grubundaki düğümden ve yerel oyuncudan
+## seviye kartları (yeniden çek / ele), mağaza, ölüm sayacı, boss barı, modifikatörler, ilk maç rehberi ve maç sonu özeti. Veriyi "td" grubundaki düğümden ve yerel oyuncudan
 ## okur; td.gd / weapons.gd / balance.gd eksikse alanlar güvenli varsayılana düşer (çökmez).
 ## 1080p'ye göre tasarlandı, pencere yüksekliğine oranla ölçeklenir (_fit).
 
-const TYPES := {"stat": "▲  STAT", "char": "★  KARAKTER", "weapon": "✚  YENİ SİLAH", "weapon_up": "◆  SİLAH YÜKSELTME"}
+const TYPES := {"stat": "▲  STAT", "char": "★  KARAKTER", "weapon": "✚  YENİ SİLAH", "weapon_up": "◆  SİLAH YÜKSELTME", "evo": "✦  EVRİM"}
+const Balance := preload("res://balance.gd")
+const Profile := preload("res://profile.gd")
+const MOD_ICONS := {"fast": "⚡", "armored": "⛨", "gold": "✦", "swarm": "⁂", "elite": "♛", "night": "☾"}
+const DIFF_COLORS := {"easy": Color(0.4, 0.85, 0.45), "normal": Color(0.45, 0.6, 0.9), "hard": Color(0.95, 0.5, 0.12), "nightmare": Color(0.85, 0.15, 0.2)}
+## İlk maç rehberi: [tuşlar, ne yapılır]; koşul tutunca sıradakine geçer (_tut_tick).
+const TUT := [
+	[["SOL TIK"], "ateş et"],
+	[["B"], "mağazayı aç, bir Duvar al"],
+	[["4"], "duvarı eline al: yeşil hayaleti kuleyle yaratık yolu arasına koy, sol tıkla kur"],
+	[["G"], "hazırım: dalgayı başlat"],
+	[["1", "2", "3"], "kart seç"],
+	[["TAB"], "stat panelini aç, puanını harca"],
+]
+const BOSS_C := Color(0.8, 0.45, 1.0)
 const GOLD := Color(1.0, 0.82, 0.25)
 const ORANGE := Color(1.0, 0.62, 0.18)
 const GREY := Color(0.55, 0.57, 0.62)
@@ -61,6 +75,34 @@ var shop_msg: Label
 var shop_rows := [] # {item, btn}
 var dead_lbl: Label
 var end_wrap: ColorRect
+var diff_lbl: Label # kule başlığının yanında zorluk
+var diff_seen := ""
+var mod_row: HBoxContainer # savaşta modifikatör etiketleri
+var mods_lbl: Label # molada sıradaki dalganın modifikatörleri
+var mods_sig := ""
+var boss_box: VBoxContainer
+var boss_name: Label
+var boss_fill: ColorRect
+var boss_txt: Label
+var cards_at := 0 # kartlar bu zamandan önce görünmez (dalga afişiyle çakışmasın)
+var reroll_btn: Button
+var banish_btn: Button
+var rerolls: int = Profile.upgrade_level("reroll") # maç başında kalıcı yükseltmeden, maç boyunca azalır
+var banishes: int = Profile.upgrade_level("banish")
+var banish_mode := false # Ele'ye basıldı: sıradaki 1/2/3 kartı eler
+var tut := -1 if Profile.tutorial_done() else 0 # rehber adımı; -1 = kapalı
+var tut_n := 0 # adımın başlangıç sayacı (yapı / stat puanı)
+var tut_seen := false # kart adımı: kartlar göründü mü
+var tut_card: PanelContainer
+var tut_step: Label
+var tut_keys: HBoxContainer
+var tut_txt: Label
+var night_on := false
+var night_tw: Tween
+var night_base := {} # Environment / ışık -> özgün değerler
+var summary := {} # td.summary_ready
+var run_gold := -1 # bu maçta kazanılan Altın Saç (-1: henüz yok)
+var run_new: Array = [] # bu maçta açılanlar
 
 
 ## Bir betiğin sabitleri; dosya yoksa (ya da henüz bozuksa) boş sözlük.
@@ -171,26 +213,57 @@ func _button(parent: Node, text: String, cb: Callable) -> Button:
 	return b
 
 
+## Renkli zeminli küçük etiket (zorluk, modifikatör, tuş, rozet). Dönen Label'ın ebeveyni paneldir.
+func _chip(parent: Node, text: String, bg: Color, fg: Color, px := 15) -> Label:
+	var p := PanelContainer.new()
+	p.mouse_filter = MOUSE_FILTER_IGNORE
+	p.size_flags_vertical = SIZE_SHRINK_CENTER
+	var sb: StyleBoxFlat = main._sb(bg, 6, 0)
+	sb.content_margin_left = 9; sb.content_margin_right = 9; sb.content_margin_top = 1; sb.content_margin_bottom = 1
+	p.add_theme_stylebox_override("panel", sb)
+	parent.add_child(p)
+	var l := _t(p, text, px, fg)
+	l.add_theme_constant_override("outline_size", 0)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return l
+
+
+## Klavye tuşu görünümü: açık zemin, altta kalın kenar.
+func _key(parent: Node, k: String) -> void:
+	var l := _chip(parent, k, Color(0.93, 0.94, 0.98), Color(0.08, 0.09, 0.13), 22)
+	var sb: StyleBoxFlat = l.get_parent().get_theme_stylebox("panel")
+	sb.border_width_bottom = 4
+	sb.border_color = Color(0.5, 0.53, 0.62)
+	sb.content_margin_left = 12; sb.content_margin_right = 12
+
+
 # ---------- Kurulum ----------
 
 func _build_top() -> void:
 	var top := VBoxContainer.new()
 	top.set_anchors_preset(PRESET_CENTER_TOP)
 	top.offset_left = -310; top.offset_right = 310; top.offset_top = 8
+	top.grow_horizontal = GROW_DIRECTION_BOTH # boss barı / rehber kartı genişse iki yana büyür
 	top.mouse_filter = MOUSE_FILTER_IGNORE
 	top.add_theme_constant_override("separation", 3)
 	add_child(top)
-	tower_title = _t(top, "♜  RAPUNZEL'İN KULESİ", 21, Color(1.0, 0.9, 0.7), true)
-	tower_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var trow := HBoxContainer.new()
+	trow.alignment = BoxContainer.ALIGNMENT_CENTER
+	trow.mouse_filter = MOUSE_FILTER_IGNORE
+	trow.add_theme_constant_override("separation", 12)
+	top.add_child(trow)
+	tower_title = _t(trow, "♜  RAPUNZEL'İN KULESİ", 21, Color(1.0, 0.9, 0.7), true)
+	diff_lbl = _chip(trow, "", DIFF_COLORS.normal, Color.WHITE, 14)
 	var bar := Control.new()
 	bar.custom_minimum_size = Vector2(620, 26)
+	bar.size_flags_horizontal = SIZE_SHRINK_CENTER
 	bar.mouse_filter = MOUSE_FILTER_IGNORE
 	top.add_child(bar)
 	_rect(bar, Color(0, 0, 0, 0.7))
 	tower_fill = _rect(bar, Color(0.3, 0.9, 0.35))
 	tower_fill.offset_left = 3; tower_fill.offset_top = 3; tower_fill.offset_bottom = -3
 	tower_txt = _t(bar, "", 18)
-	tower_txt.set_anchors_preset(PRESET_FULL_RECT)
+	tower_txt.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	tower_txt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tower_txt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var row := HBoxContainer.new()
@@ -201,11 +274,40 @@ func _build_top() -> void:
 	wave_lbl = _t(row, "", 28, Color.WHITE, true)
 	left_lbl = _t(row, "", 19)
 	money_lbl = _t(row, "", 22, GOLD)
+	mod_row = HBoxContainer.new()
+	mod_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	mod_row.mouse_filter = MOUSE_FILTER_IGNORE
+	mod_row.add_theme_constant_override("separation", 8)
+	top.add_child(mod_row)
+
+	# Boss barı: kule barından geniş, mor; yalnız boss yaşarken.
+	boss_box = VBoxContainer.new()
+	boss_box.mouse_filter = MOUSE_FILTER_IGNORE
+	boss_box.add_theme_constant_override("separation", 0)
+	boss_box.hide()
+	top.add_child(boss_box)
+	boss_name = _t(boss_box, "", 26, BOSS_C, true)
+	boss_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var bb := Control.new()
+	bb.custom_minimum_size = Vector2(780, 22)
+	bb.mouse_filter = MOUSE_FILTER_IGNORE
+	boss_box.add_child(bb)
+	_rect(bb, Color(0, 0, 0, 0.75))
+	boss_fill = _rect(bb, Color(0.62, 0.2, 0.85))
+	boss_fill.offset_left = 3; boss_fill.offset_top = 3; boss_fill.offset_bottom = -3
+	boss_txt = _t(bb, "", 15)
+	boss_txt.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	boss_txt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_txt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
 	break_lbl = _t(top, "", 19, Color(0.7, 0.95, 1.0))
 	break_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mods_lbl = _t(top, "", 18, Color(0.88, 0.75, 1.0))
+	mods_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ready_lbl = _t(top, "", 18)
 	ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ready_lbl.modulate.a = 0.85
+	_build_tut(top)
 
 	banner = VBoxContainer.new() # dalga başladı / temizlendi / boss
 	banner.anchor_right = 1.0
@@ -215,11 +317,49 @@ func _build_top() -> void:
 	add_child(banner)
 	_t(banner, "", 92, ORANGE, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_t(banner, "", 24).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_t(banner, "", 22, Color(0.88, 0.75, 1.0)).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER # modifikatörler
 
 	dead_lbl = _t(self, "", 50, RED, true)
 	dead_lbl.anchor_right = 1.0
 	dead_lbl.anchor_top = 0.4; dead_lbl.anchor_bottom = 0.4
 	dead_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+## Rehber kartı: üst bilgi bloğunun hemen altında, büyük yazı ve tuş simgeleri.
+func _build_tut(parent: Node) -> void:
+	tut_card = PanelContainer.new()
+	tut_card.size_flags_horizontal = SIZE_SHRINK_CENTER
+	tut_card.mouse_filter = MOUSE_FILTER_IGNORE
+	var sb: StyleBoxFlat = main._sb(Color(0.05, 0.06, 0.1, 0.9), 12, 14)
+	sb.border_width_left = 6
+	sb.border_color = GOLD
+	tut_card.add_theme_stylebox_override("panel", sb)
+	tut_card.hide()
+	parent.add_child(tut_card)
+	var v := VBoxContainer.new()
+	v.mouse_filter = MOUSE_FILTER_IGNORE
+	v.add_theme_constant_override("separation", 6)
+	tut_card.add_child(v)
+	var head := HBoxContainer.new()
+	head.mouse_filter = MOUSE_FILTER_IGNORE
+	v.add_child(head)
+	tut_step = _t(head, "", 15, ORANGE)
+	tut_step.size_flags_horizontal = SIZE_EXPAND_FILL
+	_t(head, "H: rehberi atla", 15).modulate.a = 0.6
+	var body := HBoxContainer.new()
+	body.mouse_filter = MOUSE_FILTER_IGNORE
+	body.add_theme_constant_override("separation", 12)
+	v.add_child(body)
+	tut_keys = HBoxContainer.new()
+	tut_keys.mouse_filter = MOUSE_FILTER_IGNORE
+	tut_keys.add_theme_constant_override("separation", 6)
+	body.add_child(tut_keys)
+	tut_txt = _t(body, "", 26)
+	tut_txt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tut_txt.custom_minimum_size.x = 560
+	tut_txt.size_flags_horizontal = SIZE_EXPAND_FILL
+	if tut >= 0:
+		_tut_show()
 
 
 func _build_bottom() -> void:
@@ -356,6 +496,15 @@ func _build_cards() -> void:
 	cards_row.mouse_filter = MOUSE_FILTER_IGNORE
 	cards_row.add_theme_constant_override("separation", 18)
 	cards_box.add_child(cards_row)
+	var rb := HBoxContainer.new() # kalıcı yükseltmeden gelen haklar
+	rb.alignment = BoxContainer.ALIGNMENT_CENTER
+	rb.mouse_filter = MOUSE_FILTER_IGNORE
+	rb.add_theme_constant_override("separation", 14)
+	cards_box.add_child(rb)
+	reroll_btn = _button(rb, "", _reroll)
+	banish_btn = _button(rb, "", _banish_toggle)
+	for b in [reroll_btn, banish_btn]:
+		b.custom_minimum_size = Vector2(300, 40)
 
 
 func _build_shop() -> void:
@@ -388,7 +537,7 @@ func _build_shop() -> void:
 
 
 func _build_end() -> void:
-	end_wrap = _rect(self, Color(0, 0, 0, 0.62))
+	end_wrap = _rect(self, Color(0, 0, 0, 0.8)) # altındaki HUD özetle karışmasın
 	end_wrap.mouse_filter = MOUSE_FILTER_STOP
 	end_wrap.hide()
 
@@ -400,6 +549,8 @@ func _process(dt: float) -> void:
 		td = get_tree().get_first_node_in_group("td")
 		if td and td.has_signal("changed"):
 			td.connect("changed", func(): slow_t = 0.0)
+		if td and td.has_signal("summary_ready"):
+			td.connect("summary_ready", _on_summary)
 	if (player == null or not is_instance_valid(player)) and main.players:
 		player = main.players.get_node_or_null(str(multiplayer.get_unique_id()))
 	if scope:
@@ -409,18 +560,23 @@ func _process(dt: float) -> void:
 	var wave: int = _g(td, "wave", 0)
 	var money: int = _g(td, "money", 0)
 	var ended := st == "won" or st == "lost"
+	var endless: bool = _g(td, "endless", false)
+	var mods: Array = _g(td, "mods", [])
 	if st != state: # durum geçişleri: afişler, mağazanın kapanması, oyun sonu
 		if st == "fight":
 			shop_wrap.hide()
-			if wave >= wave_count:
-				_banner("BOSS DALGASI!", "Son dalga: kuleyi ne pahasına olursa olsun koru.", RED)
-			else:
-				_banner("DALGA %d" % wave, "Yaratıklar geliyor!", ORANGE)
+			var bt: String = Balance.wave(maxi(wave, 1), 1).boss
+			var final := wave >= wave_count and not endless
+			var sub := (_boss_title(bt) + " geliyor!") if bt != "" else ("Son dalga: kuleyi ne pahasına olursa olsun koru." if final else "Yaratıklar geliyor!")
+			_banner("SON DALGA!" if final else "DALGA %d" % wave, sub, RED if bt != "" or final else ORANGE, _mods_text(mods, false))
+			cards_at = Time.get_ticks_msec() + 1500 # kartlar afişin üstüne binmesin
 		elif st == "break" and state == "fight":
-			_banner("DALGA TEMİZLENDİ", "Mola: B ile mağaza, TAB ile stat puanları.", Color(0.5, 1.0, 0.6))
-		elif ended:
+			_banner("DALGA TEMİZLENDİ", "Mola: B ile mağaza, TAB ile stat puanları.", Color(0.5, 1.0, 0.6),
+				("Sıradaki dalga:  " + _mods_text(mods, false)) if not mods.is_empty() else "")
+		elif ended and not end_wrap.visible:
 			_show_end(st == "won", wave)
 		state = st
+	_night(st == "fight" and mods.has("night"))
 
 	# Kule canı: azaldıkça kırmızıya döner, %30 altında yanıp söner.
 	var tmax: int = maxi(_g(td, "tower_max", 1), 1)
@@ -436,7 +592,32 @@ func _process(dt: float) -> void:
 	tower_title.add_theme_color_override("font_color", RED.lerp(Color.WHITE, 0.5 * pulse) if low else Color(1.0, 0.9, 0.7))
 	tower_txt.text = "%d / %d" % [thp, tmax]
 	# td.wave son başlayan dalgadır: molada sıradaki gösterilir.
-	wave_lbl.text = "DALGA %d / %d" % [clampi(wave + int(st == "break"), 1, wave_count), wave_count]
+	wave_lbl.text = "DALGA %d / ∞" % maxi(wave + int(st == "break"), 1) if endless \
+		else "DALGA %d / %d" % [clampi(wave + int(st == "break"), 1, wave_count), wave_count]
+	var diff: String = _g(td, "difficulty", "normal")
+	if diff != diff_seen:
+		diff_seen = diff
+		diff_lbl.text = str(Balance.DIFFS.get(diff, {}).get("name", diff)).to_upper()
+		(diff_lbl.get_parent().get_theme_stylebox("panel") as StyleBoxFlat).bg_color = DIFF_COLORS.get(diff, GREY)
+	var msig := str(mods)
+	if msig != mods_sig:
+		mods_sig = msig
+		for n in mod_row.get_children():
+			n.queue_free()
+		for m in mods:
+			_chip(mod_row, "%s %s" % [MOD_ICONS.get(m, "•"), str(Balance.MODS.get(m, {}).get("name", m)).to_upper()], Color(0.22, 0.1, 0.32, 0.85), Color(0.92, 0.82, 1.0), 15)
+		mods_lbl.text = "Sıradaki dalga:  " + _mods_text(mods, true) if not mods.is_empty() else ""
+	mod_row.visible = st == "fight" and not mods.is_empty()
+	mods_lbl.visible = st == "break" and not mods.is_empty()
+	# Boss: td._by_id'deki yaratık düğümü (her makinede _spawn ile dolar), canı hp / max_hp.
+	var boss = _g(td, "_by_id", {}).get(_g(td, "boss_eid", 0))
+	boss_box.visible = st == "fight" and is_instance_valid(boss) and boss.hp > 0
+	if boss_box.visible:
+		var bf := clampf(float(boss.hp) / maxi(boss.max_hp, 1), 0.0, 1.0)
+		boss_fill.anchor_right = bf
+		boss_fill.offset_right = -3.0 * bf
+		boss_name.text = _boss_title(boss.type).to_upper()
+		boss_txt.text = "%d / %d" % [boss.hp, boss.max_hp]
 	left_lbl.text = "Kalan yaratık: %d" % _g(td, "enemies_left", 0) if st == "fight" else "Öldürülen: %d" % _g(td, "kills", 0)
 	money_lbl.text = "₺ %d" % money
 	break_lbl.visible = st == "break"
@@ -467,8 +648,23 @@ func _process(dt: float) -> void:
 	if sig != card_sig:
 		card_sig = sig
 		_make_cards(cards)
-	cards_box.visible = not cards.is_empty() and not ended
-	cards_hint.text = "1 / 2 / 3 tuşuyla ya da tıklayarak seç" if st == "break" else "1 / 2 / 3 tuşuyla seç"
+	var was := cards_box.visible
+	cards_box.visible = not cards.is_empty() and not ended and Time.get_ticks_msec() >= cards_at
+	if cards_box.visible and not was and banner.modulate.a > 0.0: # kartlar gelince afiş hemen çekilir: üst üste binmez
+		banner_tw.kill()
+		banner_tw = create_tween()
+		banner_tw.tween_property(banner, "modulate:a", 0.0, 0.2)
+	if cards.is_empty():
+		banish_mode = false
+	cards_hint.text = "Elemek istediğin kartı seç: bu maçta bir daha çıkmaz" if banish_mode \
+		else "1 / 2 / 3 tuşuyla ya da tıklayarak seç" if st == "break" else "1 / 2 / 3 tuşuyla seç"
+	if cards_box.visible:
+		reroll_btn.text = "↻  Yeniden Çek  [4]   •   %d hak" % rerolls
+		reroll_btn.disabled = rerolls <= 0
+		banish_btn.text = "✕  Hangisi? 1 / 2 / 3   ([5] vazgeç)" if banish_mode else "✕  Ele  [5]   •   %d hak" % banishes
+		banish_btn.disabled = banishes <= 0
+		cards_row.modulate = Color(1.0, 0.6, 0.55) if banish_mode else Color.WHITE
+	_tut_tick(st, ended, cards_box.visible)
 
 	stats_panel.visible = Input.is_action_pressed("stats") and not ended and not shop_wrap.visible
 	if shop_wrap.visible:
@@ -501,10 +697,20 @@ func want_mouse() -> bool:
 func _input(e: InputEvent) -> void:
 	if main.settings_wrap.visible or end_wrap.visible:
 		return
+	if tut == 0 and e.is_action_pressed("throw") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		_tut_next() # ilk ateş; olay oyuncuya da gider
+	var key: int = e.physical_keycode if e is InputEventKey and e.pressed and not e.echo else 0
 	if shop_wrap.visible and (e.is_action_pressed("ui_cancel") or e.is_action_pressed("shop")):
 		shop_wrap.hide()
-	elif cards_open() and e is InputEventKey and e.pressed and not e.echo and e.physical_keycode in [KEY_1, KEY_2, KEY_3]:
-		_choose(e.physical_keycode - KEY_1)
+	elif cards_open() and key in [KEY_1, KEY_2, KEY_3]:
+		_choose(key - KEY_1)
+	elif cards_open() and key == KEY_4:
+		_reroll()
+	elif cards_open() and key == KEY_5:
+		_banish_toggle()
+	elif tut >= 0 and key == KEY_H:
+		tut = TUT.size() - 1
+		_tut_next()
 	elif e.is_action_pressed("shop"):
 		if state == "break":
 			_open_shop()
@@ -517,12 +723,17 @@ func _input(e: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
-func _banner(title: String, sub: String, c: Color) -> void:
+func _banner(title: String, sub: String, c: Color, extra := "") -> void:
 	var t: Label = banner.get_child(0)
 	t.text = title
 	t.visible = title != ""
 	t.add_theme_color_override("font_color", c)
 	(banner.get_child(1) as Label).text = sub
+	(banner.get_child(2) as Label).text = extra
+	banner.get_child(2).visible = extra != ""
+	# rehber kartı açıksa onun altına kayar (yerel koordinat = küresel / ölçek)
+	banner.offset_top = maxf((tut_card.get_global_rect().end.y / scale.y + 8.0 - 0.24 * size.y) if tut_card.visible else 0.0, 0.0)
+	banner.offset_bottom = banner.offset_top
 	if banner_tw:
 		banner_tw.kill()
 	banner.modulate.a = 0.0
@@ -702,13 +913,19 @@ func _make_cards(cards: Array) -> void:
 		var d: Dictionary = cards[i]
 		var r: Dictionary = rarity.get(d.get("rarity", ""), {})
 		var c: Color = r.get("color", Color(0.8, 0.82, 0.9))
+		var evo: bool = d.get("type", "") == "evo"
 		var card := PanelContainer.new()
 		card.custom_minimum_size = Vector2(310, 236)
 		card.pivot_offset = Vector2(155, 118)
 		var sb: StyleBoxFlat = main._sb(Color(c.darkened(0.86), 0.94), 14, 16)
-		sb.set_border_width_all(2)
+		sb.set_border_width_all(4 if evo else 2)
 		sb.border_width_top = 7
-		sb.border_color = c
+		sb.border_color = GOLD if evo else c
+		if evo: # evrim: altın kenar nabız gibi parlar
+			sb.shadow_color = Color(GOLD, 0.7)
+			var glow := card.create_tween().set_loops()
+			glow.tween_property(sb, "shadow_size", 22, 0.6).from(6).set_trans(Tween.TRANS_SINE)
+			glow.tween_property(sb, "shadow_size", 6, 0.6).set_trans(Tween.TRANS_SINE)
 		card.add_theme_stylebox_override("panel", sb)
 		card.gui_input.connect(func(e):
 			if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
@@ -723,7 +940,9 @@ func _make_cards(cards: Array) -> void:
 		var head := HBoxContainer.new()
 		head.mouse_filter = MOUSE_FILTER_IGNORE
 		v.add_child(head)
-		var ty := _t(head, TYPES.get(d.get("type", ""), "KART"), 13)
+		if evo:
+			_chip(head, "✦ EVRİM", GOLD, Color(0.12, 0.06, 0.0), 15)
+		var ty := _t(head, "" if evo else TYPES.get(d.get("type", ""), "KART"), 13)
 		ty.modulate.a = 0.8
 		ty.size_flags_horizontal = SIZE_EXPAND_FILL
 		_t(head, str(r.get("name", "")).to_upper(), 13, c)
@@ -742,9 +961,26 @@ func _make_cards(cards: Array) -> void:
 
 
 func _choose(i: int) -> void:
-	if player and player.has_method("choose_card") and i < _g(player, "cards", []).size():
+	if banish_mode:
+		banish_mode = false
+		if banishes > 0 and player and player.has_method("banish_card") and player.banish_card(i):
+			banishes -= 1
+			Sfx.play2d(Sfx.whoosh, -4.0)
+	elif player and player.has_method("choose_card") and i < _g(player, "cards", []).size():
 		player.choose_card(i)
 		Sfx.play2d(Sfx.whoosh, -4.0)
+
+
+func _reroll() -> void:
+	if rerolls > 0 and player and player.has_method("reroll_cards"):
+		rerolls -= 1
+		banish_mode = false
+		player.reroll_cards()
+		Sfx.play2d(Sfx.whoosh, -4.0)
+
+
+func _banish_toggle() -> void:
+	banish_mode = banishes > 0 and not banish_mode
 
 
 # ---------- Mağaza ----------
@@ -818,35 +1054,163 @@ func _shop_say(text: String, c: Color) -> void:
 	create_tween().tween_property(shop_msg, "modulate", Color.WHITE, 0.5).from(Color(2, 2, 2))
 
 
+# ---------- Boss, modifikatör, gece ----------
+
+func _boss_title(type: String) -> String:
+	return ("BOSS: " if type == "boss" else "ARA BOSS: ") + str(Balance.ENEMIES.get(type, {}).get("name", type))
+
+
+## Kısa: "⚡ Hızlı   ☾ Gece"; uzun: her biri "⚡ Hızlı — açıklama" satırı.
+func _mods_text(ms: Array, long: bool) -> String:
+	var out := PackedStringArray()
+	for m in ms:
+		var d: Dictionary = Balance.MODS.get(m, {})
+		out.append("%s %s" % [MOD_ICONS.get(m, "•"), d.get("name", m)] + (" — " + str(d.get("desc", "")) if long else ""))
+	return ("\n" if long else "     ").join(out)
+
+
+## "night": yalnız bu makinede, dünyadaki WorldEnvironment sisini koyulaştırır ve güneşi kısar; kapanınca geri alır.
+func _night(on: bool) -> void:
+	if on == night_on:
+		return
+	night_on = on
+	var w: Node = main.get("world")
+	if w == null or not is_instance_valid(w):
+		return
+	if night_base.is_empty():
+		for we in w.find_children("*", "WorldEnvironment", true, false):
+			if we.environment:
+				var env: Environment = we.environment
+				night_base[env] = [env.fog_density, env.volumetric_fog_density, env.fog_light_color]
+		for l in w.find_children("*", "DirectionalLight3D", true, false):
+			night_base[l] = l.light_energy
+	if night_tw:
+		night_tw.kill()
+	night_tw = create_tween().set_parallel()
+	for o in night_base:
+		if o is Environment:
+			var b: Array = night_base[o]
+			night_tw.tween_property(o, "fog_density", b[0] * (9.0 if on else 1.0), 2.0)
+			night_tw.tween_property(o, "volumetric_fog_density", b[1] * (4.0 if on else 1.0), 2.0)
+			night_tw.tween_property(o, "fog_light_color", b[2] * Color(0.2, 0.25, 0.45) if on else b[2], 2.0)
+		else:
+			night_tw.tween_property(o, "light_energy", night_base[o] * (0.25 if on else 1.0), 2.0)
+
+
+# ---------- İlk maç rehberi ----------
+
+func _tut_show() -> void:
+	for n in tut_keys.get_children():
+		n.queue_free()
+	for k in TUT[tut][0]:
+		_key(tut_keys, k)
+	tut_txt.text = TUT[tut][1]
+	tut_step.text = "İLK MAÇ REHBERİ   %d / %d" % [tut + 1, TUT.size()]
+	create_tween().tween_property(tut_card, "modulate", Color.WHITE, 0.5).from(Color(1.8, 1.6, 1.0))
+
+
+## Sıradaki adım; son adımdan sonra (ya da H ile atlanınca) profile "bitti" yazar.
+func _tut_next() -> void:
+	tut += 1
+	tut_seen = false
+	if tut >= TUT.size():
+		tut = -1
+		tut_card.hide()
+		Profile.set_tutorial_done()
+		_banner("", "Rehber tamam. İyi savunmalar!", Color.WHITE)
+		return
+	tut_n = _builds() if tut == 2 else int(_g(player, "stat_points", 0))
+	_tut_show()
+
+
+func _builds() -> int:
+	var b = _g(td, "builds", null)
+	return b.get_child_count() if b is Node else 0
+
+
+## Adım koşulları (yerel): 0 ilk ateş (_input), 1 yapı alındı, 2 yapı kuruldu, 3 hazır oyu, 4 kart seçildi, 5 stat puanı harcandı.
+func _tut_tick(st: String, ended: bool, cards_vis: bool) -> void:
+	if tut < 0:
+		return
+	var show := not ended
+	if tut == 1:
+		var inv: Array = _g(player, "inv", [])
+		if inv.any(func(it): return it is Dictionary and it.get("kind", "") == "build"):
+			_tut_next()
+		elif _builds() > 0: # alıp kurmuş bile: kurma adımı da geçer
+			tut = 2
+			_tut_next()
+	elif tut == 2 and _builds() > tut_n:
+		_tut_next()
+	elif tut == 3 and (st == "fight" or _is_ready(multiplayer.get_unique_id())):
+		_tut_next()
+	elif tut == 4: # yalnız kartlar açıkken görünür; seçilince (liste değişince) geçer
+		show = show and cards_vis
+		if cards_vis and not tut_seen:
+			tut_seen = true
+			tut_n = card_sig.hash()
+		elif tut_seen and card_sig.hash() != tut_n:
+			_tut_next()
+	elif tut == 5:
+		show = show and st == "break"
+		var pts: int = _g(player, "stat_points", 0)
+		if pts < tut_n or (stats_panel.visible and pts == 0):
+			_tut_next()
+		else:
+			tut_n = pts
+	tut_card.visible = show and tut >= 0
+
+
 # ---------- Oyun sonu ----------
+
+## td.summary_ready: profile işlenir (yalnız bu makinenin oyuncusu), son ekran özetle yeniden kurulur.
+func _on_summary(d: Dictionary) -> void:
+	summary = d
+	if run_gold < 0:
+		var g0 := Profile.gold()
+		var d2 := d.duplicate()
+		d2["tower_hp"] = _g(td, "tower_hp", 0) # ACH_FLAWLESS için
+		d2["tower_max"] = _g(td, "tower_max", 0)
+		run_new = Profile.add_run(d2, multiplayer.get_unique_id())
+		run_gold = Profile.gold() - g0
+	_show_end(bool(d.get("won", false)), int(d.get("wave", _g(td, "wave", 0))))
+
 
 func _show_end(won: bool, wave: int) -> void:
 	shop_wrap.hide()
+	var again := end_wrap.visible # özet sonradan geldi: yeniden belirme yok
 	for n in end_wrap.get_children():
 		n.queue_free()
 	var center := CenterContainer.new()
 	center.set_anchors_preset(PRESET_FULL_RECT)
 	end_wrap.add_child(center)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 14)
+	v.add_theme_constant_override("separation", 10)
 	center.add_child(v)
-	_t(v, "KAZANDINIZ!" if won else "KULE YIKILDI", 120, GOLD if won else RED, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_t(v, "Rapunzel güvende. Kule tüm dalgalara dayandı." if won else "Yaratıklar kuleyi ele geçirdi.", 24).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(main._gap(10))
+	var endless: bool = summary.get("endless", _g(td, "endless", false))
+	var diff: String = summary.get("difficulty", _g(td, "difficulty", "normal"))
+	var title := "ZAFER!" if won else ("SONSUZ: DALGA %d" % wave if endless else "KULE DÜŞTÜ")
+	_t(v, title, 92, GOLD if won else RED, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_t(v, "Rapunzel güvende. Kule tüm dalgalara dayandı." if won else ("Kule %d. dalgada düştü." % wave if endless else "Yaratıklar kuleyi ele geçirdi."), 24).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 18)
 	v.add_child(row)
-	for s in [["DALGA", "%d / %d" % [wave, wave_count]], ["ÖLDÜRME", str(_g(td, "kills", 0))], ["SEVİYE", str(_g(td, "level", 1))]]:
+	for s in [["DALGA", str(wave) if endless else "%d / %d" % [wave, wave_count]], ["ZORLUK", str(Balance.DIFFS.get(diff, {}).get("name", diff))],
+			["ÖLDÜRME", str(_g(td, "kills", 0))], ["SEVİYE", str(_g(td, "level", 1))]]:
 		var p := PanelContainer.new()
-		p.custom_minimum_size.x = 220
+		p.custom_minimum_size.x = 200
 		row.add_child(p)
 		var pv := VBoxContainer.new()
 		p.add_child(pv)
 		var cap := _t(pv, s[0], 15, ORANGE)
 		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_t(pv, s[1], 44, Color.WHITE, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(main._gap(10))
+		var val := _t(pv, s[1], 38, DIFF_COLORS.get(diff, Color.WHITE).lightened(0.3) if s[0] == "ZORLUK" else Color.WHITE, true)
+		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if summary.get("players") is Dictionary and not summary.players.is_empty():
+		_end_players(v, summary.players, summary.get("mvp", 0))
+	if run_gold >= 0:
+		_end_profile(v)
 	var btns := HBoxContainer.new()
 	btns.alignment = BoxContainer.ALIGNMENT_CENTER
 	btns.add_theme_constant_override("separation", 14)
@@ -860,6 +1224,111 @@ func _show_end(won: bool, wave: int) -> void:
 		b.add_theme_font_size_override("font_size", 20)
 	if not multiplayer.is_server():
 		_t(v, "Yeniden başlatmayı host yapar.", 15).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	elif won and not endless:
+		var note := _t(v, "İpucu: lobide Sonsuz modu açarsan 10. dalgadan sonra da savaş sürer.", 15, Color(0.7, 0.95, 1.0))
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	end_wrap.show()
-	end_wrap.modulate.a = 0.0
-	create_tween().tween_property(end_wrap, "modulate:a", 1.0, 0.5)
+	if not again:
+		end_wrap.modulate.a = 0.0
+		create_tween().tween_property(end_wrap, "modulate:a", 1.0, 0.5)
+
+
+## Oyuncu tablosu: ad, hasar, öldürme, kritik, yapı, ölüm, unvanlar; MVP altın çerçeveli.
+func _end_players(parent: Node, ps: Dictionary, mvp: int) -> void:
+	var titles := {}
+	for peer in ps:
+		titles[peer] = []
+	# shortcut: isabet sayısı tutulmuyor; "kritik oranı" = kritik / öldürme. pstats'a "hits" eklenirse ona geçilir.
+	for t in [["Kasap", "kills"], ["Mimar", "builds"], ["Keskin Göz", "crit"]]:
+		var top := 0
+		var hi := 0.0
+		for peer in ps:
+			var st: Dictionary = ps[peer]
+			var x := float(st.get("crits", 0)) / maxi(int(st.get("kills", 0)), 1) if t[1] == "crit" else float(st.get(t[1], 0))
+			if x > hi:
+				hi = x
+				top = peer
+		if top != 0:
+			titles[top].append(t[0])
+	for peer in ps:
+		if int(ps[peer].get("deaths", 0)) == 0:
+			titles[peer].append("Ölümsüz")
+	var widths := [250, 110, 110, 100, 90, 90, 330]
+	var rows := [["OYUNCU", "HASAR", "ÖLDÜRME", "KRİTİK", "YAPI", "ÖLÜM", "UNVAN"]]
+	var peers := ps.keys()
+	peers.sort()
+	for peer in peers:
+		var st: Dictionary = ps[peer]
+		rows.append([Net.display_name(int(peer)), str(st.get("dmg", 0)), str(st.get("kills", 0)), str(st.get("crits", 0)),
+			str(st.get("builds", 0)), str(st.get("deaths", 0)), "  •  ".join(PackedStringArray(titles[peer])), peer])
+	for r in rows:
+		var head: bool = r.size() == 7
+		var star: bool = not head and r[7] == mvp
+		var p := PanelContainer.new()
+		var sb: StyleBoxFlat = main._sb(Color(0, 0, 0, 0.0 if head else 0.45), 8, 6)
+		if star:
+			sb.bg_color = Color(0.35, 0.25, 0.05, 0.75)
+			sb.set_border_width_all(2)
+			sb.border_color = GOLD
+		p.add_theme_stylebox_override("panel", sb)
+		parent.add_child(p)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 6)
+		p.add_child(h)
+		for c in 7:
+			var txt: String = ("★ MVP  " if star and c == 0 else "") + r[c]
+			var l := _t(h, txt, 14 if head else (18 if c != 6 else 16), ORANGE if head else (GOLD if star and c == 0 else Color.WHITE))
+			l.custom_minimum_size.x = widths[c]
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if c in [0, 6] else HORIZONTAL_ALIGNMENT_CENTER
+			if c == 6:
+				l.add_theme_color_override("font_color", Color(0.75, 0.95, 1.0) if not head else ORANGE)
+				l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+
+## Kalıcı ilerleme: kazanılan Altın Saç, yeni açılımlar, sıradaki açılımların ilerlemesi.
+func _end_profile(parent: Node) -> void:
+	var p := PanelContainer.new()
+	p.size_flags_horizontal = SIZE_SHRINK_CENTER
+	p.custom_minimum_size.x = 760
+	var sb: StyleBoxFlat = main._sb(Color(0.12, 0.09, 0.03, 0.92), 12, 14)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(GOLD, 0.7)
+	p.add_theme_stylebox_override("panel", sb)
+	parent.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	p.add_child(v)
+	var h := HBoxContainer.new()
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.add_theme_constant_override("separation", 18)
+	v.add_child(h)
+	_t(h, "+%d ALTIN SAÇ" % run_gold, 34, GOLD, true)
+	_t(h, "Toplam: %d" % Profile.gold(), 18).size_flags_vertical = SIZE_SHRINK_CENTER
+	if not run_new.is_empty(): # tek satır (çok açılımda kaydırarak): "YENİ: Yay, Bumerang açıldı!"
+		var l := _t(v, "YENİ: %s açıldı!" % ", ".join(PackedStringArray(run_new.map(_unlock_name))), 22, Color(0.5, 1.0, 0.6), true)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 720
+	var prog := PackedStringArray()
+	for id in Profile.QUESTS:
+		var q: Array = Profile.unlock_progress(id)
+		if q[0] < q[1] and prog.size() < 3:
+			prog.append("%s: %d/%d" % [_unlock_name(id), q[0], q[1]])
+	if not prog.is_empty():
+		var l := _t(v, "Sıradaki açılımlar:   " + "     ".join(prog), 16)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.modulate.a = 0.85
+
+
+## "weapon:bow" -> "Yay", "diff:hard" -> "Zor zorluğu", "mode:endless" -> "Sonsuz mod".
+func _unlock_name(id: String) -> String:
+	var k := id.get_slice(":", 1)
+	if id.begins_with("weapon:"):
+		for w in weapons:
+			if w.get("id") == k:
+				return str(w.name)
+	elif id.begins_with("diff:"):
+		return "%s zorluğu" % Balance.DIFFS.get(k, {}).get("name", k)
+	elif id == "mode:endless":
+		return "Sonsuz mod"
+	return k.capitalize()

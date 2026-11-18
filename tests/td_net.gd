@@ -20,6 +20,7 @@ func _ok(role: String, title: String, cond: bool, note = "") -> void:
 	print("%s %s %s  %s" % [role, "[OK]" if cond else "[HATA]", title, note])
 
 func _ready() -> void:
+	preload("res://profile.gd").use_path("user://test_profile.cfg") # kalıcı profil kirlenmesin (tavuk, maç sonu)
 	var role: String = OS.get_cmdline_user_args()[0]
 	var main = load("res://main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)

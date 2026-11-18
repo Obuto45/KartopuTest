@@ -17,6 +17,7 @@ const EnemyScript := preload("res://enemy.gd")
 const BuildScript := preload("res://build.gd")
 const TowerScript := preload("res://tower.gd")
 const Fx := preload("res://explosion.gd")
+const Profile := preload("res://profile.gd")
 const HALF := 30.0 # forest.gd HALF
 const SYNC_DT := 1.0 / 12.0 # yaratık konum yayını
 const STATE_DT := 0.1 # durum yayını en sık bu aralıkla (kule dövülürken kare başı rpc gitmesin)
@@ -99,11 +100,16 @@ func _ready() -> void:
 	endless = bool(opts.get("endless", false))
 	_n = _count_players()
 	tower_max = Balance.tower_hp(_n)
+	money = Balance.START_MONEY * _n
+	time_left = Balance.BREAK_TIME
+	if multiplayer.is_server(): # kalıcı yükseltmeler ve ilk maç rehberi: yalnız host'un profili (değerler _state ile yayılır)
+		tower_max = roundi(Balance.tower_hp(_n) * Profile.tower_hp_mult())
+		money += Profile.start_money_bonus()
+		if not Profile.tutorial_done():
+			time_left = 90.0 # ilk mola rehber bitene dek (en çok 90 sn); herkes hazır olunca yine 3 sn'ye iner
 	tower_hp = tower_max
 	_seen_hp = tower_hp
-	money = Balance.START_MONEY * _n
 	xp_next = Balance.xp_for(1, _n)
-	time_left = Balance.BREAK_TIME
 	multiplayer.peer_disconnected.connect(_on_peer_left)
 	if multiplayer.is_server():
 		_mod_seed = randi()
@@ -184,9 +190,9 @@ func _physics_process(dt: float) -> void:
 		_dirty = false
 		_state_t = STATE_DT
 		enemies_left = _to_spawn + elist.size()
-		# Dizi yalnız SONA eklenerek büyür (eski indeksler sabit): 11 difficulty, 12 mods, 13 boss_eid, 14 endless
+		# Dizi yalnız SONA eklenerek büyür (eski indeksler sabit): 11 difficulty, 12 mods, 13 boss_eid, 14 endless, 15 tower_max
 		_state.rpc([wave, state, time_left, money, level, xp, xp_next, tower_hp, enemies_left, kills, ready_votes,
-			difficulty, mods, boss_eid, endless])
+			difficulty, mods, boss_eid, endless, tower_max])
 
 
 # ---------- Durum yayını (her makinede) ----------
@@ -197,6 +203,8 @@ func _state(a: Array) -> void:
 	tower_hp = a[7]; enemies_left = a[8]; kills = a[9]; ready_votes = a[10]
 	if a.size() > 14:
 		difficulty = a[11]; mods = a[12]; boss_eid = a[13]; endless = a[14]
+	if a.size() > 15:
+		tower_max = a[15]
 	if tower_hp != _seen_hp:
 		tower.set_hp(float(tower_hp) / tower_max, tower_hp < _seen_hp)
 		_seen_hp = tower_hp
