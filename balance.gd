@@ -6,7 +6,8 @@ extends RefCounted
 
 const TOWER_HP := 3000 # tek oyuncu; her ek oyuncu +%50 (tower_hp). balance_sim: 1500'de ortalama oyuncu 3–5. dalgada kaybediyordu # dalga 10'da kuleye ulaşan bir boss ~35 hasar/sn vurur: tek başına ~40 sn dayanır
 const TOWER_REPAIR := 0.1 # her dalga sonunda kule canının bu oranı onarılır (hata telafisi, kartopu etkisini kırar)
-const BREAK_TIME := 25.0 # alışveriş + stat + yerleştirme için yeter; herkes hazırsa 3 sn'ye iner
+const BREAK_TIME := 40.0 # kart + alışveriş + yerleştirme için yeter; herkes hazırsa READY_TIME'a iner
+const READY_TIME := 5.0 # herkes hazır oyu verince kalan geri sayım
 const WAVE_COUNT := 10
 const RESPAWN_TIME := 8.0
 const START_MONEY := 40 # ilk molada bir duvar ya da tuzak alınabilsin
@@ -79,7 +80,7 @@ const SHOP := [
 ## mods Kabus'ta dalga başına ek modifikatör, unlock bunu açan zafer (profile.gd).
 const DIFFS := {
 	"easy": {"name": "Kolay", "hp": 0.75, "dmg": 0.8, "money": 1.15, "reward": 0.5, "mods": 0, "unlock": ""},
-	"normal": {"name": "Normal", "hp": 1.0, "dmg": 1.0, "money": 1.0, "reward": 1.0, "mods": 0, "unlock": ""},
+	"normal": {"name": "Orta", "hp": 1.0, "dmg": 1.0, "money": 1.0, "reward": 1.0, "mods": 0, "unlock": ""},
 	"hard": {"name": "Zor", "hp": 1.25, "dmg": 1.15, "money": 0.9, "reward": 1.5, "mods": 0, "unlock": "win_normal"},
 	"nightmare": {"name": "Kabus", "hp": 1.4, "dmg": 1.2, "money": 0.85, "reward": 2.5, "mods": 1, "unlock": "win_hard"},
 }
@@ -91,11 +92,10 @@ const MODS := {
 	"armored": {"name": "Zırhlı", "desc": "Tüm yaratıklara +1 zırh."},
 	"gold": {"name": "Altın", "desc": "Ödül x2, yaratıkların canı +%30."},
 	"swarm": {"name": "Sürü", "desc": "%40 daha çok yaratık, canları %25 az."},
-	"elite": {"name": "Elit", "desc": "Her kümede bir elit: 3 kat can, büyük, sandık bırakır."},
+	"elite": {"name": "Elit", "desc": "Her kümede bir elit: 3 kat can, büyük, öldürünce bonus para ve XP verir."},
 	"night": {"name": "Gece", "desc": "Karanlık basar, görüş kısalır."},
 }
 const SPEED_CAP := 6.9 # "fast" ile bile oyuncuya (7) yetişilmez
-const DROPS := {"potion": 0.03, "bomb": 0.015} # yaratık ölünce düşme olasılığı (elit: hep "chest")
 
 ## Oyuncu sayısı çarpanı: sayı x(1 + 0,55 x fazla oyuncu), can x(1 + 0,15 x fazla oyuncu).
 ## 4 oyuncu: 2,65 x 1,45 = 3,84 kat toplam can, 4 kat ateş gücüne karşı -> kişi başı yük solo ile aynı düzeyde,
@@ -152,18 +152,6 @@ static func wave(n: int, players: int, diff := "normal", mods: Array = []) -> Di
 static func enemy_speed(type: String, w: Dictionary) -> float:
 	var base: float = ENEMIES[type].speed
 	return minf(base * w.get("speed_mult", 1.0), maxf(base, SPEED_CAP))
-
-
-## Düşme: r = [0,1) rastgele sayı; elit hep sandık. Boş dize = düşmez.
-static func roll_drop(r: float, elite: bool) -> String:
-	if elite:
-		return "chest"
-	var acc := 0.0
-	for id in DROPS:
-		acc += DROPS[id]
-		if r < acc:
-			return id
-	return ""
 
 
 ## Dalga n'nin modifikatörleri; aynı tohum aynı listeyi verir (host seçer, _state ile yayılır).

@@ -1,5 +1,5 @@
 extends Control
-## Tower Defense arayüzü: XP çubuğu, kule canı, dalga bilgisi, 5 slotluk envanter, TAB stat paneli,
+## Tower Defense arayüzü: XP çubuğu, kule canı, dalga bilgisi, 5 slotluk envanter, E ile açılan çanta paneli,
 ## seviye kartları (yeniden çek / ele), mağaza, ölüm sayacı, boss barı, modifikatörler, ilk maç rehberi ve maç sonu özeti. Veriyi "td" grubundaki düğümden ve yerel oyuncudan
 ## okur; td.gd / weapons.gd / balance.gd eksikse alanlar güvenli varsayılana düşer (çökmez).
 ## 1080p'ye göre tasarlandı, pencere yüksekliğine oranla ölçeklenir (_fit).
@@ -16,11 +16,11 @@ const TUT := [
 	[["4"], "duvarı eline al: yeşil hayaleti kuleyle yaratık yolu arasına koy, sol tıkla kur"],
 	[["G"], "hazırım: dalgayı başlat"],
 	[["1", "2", "3"], "kart seç"],
-	[["TAB"], "stat panelini aç, puanını harca"],
 ]
 const BOSS_C := Color(0.8, 0.45, 1.0)
 const GOLD := Color(1.0, 0.82, 0.25)
 const ORANGE := Color(1.0, 0.62, 0.18)
+const Weapons := preload("res://weapons.gd")
 const GREY := Color(0.55, 0.57, 0.62)
 const RED := Color(1.0, 0.35, 0.3)
 const DARK := Color(0.05, 0.06, 0.1, 0.9)
@@ -31,7 +31,7 @@ var player: Node # yerel oyuncu (testte yerine sahte düğüm konabilir)
 var weapons: Array = consts("res://weapons.gd").get("LIST", [])
 var rarity: Dictionary = consts("res://weapons.gd").get("RARITY", {})
 var stat_defs: Array = consts("res://weapons.gd").get("STATS", [])
-var items: Dictionary = consts("res://weapons.gd").get("ITEMS", {}) # yaratıktan düşen eşyalar
+var items: Dictionary = consts("res://weapons.gd").get("ITEMS", {}) # eşya tanımları (can iksiri, bomba)
 var equips: Dictionary = consts("res://weapons.gd").get("EQUIPS", {})
 var wconsts: Dictionary = consts("res://weapons.gd") # kart yazılarını çevirirken CHAR_UPS / UPS / EVOS
 var shop: Array = consts("res://balance.gd").get("SHOP", [])
@@ -43,7 +43,7 @@ var level := -1
 var xp_f := 0.0
 var slow_t := 0.0 # seyrek yenilenen parçalar (hazır listesi, stat satırları)
 var card_sig := ""
-var inv_sig := ""
+var inv_sel := -1 # çanta paneli: tıkla-tıkla taşıma için seçili slot (birleşik indeks), -1 yok
 var xp_fill: ColorRect
 var xp_flash: ColorRect
 var lvl_badge: PanelContainer
@@ -59,14 +59,12 @@ var ready_lbl: Label
 var banner: VBoxContainer
 var banner_tw: Tween
 var cells := [] # 5 envanter hücresi + Q: {sb, name, count, pips}
-var stats_panel: PanelContainer
-var stats_sub: Label
-var points_lbl: Label
-var stat_box: VBoxContainer
-var stat_rows := [] # {def, bar, val, btn}
-var weap_box: VBoxContainer
+var inv_wrap: PanelContainer # E: çanta + el slotları
+var inv_msg: Label
+var inv_cells := [] # birleşik indeks sırası: 0–4 el, 5.. çanta; {sb, icon, name, info}
 var cards_box: VBoxContainer
 var cards_hint: Label
+var cards_wait_lbl: Label # savaşta: engellemeyen küçük "kart molada" notu
 var hint_lbl: Label # kısayollar; yalnız molada
 var cards_row: HBoxContainer
 var shop_wrap: ColorRect
@@ -92,7 +90,7 @@ var rerolls: int = Profile.upgrade_level("reroll") # maç başında kalıcı yü
 var banishes: int = Profile.upgrade_level("banish")
 var banish_mode := false # Ele'ye basıldı: sıradaki 1/2/3 kartı eler
 var tut := -1 if Profile.tutorial_done() else 0 # rehber adımı; -1 = kapalı
-var tut_n := 0 # adımın başlangıç sayacı (yapı / stat puanı)
+var tut_n := 0 # adımın başlangıç sayacı (yapı sayısı)
 var tut_seen := false # kart adımı: kartlar göründü mü
 var tut_card: PanelContainer
 var tut_step: Label
@@ -126,7 +124,7 @@ func _ready() -> void:
 	_fit()
 	_build_top()
 	_build_bottom()
-	_build_stats()
+	_build_inv()
 	_build_cards()
 	_build_shop()
 	_build_end()
@@ -385,7 +383,7 @@ func _build_bottom() -> void:
 	add_child(lvl_badge)
 	lvl_lbl = _t(lvl_badge, "", 21, Color.WHITE, true)
 	lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_lbl = _t(self, "TAB statlar   •   B mağaza   •   G hazır   •   1–5 envanter   •   Q yetenek   •   ESC menü", 17)
+	hint_lbl = _t(self, "E çanta   •   B mağaza   •   G hazır   •   1–5 envanter   •   Q yetenek   •   ESC menü", 17)
 	hint_lbl.set_anchors_preset(PRESET_BOTTOM_WIDE) # ekran genişliğinde, ortalı, envanterin üstünde: rozet ve slotlarla çakışmaz
 	hint_lbl.offset_left = 0; hint_lbl.offset_right = 0
 	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -454,29 +452,145 @@ func _build_bottom() -> void:
 			key += 1
 
 
-func _build_stats() -> void:
-	stats_panel = PanelContainer.new()
-	stats_panel.set_anchors_preset(PRESET_CENTER_LEFT)
-	stats_panel.grow_vertical = GROW_DIRECTION_BOTH
-	stats_panel.offset_left = 40
-	stats_panel.custom_minimum_size.x = 520
-	stats_panel.hide()
-	add_child(stats_panel)
+func _build_inv() -> void:
+	inv_wrap = PanelContainer.new()
+	inv_wrap.set_anchors_preset(PRESET_CENTER)
+	inv_wrap.grow_horizontal = GROW_DIRECTION_BOTH
+	inv_wrap.grow_vertical = GROW_DIRECTION_BOTH
+	inv_wrap.add_theme_stylebox_override("panel", main._sb(Color(0.05, 0.06, 0.1, 0.97), 12, 18))
+	inv_wrap.hide()
+	add_child(inv_wrap)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 5)
-	stats_panel.add_child(v)
-	_t(v, "STATLAR", 34, ORANGE, true)
-	stats_sub = _t(v, "", 16)
-	stats_sub.modulate.a = 0.8
-	points_lbl = _t(v, "", 17, GOLD)
+	v.add_theme_constant_override("separation", 8)
+	inv_wrap.add_child(v)
+	var head := HBoxContainer.new()
+	v.add_child(head)
+	_t(head, "ENVANTER", 40, ORANGE, true).size_flags_horizontal = SIZE_EXPAND_FILL
+	_chip(head, "E", Color(0.93, 0.94, 0.98), Color(0.08, 0.09, 0.13), 20)
+	_t(v, "Öğeyi sürükleyip bırak ya da tıkla, sonra hedef slota tıkla. Silah / ekipman 1–3, yapı / eşya 4–5. slota girer.", 15).modulate.a = 0.7
+	_t(v, "EL SLOTLARI", 15, ORANGE)
+	var hand := HBoxContainer.new()
+	hand.add_theme_constant_override("separation", 8)
+	v.add_child(hand)
+	for i in 5:
+		_inv_cell(hand, i)
 	v.add_child(HSeparator.new())
-	stat_box = VBoxContainer.new()
-	stat_box.add_theme_constant_override("separation", 5)
-	v.add_child(stat_box)
-	v.add_child(HSeparator.new())
-	_t(v, "SİLAHLAR VE EKİPMAN", 15, ORANGE)
-	weap_box = VBoxContainer.new()
-	v.add_child(weap_box)
+	_t(v, "ÇANTA", 15, ORANGE)
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	v.add_child(grid)
+	for i in Weapons.BAG_SIZE:
+		_inv_cell(grid, 5 + i)
+	inv_msg = _t(v, " ", 17)
+	inv_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+func _inv_cell(parent: Node, idx: int) -> void:
+	var cell := PanelContainer.new()
+	cell.custom_minimum_size = Vector2(124, 88)
+	var sb: StyleBoxFlat = main._sb(Color(0, 0, 0, 0.5), 8, 6)
+	sb.set_border_width_all(3)
+	cell.add_theme_stylebox_override("panel", sb)
+	cell.set_drag_forwarding(_inv_drag.bind(idx), _inv_can_drop.bind(idx), _inv_drop.bind(idx))
+	cell.gui_input.connect(_inv_click.bind(idx))
+	parent.add_child(cell)
+	var icon := TextureRect.new()
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = MOUSE_FILTER_IGNORE
+	cell.add_child(icon)
+	if idx < 5:
+		_t(cell, str(idx + 1), 14).modulate.a = 0.75
+	var n := _t(cell, "", 14)
+	n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	n.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var info := _t(cell, "", 15, GOLD)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	info.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	inv_cells.append({"sb": sb, "icon": icon, "name": n, "info": info})
+
+
+## Birleşik indeksteki öğe (el 0–4, çanta 5..); yoksa boş sözlük.
+func _inv_at(idx: int) -> Dictionary:
+	var arr: Array = _g(player, "inv" if idx < 5 else "bag", [])
+	var i := idx if idx < 5 else idx - 5
+	return arr[i] if i < arr.size() and arr[i] is Dictionary else {}
+
+
+## Taşıma kurala uyar mı: gerçek diziye dokunmadan kopyada dener.
+func _inv_can_move(a: int, b: int) -> bool:
+	return Weapons.move_item(_g(player, "inv", []).duplicate(true), _g(player, "bag", []).duplicate(true), a, b)
+
+
+func _inv_move(a: int, b: int) -> void:
+	inv_sel = -1
+	if player and player.has_method("move_item") and _inv_can_move(a, b):
+		player.move_item(a, b)
+		inv_msg.text = " "
+	else:
+		inv_msg.text = tr("Buraya taşınamaz: silah / ekipman 1–3, yapı / eşya 4–5. slota girer.")
+		inv_msg.add_theme_color_override("font_color", RED)
+
+
+func _inv_drag(_at: Vector2, idx: int) -> Variant:
+	var d := _inv_at(idx)
+	if d.is_empty():
+		return null
+	inv_sel = -1
+	var pv := PanelContainer.new()
+	_t(pv, _item(d).name, 18, GOLD)
+	set_drag_preview(pv)
+	return {"inv_from": idx}
+
+
+func _inv_can_drop(_at: Vector2, data: Variant, idx: int) -> bool:
+	return data is Dictionary and data.has("inv_from") and _inv_can_move(int(data.inv_from), idx)
+
+
+func _inv_drop(_at: Vector2, data: Variant, idx: int) -> void:
+	_inv_move(int(data.inv_from), idx)
+
+
+## Tıkla-tıkla taşıma (sürükleyemeyenler için): ilk tık seçer, ikinci tık hedefe taşır, aynı slota tık seçimi bırakır.
+func _inv_click(e: InputEvent, idx: int) -> void:
+	if not (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT):
+		return
+	if inv_sel < 0:
+		inv_sel = idx if not _inv_at(idx).is_empty() else -1
+	elif inv_sel == idx:
+		inv_sel = -1
+	else:
+		_inv_move(inv_sel, idx)
+
+
+func _refresh_inv() -> void:
+	var held: int = _g(player, "slot", 0) - 1
+	for i in inv_cells.size():
+		var c: Dictionary = inv_cells[i]
+		var d := _inv_at(i)
+		var it := _item(d) if not d.is_empty() else {"name": "", "color": Color(GREY, 0.5)}
+		c.name.text = it.name
+		var tex: Texture2D = main.weapon_icon(str(d.id)) if d.get("kind", "") == "weapon" else null
+		c.icon.texture = tex
+		c.name.size_flags_vertical = SIZE_SHRINK_END if tex else SIZE_FILL
+		c.name.add_theme_font_size_override("font_size", 12 if tex else 14)
+		var txt := "x%d" % d.count if int(d.get("count", 1)) > 1 else ""
+		if d.get("kind", "") in ["weapon", "equip"]:
+			txt = tr("Sv %d") % int(d.get("lvl", 1))
+		c.info.text = txt
+		c.sb.border_color = GOLD if i == inv_sel else it.color
+		c.sb.bg_color = Color(0.95, 0.5, 0.1, 0.42) if i == inv_sel else Color(0.95, 0.5, 0.1, 0.2) if i == held else Color(0, 0, 0, 0.5)
+
+
+func _toggle_inv() -> void:
+	inv_wrap.visible = not inv_wrap.visible
+	inv_sel = -1
+	inv_msg.text = " "
+	if inv_wrap.visible:
+		_refresh_inv()
 
 
 func _build_cards() -> void:
@@ -490,6 +604,12 @@ func _build_cards() -> void:
 	cards_box.hide()
 	add_child(cards_box)
 	_t(cards_box, "SEVİYE ATLADIN!", 34, GOLD, true).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cards_wait_lbl = _t(self, "", 18, GOLD)
+	cards_wait_lbl.set_anchors_preset(PRESET_CENTER_BOTTOM)
+	cards_wait_lbl.grow_horizontal = GROW_DIRECTION_BOTH
+	cards_wait_lbl.grow_vertical = GROW_DIRECTION_BEGIN
+	cards_wait_lbl.offset_bottom = -176
+	cards_wait_lbl.hide()
 	cards_hint = _t(cards_box, "", 16)
 	cards_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cards_row = HBoxContainer.new()
@@ -570,9 +690,9 @@ func _process(dt: float) -> void:
 			var final := wave >= wave_count and not endless
 			var sub := (tr("%s geliyor!") % _boss_title(bt)) if bt != "" else ("Son dalga: kuleyi ne pahasına olursa olsun koru." if final else "Yaratıklar geliyor!")
 			_banner("SON DALGA!" if final else tr("DALGA %d") % wave, sub, RED if bt != "" or final else ORANGE, _mods_text(mods, false))
-			cards_at = Time.get_ticks_msec() + 1500 # kartlar afişin üstüne binmesin
 		elif st == "break" and state == "fight":
-			_banner("DALGA TEMİZLENDİ", "Mola: B ile mağaza, TAB ile stat puanları.", Color(0.5, 1.0, 0.6),
+			cards_at = Time.get_ticks_msec() + 1500 # kartlar afişin üstüne binmesin
+			_banner("DALGA TEMİZLENDİ", "Mola: B ile mağaza, E ile çanta.", Color(0.5, 1.0, 0.6),
 				(tr("Sıradaki dalga:  %s") % _mods_text(mods, false)) if not mods.is_empty() else "")
 		elif ended and not end_wrap.visible:
 			_show_end(st == "won", wave)
@@ -624,6 +744,8 @@ func _process(dt: float) -> void:
 	break_lbl.visible = st == "break"
 	ready_lbl.visible = st == "break"
 	break_lbl.text = tr("MOLA   •   sıradaki dalgaya %d sn") % ceili(_g(td, "time_left", 0.0))
+	if cards_box.visible and multiplayer.get_peers().is_empty(): # tek kişilikte kart açıkken geri sayım durur
+		break_lbl.text = tr("MOLA   •   sıradaki dalgaya %d sn   (kart seçerken süre durur)") % ceili(_g(td, "time_left", 0.0))
 
 	# XP: yumuşak dolar; seviye atlayınca sıfırdan başlar ve parlar.
 	var lv: int = _g(td, "level", 1)
@@ -650,7 +772,9 @@ func _process(dt: float) -> void:
 		card_sig = sig
 		_make_cards(cards)
 	var was := cards_box.visible
-	cards_box.visible = not cards.is_empty() and not ended and Time.get_ticks_msec() >= cards_at
+	cards_box.visible = not cards.is_empty() and st == "break" and Time.get_ticks_msec() >= cards_at # savaşta açılmaz, molaya kalır
+	cards_wait_lbl.visible = not cards.is_empty() and st == "fight"
+	cards_wait_lbl.text = tr("Seviye atladın: %d kart molada seçilecek") % _g(player, "pending", 1)
 	if cards_box.visible and not was and banner.modulate.a > 0.0: # kartlar gelince afiş hemen çekilir: üst üste binmez
 		banner_tw.kill()
 		banner_tw = create_tween()
@@ -667,7 +791,12 @@ func _process(dt: float) -> void:
 		cards_row.modulate = Color(1.0, 0.6, 0.55) if banish_mode else Color.WHITE
 	_tut_tick(st, ended, cards_box.visible)
 
-	stats_panel.visible = Input.is_action_pressed("stats") and not ended and not shop_wrap.visible
+	if inv_wrap.visible:
+		if ended or not alive or shop_wrap.visible:
+			inv_wrap.hide()
+			inv_sel = -1
+		else:
+			_refresh_inv()
 	if shop_wrap.visible:
 		shop_money.text = "₺ %d" % money
 		for r in shop_rows:
@@ -676,8 +805,6 @@ func _process(dt: float) -> void:
 	if slow_t <= 0.0:
 		slow_t = 0.2
 		_refresh_ready(st)
-		if stats_panel.visible:
-			_refresh_stats(st)
 
 	if not main.settings_wrap.visible: # imleç: panel açıkken görünür, yoksa oyuna yakalı
 		var m := Input.MOUSE_MODE_VISIBLE if want_mouse() else Input.MOUSE_MODE_CAPTURED
@@ -692,7 +819,7 @@ func cards_open() -> bool:
 
 ## Savaşta kartlar imleci serbest bırakmaz (oyuncu donmasın, tuşla seçilir); molada her panel bırakır.
 func want_mouse() -> bool:
-	return shop_wrap.visible or end_wrap.visible or (state == "break" and (stats_panel.visible or cards_open()))
+	return shop_wrap.visible or end_wrap.visible or inv_wrap.visible or (state == "break" and cards_open())
 
 
 func _input(e: InputEvent) -> void:
@@ -703,6 +830,10 @@ func _input(e: InputEvent) -> void:
 	var key: int = e.physical_keycode if e is InputEventKey and e.pressed and not e.echo else 0
 	if shop_wrap.visible and (e.is_action_pressed("ui_cancel") or e.is_action_pressed("shop")):
 		shop_wrap.hide()
+	elif inv_wrap.visible and (e.is_action_pressed("ui_cancel") or e.is_action_pressed("interact")):
+		_toggle_inv()
+	elif e.is_action_pressed("interact") and not shop_wrap.visible and _g(player, "hp", 1) > 0:
+		_toggle_inv()
 	elif cards_open() and key in [KEY_1, KEY_2, KEY_3]:
 		_choose(key - KEY_1)
 	elif cards_open() and key == KEY_4:
@@ -820,7 +951,7 @@ func _update_inv() -> void:
 	cells[5].sb.border_color = ch.get("color", GREY) if cd <= 0.0 else Color(GREY, 0.6)
 
 
-# ---------- Hazır listesi ve stat paneli ----------
+# ---------- Hazır listesi ----------
 
 ## td.gd oyları ready_votes + is_ready() ile tutuyor; sözleşmedeki ready sözlüğü de kabul edilir.
 func _is_ready(id: int) -> bool:
@@ -846,63 +977,6 @@ func _num(id: String, v: float) -> String:
 	if id in ["armor", "crit"]:
 		return tr("%%%d") % roundi(v * 100.0) # Türkçe "%10", İngilizce "10%"
 	return "%+d%%" % roundi((v - 1.0) * 100.0)
-
-
-func _refresh_stats(st: String) -> void:
-	if stat_rows.size() != stat_defs.size(): # satırlar bir kez kurulur
-		for n in stat_box.get_children():
-			n.queue_free()
-		stat_rows.clear()
-		for d in stat_defs:
-			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 10)
-			stat_box.add_child(row)
-			_t(row, str(d.get("name", d.get("id", "?"))), 17).custom_minimum_size.x = 150
-			var pb := ProgressBar.new()
-			pb.show_percentage = false
-			pb.size_flags_horizontal = SIZE_EXPAND_FILL
-			pb.size_flags_vertical = SIZE_SHRINK_CENTER
-			pb.custom_minimum_size.y = 10
-			pb.add_theme_stylebox_override("background", main._sb(Color(0, 0, 0, 0.6), 4, 0))
-			pb.add_theme_stylebox_override("fill", main._sb(ORANGE, 4, 0))
-			pb.min_value = float(d.get("base", 0.0))
-			pb.max_value = maxf(float(d.get("max", 0.0)), pb.min_value + 0.001)
-			row.add_child(pb)
-			var val := _t(row, "", 17)
-			val.custom_minimum_size.x = 64
-			val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			var b := _button(row, "+", _spend.bind(str(d.get("id", ""))))
-			b.custom_minimum_size = Vector2(36, 30)
-			b.add_theme_font_size_override("font_size", 20)
-			stat_rows.append({"def": d, "bar": pb, "val": val, "btn": b})
-	var stats: Dictionary = _g(player, "stats", {})
-	var pts: int = _g(player, "stat_points", 0)
-	for r in stat_rows:
-		var v: float = float(stats.get(r.def.get("id", ""), r.def.get("base", 0.0)))
-		r.bar.value = v
-		r.val.text = _num(str(r.def.get("id", "")), v)
-		# görünmez olunca yer kaplamaya devam etsin: satırlar zıplamasın
-		r.btn.modulate.a = 1.0 if st == "break" and pts > 0 and v < r.bar.max_value - 0.0001 else 0.0
-		r.btn.disabled = r.btn.modulate.a < 1.0
-	stats_sub.text = tr("%s   •   Seviye %d") % [tr(_g(player, "ch", {}).get("name", "Oyuncu")), _g(player, "level", level)]
-	points_lbl.text = (tr("Harcanacak stat puanı: %d   (+ ile dağıt)") % pts) if st == "break" and pts > 0 \
-		else (tr("Stat puanı: %d   (molada harcanır)") % pts)
-	var inv: Array = _g(player, "inv", [])
-	if str(inv) != inv_sig:
-		inv_sig = str(inv)
-		for n in weap_box.get_children():
-			n.queue_free()
-		for d in inv:
-			if d is Dictionary and d.get("kind", "") in ["weapon", "equip"]:
-				var it := _item(d)
-				var lvl := int(d.get("lvl", 1))
-				_t(weap_box, tr("%s    Sv %d   %s") % [it.name, lvl, "●".repeat(clampi(lvl, 0, 8))], 17, it.color.lightened(0.2))
-
-
-func _spend(id: String) -> void:
-	if player and player.has_method("spend_point"):
-		player.spend_point(id)
-	slow_t = 0.0
 
 
 # ---------- Seviye kartları ----------
@@ -1029,6 +1103,7 @@ func _banish_toggle() -> void:
 # ---------- Mağaza ----------
 
 func _open_shop() -> void:
+	inv_wrap.hide()
 	if shop_rows.size() != shop.size():
 		for n in shop_grid.get_children():
 			n.queue_free()
@@ -1077,6 +1152,8 @@ func _buy(it: Dictionary, b: Button) -> void:
 	for i in [3, 4]:
 		if i < inv.size() and (inv[i].is_empty() or inv[i].get("id") == it.get("id")):
 			room = true
+	if Weapons.bag_slot(inv, _g(player, "bag", []), {"kind": "build", "id": it.get("id", "")}) >= 0:
+		room = true
 	if money < price:
 		_shop_say(tr("Para yetmiyor: %d ₺ eksik.") % (price - money), RED)
 		var x := b.position.x
@@ -1084,7 +1161,7 @@ func _buy(it: Dictionary, b: Button) -> void:
 		for dx in [8, -8, 5, -5, 0]:
 			tw.tween_property(b, "position:x", x + dx, 0.04)
 	elif not room:
-		_shop_say("Envanter dolu: 4. ve 5. slotta yer yok. Önce elindeki yapıyı yerleştir.", RED)
+		_shop_say(tr("Envanter ve çanta dolu. Önce elindeki yapıyı yerleştir."), RED)
 	elif td and td.has_method("buy") and td.buy(str(it.get("id", ""))) != false:
 		_shop_say(tr("%s alındı.") % tr(str(it.get("name", ""))), Color(0.5, 1.0, 0.6))
 	else:
@@ -1162,7 +1239,7 @@ func _tut_next() -> void:
 		Profile.set_tutorial_done()
 		_banner("", "Rehber tamam. İyi savunmalar!", Color.WHITE)
 		return
-	tut_n = _builds() if tut == 2 else int(_g(player, "stat_points", 0))
+	tut_n = _builds()
 	_tut_show()
 
 
@@ -1171,7 +1248,7 @@ func _builds() -> int:
 	return b.get_child_count() if b is Node else 0
 
 
-## Adım koşulları (yerel): 0 ilk ateş (_input), 1 yapı alındı, 2 yapı kuruldu, 3 hazır oyu, 4 kart seçildi, 5 stat puanı harcandı.
+## Adım koşulları (yerel): 0 ilk ateş (_input), 1 yapı alındı, 2 yapı kuruldu, 3 hazır oyu, 4 kart seçildi.
 func _tut_tick(st: String, ended: bool, cards_vis: bool) -> void:
 	if tut < 0:
 		return
@@ -1194,13 +1271,6 @@ func _tut_tick(st: String, ended: bool, cards_vis: bool) -> void:
 			tut_n = card_sig.hash()
 		elif tut_seen and card_sig.hash() != tut_n:
 			_tut_next()
-	elif tut == 5:
-		show = show and st == "break"
-		var pts: int = _g(player, "stat_points", 0)
-		if pts < tut_n or (stats_panel.visible and pts == 0):
-			_tut_next()
-		else:
-			tut_n = pts
 	tut_card.visible = show and tut >= 0
 
 

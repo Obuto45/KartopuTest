@@ -103,6 +103,8 @@ func _ready() -> void:
 
 	# TD maçı (Steam'siz tek kişilik)
 	main._solo_td()
+	_scan(main.ui, "solo_zorluk")
+	main._solo_start("normal")
 	await _wait(1.5)
 	var ui = main.td_ui
 	var td = get_tree().get_first_node_in_group("td")
@@ -112,9 +114,9 @@ func _ready() -> void:
 	ui._open_shop()
 	_scan(ui, "td_shop")
 	ui.shop_wrap.hide()
-	ui.stats_panel.show()
-	ui._refresh_stats("break")
-	_scan(ui.stats_panel, "td_stats")
+	ui._toggle_inv()
+	_scan(ui.inv_wrap, "td_inv")
+	ui._toggle_inv()
 	_eq(ui._num("armor", 0.1) == "10%", "yüzde biçimi: " + ui._num("armor", 0.1))
 	var cards: Array = W.pool(me) # bütün kart türleri: stat, karakter, yeni silah, ekipman
 	me.ups["bazooka:blast"] = 2

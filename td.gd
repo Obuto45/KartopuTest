@@ -27,8 +27,6 @@ const SLAM_EVERY := 8.0 # Kara Şövalye yer darbesi aralığı
 const SLAM_T := 1.2 # darbe uyarısı süresi
 const SLAM_R := 5.0
 const SLAM_DMG := 30
-const DROP_LIFE := 15.0 # yerdeki eşya kaç sn kalır
-const DROP_R := 1.5 # alma uzaklığı
 const CHEST_MONEY := 40
 const CHEST_XP := 40
 
@@ -79,9 +77,6 @@ var _mod_seed := 0 # maç başında host'ta randi(); sıradaki dalganın modlar�
 var _boss: Node3D # host: yaşayan boss
 var _slam_cd := SLAM_EVERY
 var _summoned := false
-var _drops := {} # host: eşya no -> [konum, id, yaş]
-var _dnodes := {} # her makine: eşya no -> görsel düğüm
-var _did := 0
 var _alive := {} # host: peer -> canlı mıydı (ölüm sayacı için)
 
 
@@ -115,6 +110,20 @@ func _ready() -> void:
 	if multiplayer.is_server():
 		_mod_seed = randi()
 		mods = Balance.roll_mods(1, difficulty, _mod_seed)
+
+
+## Tek kişilikte oyuncunun seçilmemiş kartı varsa mola geri sayımı durur (kart ekranı açıkken dalga başlamasın).
+## Çok oyunculuda durmaz: bir oyuncu herkesi bekletmesin (kartlar sonraki molaya kalır).
+func _cards_wait() -> bool:
+	if not multiplayer.get_peers().is_empty():
+		return false
+	var pl := _players()
+	if pl == null:
+		return false
+	for p in pl.get_children():
+		if p.is_multiplayer_authority() and not (p.get("cards") as Array).is_empty():
+			return true
+	return false
 
 
 func is_ready(peer: int) -> bool:
@@ -154,7 +163,7 @@ func _to_owner(p: Node, method: String, args: Array) -> bool:
 
 
 func _physics_process(dt: float) -> void:
-	if state == "break":
+	if state == "break" and (not _cards_wait() or _all_ready()): # G ile hazır diyen kartları beklemez
 		time_left = maxf(time_left - dt, 0.0)
 	if not multiplayer.is_server():
 		return
@@ -164,10 +173,9 @@ func _physics_process(dt: float) -> void:
 		var p := _players()
 		plist = p.get_children() if p else []
 		_track_deaths()
-	_drops_tick(dt)
 	if state == "break":
-		if time_left > 3.0 and _all_ready(): # herkes hazır: kısa geri sayım
-			time_left = 3.0
+		if time_left > Balance.READY_TIME and _all_ready(): # herkes hazır: kısa geri sayım
+			time_left = Balance.READY_TIME
 			_dirty = true
 		if time_left <= 0.0:
 			_start_wave()
@@ -230,93 +238,6 @@ func _state(a: Array) -> void:
 @rpc("authority", "call_local", "reliable")
 func _summary(d: Dictionary) -> void:
 	summary_ready.emit(d)
-
-
-## Host: yere eşya bırakır (item_id: "potion" | "bomb" | "chest"); herkeste görünür, DROP_LIFE sn durur.
-func drop(pos: Vector3, item_id: String) -> void:
-	_did += 1
-	_drops[_did] = [pos, item_id, 0.0]
-	_drop_new.rpc(_did, pos, item_id)
-
-
-@rpc("authority", "call_local", "reliable")
-func _drop_new(n: int, pos: Vector3, id: String) -> void:
-	if id == "chest" and ResourceLoader.exists("res://models/chest.glb"): # Hunyuan3D ile yapılan sandık modeli
-		var ch: Node3D = load("res://models/chest.glb").instantiate()
-		var glow := OmniLight3D.new() # altın parıltısı: yerde fark edilsin
-		glow.light_color = Color(1.0, 0.8, 0.3)
-		glow.light_energy = 1.5
-		glow.omni_range = 2.5
-		glow.position = Vector3.UP * 0.5
-		ch.add_child(glow)
-		ch.position = pos + Vector3.UP * 0.15
-		get_parent().add_child(ch)
-		ch.create_tween().set_loops().tween_property(ch, "rotation:y", TAU, 3.0).as_relative()
-		_dnodes[n] = ch
-		return
-	var mi := MeshInstance3D.new()
-	var m := StandardMaterial3D.new()
-	var c := Color(1.0, 0.8, 0.2) if id == "chest" else (Color(0.2, 0.9, 0.4) if id == "potion" else Color(0.9, 0.2, 0.2))
-	if id == "potion":
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.12
-		cm.bottom_radius = 0.2
-		cm.height = 0.45
-		mi.mesh = cm
-	else:
-		var bm := BoxMesh.new()
-		bm.size = Vector3.ONE * (0.55 if id == "chest" else 0.4)
-		mi.mesh = bm
-	m.albedo_color = c
-	m.emission_enabled = true
-	m.emission = c
-	m.emission_energy_multiplier = 0.6
-	mi.material_override = m
-	mi.position = pos + Vector3.UP * 0.5
-	get_parent().add_child(mi)
-	mi.create_tween().set_loops().tween_property(mi, "rotation:y", TAU, 2.0).as_relative()
-	_dnodes[n] = mi
-
-
-@rpc("authority", "call_local", "reliable")
-func _drop_gone(n: int) -> void:
-	if _dnodes.has(n):
-		_dnodes[n].queue_free()
-		_dnodes.erase(n)
-
-
-## Host: süresi dolanı sil, 1,5 m'ye giren ilk canlı oyuncuya ver.
-func _drops_tick(dt: float) -> void:
-	for n in _drops.keys():
-		var d: Array = _drops[n]
-		d[2] += dt
-		if d[2] >= DROP_LIFE:
-			_drops.erase(n)
-			_drop_gone.rpc(n)
-			continue
-		for p in plist:
-			if is_instance_valid(p) and p.hp > 0 and Vector2(p.global_position.x - d[0].x, p.global_position.z - d[0].z).length() < DROP_R:
-				if d[1] != "chest" and Weapons.find_slot(p.inv, {"kind": "item", "id": d[1]}) < 0:
-					continue # envanteri dolu: eşya yerde kalsın, başkası alabilsin
-				_take(n, p)
-				break
-
-
-## Eşyayı p'ye verir; zaten alınmışsa false (iki oyuncu aynı anda alırsa bir kez).
-func _take(n: int, p: Node) -> bool:
-	if not _drops.has(n):
-		return false
-	var id: String = _drops[n][1]
-	_drops.erase(n)
-	_drop_gone.rpc(n)
-	if id == "chest":
-		# shortcut: "chest" kartı player.gd gerektirir; şimdilik para + XP verir. Kart açılınca burası değişir.
-		money += CHEST_MONEY
-		_add_xp(CHEST_XP)
-		_dirty = true
-	else:
-		_to_owner(p, "add_item", [{"kind": "item", "id": id}])
-	return true
 
 
 func _add_xp(n: int) -> void:
@@ -586,9 +507,9 @@ func damage(e: Node3D, dmg: int, crit: bool, n := 0, by := 0) -> void:
 		_stat(by, "kills")
 		money += e.money
 		_add_xp(e.d.xp)
-		var id := Balance.roll_drop(randf(), e.elite)
-		if id != "":
-			drop(e.global_position, id)
+		if e.elite: # eskiden sandık düşerdi: ödül doğrudan verilir
+			money += CHEST_MONEY
+			_add_xp(CHEST_XP)
 	_dirty = true
 
 
@@ -680,7 +601,7 @@ func buy(id: String) -> bool:
 	return true
 
 
-## Yapı slotlarında (4–5) boş yer ya da aynı yapının yığını var mı? (inv: B'nin sözleşmedeki dizisi.)
+## Yapı slotlarında (4–5) ya da çantada boş yer / aynı yapının yığını var mı? (inv: B'nin sözleşmedeki dizisi.)
 func _has_room(me: Node, id: String) -> bool:
 	var inv = me.get("inv")
 	if not (inv is Array) or inv.size() < 5:
@@ -689,7 +610,8 @@ func _has_room(me: Node, id: String) -> bool:
 		var s: Dictionary = inv[i]
 		if s.is_empty() or (s.get("kind") == "build" and s.get("id") == id):
 			return true
-	return false
+	var bag = me.get("bag")
+	return bag is Array and Weapons.bag_slot(inv, bag, {"kind": "build", "id": id}) >= 0
 
 
 @rpc("any_peer", "call_remote", "reliable")

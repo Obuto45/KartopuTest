@@ -642,8 +642,8 @@ msgid "H: rehberi atla"
 msgstr "H: skip tutorial"
 
 #: td_ui.gd:388
-msgid "TAB statlar   •   B mağaza   •   G hazır   •   1–5 envanter   •   Q yetenek   •   ESC menü"
-msgstr "TAB stats   •   B shop   •   G ready   •   1–5 inventory   •   Q skill   •   ESC menu"
+msgid "E çanta   •   B mağaza   •   G hazır   •   1–5 envanter   •   Q yetenek   •   ESC menü"
+msgstr "E bag   •   B shop   •   G ready   •   1–5 inventory   •   Q skill   •   ESC menu"
 
 #: td_ui.gd:405
 msgid "SİLAH  /  EKİPMAN"
@@ -706,8 +706,8 @@ msgid "DALGA TEMİZLENDİ"
 msgstr "WAVE CLEARED"
 
 #: td_ui.gd:575
-msgid "Mola: B ile mağaza, TAB ile stat puanları."
-msgstr "Break: B for the shop, TAB for stat points."
+msgid "Mola: B ile mağaza, E ile çanta."
+msgstr "Break: B for the shop, E for the bag."
 
 #: td_ui.gd:576 td_ui.gd:610
 msgid "Sıradaki dalga:  %s"
@@ -789,17 +789,33 @@ msgstr "%s   •   Level %d"
 msgid "Oyuncu"
 msgstr "Player"
 
-#: td_ui.gd:888
-msgid "Harcanacak stat puanı: %d   (+ ile dağıt)"
-msgstr "Stat points to spend: %d   (use +)"
+#: td_ui.gd
+msgid "ENVANTER"
+msgstr "INVENTORY"
 
-#: td_ui.gd:889
-msgid "Stat puanı: %d   (molada harcanır)"
-msgstr "Stat points: %d   (spend during breaks)"
+#: td_ui.gd
+msgid "Öğeyi sürükleyip bırak ya da tıkla, sonra hedef slota tıkla. Silah / ekipman 1–3, yapı / eşya 4–5. slota girer."
+msgstr "Drag and drop an item, or click it and then click the target slot. Weapons / gear go to slots 1-3, builds / items to 4-5."
 
-#: td_ui.gd:899
-msgid "%s    Sv %d   %s"
-msgstr "%s    Lv %d   %s"
+#: td_ui.gd
+msgid "EL SLOTLARI"
+msgstr "HOTBAR"
+
+#: td_ui.gd
+msgid "ÇANTA"
+msgstr "BAG"
+
+#: td_ui.gd
+msgid "Buraya taşınamaz: silah / ekipman 1–3, yapı / eşya 4–5. slota girer."
+msgstr "Can't move it there: weapons / gear go to slots 1-3, builds / items to 4-5."
+
+#: td_ui.gd
+msgid "Sv %d"
+msgstr "Lv %d"
+
+#: td_ui.gd
+msgid "Envanter ve çanta dolu. Önce elindeki yapıyı yerleştir."
+msgstr "Inventory and bag are full. Place the build in your hand first."
 
 #: td_ui.gd:945
 msgid "✦ EVRİM"
@@ -2770,7 +2786,7 @@ msgid "Kolay"
 msgstr "Easy"
 
 #: balance.gd:82
-msgid "Normal"
+msgid "Orta"
 msgstr "Normal"
 
 #: balance.gd:83
@@ -2814,8 +2830,8 @@ msgid "Elit"
 msgstr "Elite"
 
 #: balance.gd:94
-msgid "Her kümede bir elit: 3 kat can, büyük, sandık bırakır."
-msgstr "One elite per group: triple HP, bigger, drops a chest."
+msgid "Her kümede bir elit: 3 kat can, büyük, öldürünce bonus para ve XP verir."
+msgstr "One elite per group: triple HP, bigger, gives bonus money and XP on kill."
 
 #: balance.gd:95
 msgid "Gece"
@@ -2824,3 +2840,19 @@ msgstr "Night"
 #: balance.gd:95
 msgid "Karanlık basar, görüş kısalır."
 msgstr "Darkness falls; visibility drops."
+
+#: main.gd
+msgid "Kuleyi hangi zorlukta savunacaksın?"
+msgstr "Which difficulty will you defend the tower on?"
+
+#: main.gd
+msgid "Yaratık canı %%%d  •  hasar %%%d  •  para %%%d"
+msgstr "Enemy HP %d%%  •  damage %d%%  •  money %d%%"
+
+#: td_ui.gd
+msgid "Seviye atladın: %d kart molada seçilecek"
+msgstr "Level up: %d card(s) to pick at the break"
+
+#: td_ui.gd
+msgid "MOLA   •   sıradaki dalgaya %d sn   (kart seçerken süre durur)"
+msgstr "BREAK   •   next wave in %d s   (timer pauses while picking a card)"
