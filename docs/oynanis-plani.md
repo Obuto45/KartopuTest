@@ -37,7 +37,8 @@ Faz 0 sözleşmeleri (commit `a9bd3d7`): `start_td(ids, opts)`, `td.gd` durum di
 - [x] Faz 1 birleşti: profil (32/32), silah evrimleri (15/15), dalga sistemi (10/10), giriş/lobi (tek başına oyna, açık lobi, zorluk, kilitler, GELİŞİM), tutuş 1. tur (silahlar düz, bilekler doğal; GRIP_TEST 76/120)
 - [x] Faz 2 birleşti: TD arayüzü (rehber, maç sonu özeti, boss barı, modifikatör afişi, yeniden çek/ele, evrim kartı)
 - [x] Denge: kule 3000 (+%35/oyuncu), yaratık hasarı x0.55, canı x0.85, kalabalık 0.4/0.25, zorluklar yumuşatıldı. Simde 1 oyuncu artık 10. dalgaya ulaşıyor/kazanıyor; 4 oyunculu ölçüm yeniden yapılıyor.
-- [ ] Süren: tutuş 2. tur (parmaklar silah başına, sol kol açısı), Faz 3 İngilizce yerelleştirme + menü cilası
+- [x] Faz 3 birleşti: İngilizce yerelleştirme (705 metin, I18N_TEST 853/853, Ayarlar > Dil), menü cilası
+- [ ] Süren: tutuş 2. tur (parmaklar silah başına, sol kol açısı)
 - [ ] Aşama 3: son birleştirme; tüm testler, Vulkan/OpenGL ekran görüntüleri, iki süreçli ağ testi
 - [ ] Aşama 4: commit, push, rapor
 
