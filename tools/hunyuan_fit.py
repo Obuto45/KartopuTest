@@ -46,7 +46,7 @@ def remesh(m, cells=180):
     out = vox.marching_cubes
     out.apply_transform(vox.transform)
     trimesh.smoothing.filter_taubin(out, iterations=10) # basamakları yumuşatır, hacmi korur
-    return out
+    return max(out.split(only_watertight=False), key=lambda b: len(b.faces)) # kopuk artıklar boyutu bozmasın
 
 
 def fit(ref, src):
@@ -102,9 +102,10 @@ def main(argv=None):
         sel = np.nonzero(face_mat == i)[0]
         if len(sel):
             part = new.submesh([sel], append=True)
+            part.unmerge_vertices() # yüz başına normal: low-poly yontulmuş görünüm
             part.visual = trimesh.visual.TextureVisuals(material=mat)
             scene.add_geometry(part, geom_name=f"mat{i}")
-    scene.export(a.cikti)
+    scene.export(a.cikti, include_normals=True) # normalsiz GLB'de Godot ışığı düz çizer
     print(f"yazıldı: {a.cikti} ({len(new.faces)} üçgen, {len(scene.geometry)} malzeme grubu)")
     return err
 

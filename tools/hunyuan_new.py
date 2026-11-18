@@ -3,6 +3,8 @@ Tek parça yüzey yapar, dik oturtur, hedef boya ölçekler, sadeleştirir; renk
 birkaç düz renge indirir (low-poly görünüm).
 
   python tools/hunyuan_new.py art/hunyuan/sandik/hunyuan.glb art/hunyuan/sandik/three_quarter.png models/chest.glb --boy 0.6
+  python tools/hunyuan_new.py art/hunyuan/sandik/hunyuan.glb - models/chest.glb --ana 8c552d --serit ebb432
+    (görsel yerine "-": kabartmalar (kenar, kayış, kilit) --serit, gerisi --ana rengine boyanır)
 Gerekenler: trimesh numpy scipy fast-simplification scikit-image pillow
 """
 import argparse
@@ -103,6 +105,15 @@ def colorize(mesh, img, az, el, box, k):
     return pal, lab_all, visible.mean()
 
 
+def relief_colors(mesh, ana, serit, frac=0.25):
+    """Görselsiz boyama: düzleştirilmiş kopyadan en çok dışarı taşan yüzler (kabartma) serit, gerisi ana renk."""
+    sm = mesh.copy()
+    trimesh.smoothing.filter_laplacian(sm, iterations=15)
+    d = ((mesh.vertices - sm.vertices) * mesh.vertex_normals).sum(1)[mesh.faces].mean(1)
+    pal = np.array([[int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)] for h in (ana, serit)])
+    return pal, (d >= np.quantile(d, 1 - frac)).astype(int)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("hunyuan")
@@ -111,6 +122,8 @@ def main(argv=None):
     ap.add_argument("--boy", type=float, default=0.6, help="en uzun kenar (m)")
     ap.add_argument("--ucgen", type=int, default=2500)
     ap.add_argument("--renk", type=int, default=6, help="düz renk sayısı")
+    ap.add_argument("--ana", default="8c552d", help="görselsiz: ana renk (hex)")
+    ap.add_argument("--serit", default="ebb432", help="görselsiz: kabartma rengi (hex)")
     a = ap.parse_args(argv)
     m = trimesh.load(a.hunyuan, force="mesh")
     if not m.is_watertight:
@@ -121,23 +134,30 @@ def main(argv=None):
     v, f = fast_simplification.simplify(m.vertices.astype(np.float32), m.faces.astype(np.int32), target_reduction=red)
     m = trimesh.Trimesh(v, f, process=True)
     trimesh.repair.fix_normals(m)
-    img = Image.open(a.gorsel)
-    (iou, az, el), box = find_view(m, img)
-    print(f"bakış: azimut {np.degrees(az):.0f}°, yükseklik {np.degrees(el):.0f}°, siluet uyumu {iou:.2f}")
-    pal, lab, seen = colorize(m, img, az, el, box, a.renk)
-    print(f"görselden boyanan yüz oranı: {seen:.0%}")
+    if m.volume < 0:
+        m.invert()
+    iou = None
+    if a.gorsel == "-":
+        pal, lab = relief_colors(m, a.ana, a.serit)
+    else:
+        img = Image.open(a.gorsel)
+        (iou, az, el), box = find_view(m, img)
+        print(f"bakış: azimut {np.degrees(az):.0f}°, yükseklik {np.degrees(el):.0f}°, siluet uyumu {iou:.2f}")
+        pal, lab, seen = colorize(m, img, az, el, box, a.renk)
+        print(f"görselden boyanan yüz oranı: {seen:.0%}")
     m.apply_translation([0, -m.bounds[0][1], 0]) # tabanı y=0'a
     scene = trimesh.Scene()
     for i, c in enumerate(pal):
         sel = np.nonzero(lab == i)[0]
         if len(sel):
             part = m.submesh([sel], append=True)
+            part.unmerge_vertices() # yüz başına normal: low-poly yontulmuş görünüm
             lin = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4) # görsel sRGB, glTF rengi doğrusal
             mat = trimesh.visual.material.PBRMaterial(baseColorFactor=list((np.clip(lin, 0, 1) * 255).round().astype(int)) + [255],
                                                       roughnessFactor=0.7, metallicFactor=0.0, name=f"renk{i}")
             part.visual = trimesh.visual.TextureVisuals(material=mat)
             scene.add_geometry(part, geom_name=f"renk{i}")
-    scene.export(a.cikti)
+    scene.export(a.cikti, include_normals=True) # normalsiz GLB'de Godot ışığı düz çizer
     print(f"yazıldı: {a.cikti} ({len(m.faces)} üçgen, {len(scene.geometry)} renk, boy {m.extents.max():.2f} m)")
     return iou
 
