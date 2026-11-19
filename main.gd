@@ -87,8 +87,6 @@ var spec_lbl: Label
 var slots := [] # [[StyleBoxFlat, Label], ...]
 var settings_wrap: ColorRect
 var vol_lbl: Label
-var bus_sliders: Array[HSlider] = [] # dil değişince etiketleri yenilenir
-const BUS_LABELS := {"sfx": "Efekt sesi: %d%%", "music": "Müzik: %d%%", "ui": "Arayüz sesi: %d%%", "ambient": "Ortam sesi: %d%%"}
 var res_opt: OptionButton
 var close_btn: Button
 var ver_lbl: Label
@@ -123,7 +121,6 @@ func _ready() -> void:
 		if multiplayer.is_server():
 			set_mode.rpc_id(id, mode))
 	_set_menu_bg(true)
-	Sfx.music("menu")
 	_show_page("intro")
 	set_mode("arena")
 	if "--selftest" in OS.get_cmdline_user_args(): # yayın öncesi: paketlenmiş exe'de haritayı açıp bir kare kaydeder
@@ -1272,7 +1269,7 @@ func _open_growth() -> void:
 					Profile.cosm_select(slot, "" if on else id)
 				elif Profile.cosm_buy(id):
 					Profile.cosm_select(slot, id)
-					Sfx.ui("buy")
+					Sfx.play2d(Sfx.hurt, -6.0)
 				_open_growth())
 			b.custom_minimum_size.x = 140
 			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1316,8 +1313,6 @@ func _retranslate() -> void:
 	_update_char_btn()
 	_on_volume(Settings.volume)
 	shake_slider.value_changed.emit(shake_slider.value)
-	for sl in bus_sliders:
-		sl.value_changed.emit(sl.value)
 	set_mode(mode) # lobi yazıları, zorluk listesi, silah düğmesi, üyeler
 	if page == "growth":
 		_open_growth()
@@ -1371,18 +1366,6 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 	vol.value_changed.connect(_on_volume)
 	v.add_child(vol)
 	_on_volume(vol.value)
-	for k in Settings.BUSES: # SFX / Müzik / Arayüz / Ortam
-		var lbl := _lbl(v, "", 17)
-		var sl := HSlider.new()
-		sl.min_value = 0.0; sl.max_value = 1.0; sl.step = 0.05
-		sl.value_changed.connect(func(x: float) -> void:
-			Settings.bus_vol[k] = x
-			Settings.apply_audio()
-			lbl.text = tr(BUS_LABELS[k]) % roundi(x * 100.0))
-		sl.value = Settings.bus_vol[k]
-		sl.value_changed.emit(sl.value)
-		bus_sliders.append(sl)
-		v.add_child(sl)
 
 	_lbl(v, "— GÖRÜNTÜ —", 15).modulate = Color(1, 1, 1, 0.6)
 	_lbl(v, "Ekran modu", 17)
@@ -1634,8 +1617,6 @@ func start_game(ids: Array) -> void:
 	_clear_world()
 	_set_menu_bg(false)
 	_build_world()
-	Sfx.music("battle")
-	Sfx.ambient("forest")
 	for i in ids.size():
 		var p: CharacterBody3D = PlayerScript.new()
 		p.name = str(ids[i])
@@ -1664,7 +1645,6 @@ func start_world(ids: Array) -> void:
 	players.name = "Players"
 	world.add_child(players)
 	w.players = players
-	Sfx.music("world")
 	var sp: Array = w.spawns()
 	for i in ids.size():
 		var p: CharacterBody3D = PlayerScript.new()
@@ -1686,8 +1666,6 @@ func start_td(ids: Array, opts := {}) -> void:
 	_clear_world()
 	_set_menu_bg(false)
 	_build_world(TD_CLEAR)
-	Sfx.music("battle")
-	Sfx.ambient("forest")
 	for i in ids.size():
 		var p: CharacterBody3D = PlayerScript.new()
 		p.name = str(ids[i])
@@ -1782,8 +1760,6 @@ func _back_to_menu() -> void:
 	if Net.steam_ok and Net.lobby_id != 0 and multiplayer.is_server():
 		Steam.setLobbyJoinable(Net.lobby_id, true)
 	_clear_world()
-	Sfx.music("menu")
-	Sfx.ambient("")
 	round_over = false
 	hud.hide()
 	settings_wrap.hide()

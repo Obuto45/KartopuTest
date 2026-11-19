@@ -683,7 +683,6 @@ func _update_env(dt: float) -> void:
 	var b := biome_at(p.x, p.z)
 	if b != _biome:
 		_biome = b
-		Sfx.ambient(NAMES[b])
 
 
 ## Kamera konumu (world.gd'nin kökte, dönüşsüz durduğu varsayılır: yerel = dünya).

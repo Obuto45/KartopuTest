@@ -171,8 +171,6 @@ var vm: Node3D # kendi gözünden eller + silah (yalnız yerel oyuncuda; viewmod
 var held_id := "" # çıkarılmış silah; _held() değişince _switched
 var busy := "" # ateşi kilitleyen animasyon: draw, reload, drink, prime, charge ("" = serbest)
 var reloading := false
-var _step_d := 0.0 # son adımdan beri yol
-var _air_t := 0.0 # havada geçen süre
 var reload_t := 0.0 # doldurmanın kalan süresi (HUD çubuğu)
 var anim_gen := 0 # vm'siz oyuncuda zamanlanmış klip olaylarını geçersiz kılar
 var flame_t := 0.0 # alev pilotu büyük kalsın
@@ -516,30 +514,11 @@ func _physics_process(dt: float) -> void:
 	_animate(dt)
 
 
-## Adım (yürürken her ~2.3 m), zıplama ve iniş sesleri.
-func _foley(dt: float, on_floor: bool) -> void:
-	var flat := Vector2(velocity.x, velocity.z).length()
-	if on_floor:
-		if _air_t > 0.3:
-			Sfx.foley("land", global_position)
-		_air_t = 0.0
-		_step_d += flat * dt if flat > 1.0 else 0.0
-		if _step_d >= 2.3:
-			_step_d = 0.0
-			Sfx.foley("step", global_position)
-	else:
-		if _air_t == 0.0 and velocity.y > 0.0:
-			Sfx.foley("jump", global_position)
-		_air_t += dt
-
-
 func _local(dt: float) -> void:
 	var alive := hp > 0
 	var active := alive and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and bt("stun") <= 0.0
 	var can_act := active and bt("silence") <= 0.0
 	var on_floor := is_on_floor()
-	if alive:
-		_foley(dt, on_floor)
 	if not alive:
 		_spectate(dt)
 	if on_floor:
@@ -1448,8 +1427,6 @@ func _td_use(just: bool) -> void:
 			if busy != "":
 				return
 			if mag > 0 and int(it.get("ammo", mag)) <= 0:
-				if just:
-					Sfx.weapon(it.id, "empty", global_position)
 				start_reload() # yedek sınırsız: boşken tetik doldurur
 				return
 			if it.id == "grenade": # bas: pim çek; bırakınca at (_release_throw)
@@ -1527,7 +1504,6 @@ func start_reload() -> void:
 		return
 	reloading = true
 	busy = "reload"
-	Sfx.weapon(held_id, "reload", global_position, -4.0)
 	var a := st("attack")
 	if w.get("per_shell", false): # pompalı: başla, fişek fişek, bitir
 		reload_t = Weapons.reload_time(w, a, false) * (mag - ammo) + 0.6 / a
@@ -1845,7 +1821,7 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 	w.dmg *= _pow(w) * k
 	kick = w.kick
 	shake(origin, w.kick * 0.2)
-	Sfx.weapon(id, "fire", origin, -8.0 if w.rate < 0.2 else -2.0, Sfx.fire if w.kind in ["shot", "rocket"] else Sfx.whoosh)
+	Sfx.play3d(Sfx.fire if w.kind in ["shot", "rocket"] else Sfx.whoosh, origin, -8.0 if w.rate < 0.2 else -2.0)
 	if w.kind in ["shot", "rocket"] and dirs.size() > 0:
 		_muzzle_fx(_muzzle(), dirs[0], w.kind == "shot")
 	for i in dirs.size():
@@ -1891,7 +1867,6 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 					if em.distance_to(origin) < w.range + 1.0 and (em - origin).normalized().dot(fl) > 0.3:
 						Ragdoll.poke(em, fl * 5.0 * k)
 						Ragdoll.flinch(e.get("model"), em, fl * 5.0 * k)
-						Sfx.weapon("sword", "hit", em, -4.0)
 				if mine:
 					_td_arc(w, origin, d)
 

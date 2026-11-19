@@ -5,9 +5,7 @@ const PATH := "user://settings.cfg"
 const MODES := ["Pencere", "Tam ekran", "Kenarlıksız tam ekran"]
 const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440)]
 
-var volume := 0.8 # 0..1 (Master)
-const BUSES := {"sfx": "SFX", "music": "Music", "ui": "UI", "ambient": "Ambient"}
-var bus_vol := {"sfx": 1.0, "music": 0.7, "ui": 1.0, "ambient": 0.8} # bus başına 0..1
+var volume := 0.8 # 0..1
 var mode := 0 # MODES indeksi
 var resolution := 0 # RESOLUTIONS indeksi
 const QUALITIES := ["Düşük", "Orta", "Yüksek"]
@@ -23,8 +21,6 @@ func _ready() -> void:
 	var c := ConfigFile.new()
 	if c.load(PATH) == OK: # dosya elle bozulmuş olabilir: sınırla
 		volume = clampf(float(c.get_value("audio", "volume", volume)), 0.0, 1.0)
-		for k in BUSES:
-			bus_vol[k] = clampf(float(c.get_value("audio", k, bus_vol[k])), 0.0, 1.0)
 		mode = clampi(int(c.get_value("display", "mode", mode)), 0, MODES.size() - 1)
 		resolution = clampi(int(c.get_value("display", "resolution", resolution)), 0, RESOLUTIONS.size() - 1)
 		quality = clampi(int(c.get_value("graphics", "quality", quality)), 0, QUALITIES.size() - 1)
@@ -56,17 +52,9 @@ func apply_language() -> void:
 
 
 func apply_audio() -> void:
-	_set_bus("Master", volume)
-	for k in BUSES:
-		_set_bus(BUSES[k], bus_vol[k])
-
-
-func _set_bus(bus_name: String, v: float) -> void:
-	var bus := AudioServer.get_bus_index(bus_name)
-	if bus < 0:
-		return
-	AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(v, 0.0001)))
-	AudioServer.set_bus_mute(bus, v <= 0.001)
+	var bus := AudioServer.get_bus_index("Master")
+	AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(volume, 0.0001)))
+	AudioServer.set_bus_mute(bus, volume <= 0.001)
 
 
 func apply_display() -> void:
@@ -89,8 +77,6 @@ func apply_display() -> void:
 func save() -> void:
 	var c := ConfigFile.new()
 	c.set_value("audio", "volume", volume)
-	for k in BUSES:
-		c.set_value("audio", k, bus_vol[k])
 	c.set_value("display", "mode", mode)
 	c.set_value("display", "resolution", resolution)
 	c.set_value("graphics", "quality", quality)
