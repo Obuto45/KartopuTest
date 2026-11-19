@@ -19,6 +19,12 @@ var scare := 0.0
 var body: Node3D
 var head: Node3D
 var wings: Array = []
+# Açık dünya (world.gd) ayarları; TD'de varsayılanlar kullanılır.
+var bounds := Rect2(-HALF, -HALF, HALF * 2.0, HALF * 2.0) # dolaşma alanı, ebeveyne göre
+var keep_out := KEEP_OUT # ebeveynin merkezinden uzak durma yarıçapı (0: yok)
+var ground := Callable() # (x, z) -> zemin yüksekliği; yoksa y = 0
+var vis_end := 0.0 # parçaların görünürlük mesafesi (0: sınırsız)
+var speed := 0.9 # gezinme hızı (kaçarken 5)
 
 
 func _part(parent: Node3D, mesh: Mesh, pos: Vector3, size: Vector3, col: Color) -> MeshInstance3D:
@@ -30,11 +36,24 @@ func _part(parent: Node3D, mesh: Mesh, pos: Vector3, size: Vector3, col: Color) 
 	m.albedo_color = col
 	m.roughness = 0.9
 	mi.material_override = m
+	mi.visibility_range_end = vis_end
 	parent.add_child(mi)
 	return mi
 
 
 func _ready() -> void:
+	_model()
+	add_to_group("chickens")
+	add_to_group("enemies")
+	if not chick and scale == Vector3.ONE:
+		scale = Vector3.ONE * rng.randf_range(0.9, 1.15)
+	target = position
+	wait = rng.randf_range(0.0, 3.0)
+	t = rng.randf() * 10.0
+
+
+## Görünüş: body, head ve wings burada kurulur (critter.gd başka hayvan için ezer).
+func _model() -> void:
 	var white: Color = Color(1.0, 0.85, 0.3) if chick else [Color(0.97, 0.95, 0.9), Color(0.72, 0.42, 0.22), Color(0.25, 0.22, 0.2)][rng.randi() % 3]
 	var orange := Color(0.95, 0.55, 0.1)
 	var ball := SphereMesh.new()
@@ -64,21 +83,17 @@ func _ready() -> void:
 	if not chick:
 		_part(head, ball, Vector3(0, 0.24, -0.02), Vector3(0.05, 0.1, 0.14), Color(0.85, 0.12, 0.1)) # ibik
 		_part(head, ball, Vector3(0, 0.03, -0.12), Vector3(0.05, 0.08, 0.05), Color(0.85, 0.12, 0.1))
-	add_to_group("chickens")
-	add_to_group("enemies")
-	scale = Vector3.ONE * (0.5 if chick else rng.randf_range(0.9, 1.15))
-	target = position
-	wait = rng.randf_range(0.0, 3.0)
-	t = rng.randf() * 10.0
+	if chick:
+		scale = Vector3.ONE * 0.5
 
 
 func _pick(from: Vector3, away: Vector3, dist: float) -> void:
 	var dir := away if away != Vector3.ZERO else Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))
 	var p := from + dir.normalized().rotated(Vector3.UP, rng.randf_range(-0.6, 0.6)) * dist
-	p.x = clampf(p.x, -HALF, HALF)
-	p.z = clampf(p.z, -HALF, HALF)
-	if Vector2(p.x, p.z).length() < KEEP_OUT:
-		p = Vector3(p.x, 0, p.z).normalized() * KEEP_OUT if p.length() > 0.1 else Vector3(KEEP_OUT, 0, 0)
+	p.x = clampf(p.x, bounds.position.x, bounds.end.x)
+	p.z = clampf(p.z, bounds.position.y, bounds.end.y)
+	if Vector2(p.x, p.z).length() < keep_out:
+		p = Vector3(p.x, 0, p.z).normalized() * keep_out if p.length() > 0.1 else Vector3(keep_out, 0, 0)
 	target = Vector3(p.x, 0, p.z)
 
 
@@ -130,10 +145,13 @@ func _process(dt: float) -> void:
 				flee(p.global_position)
 				break
 	var to := target - position
+	to.y = 0.0
 	var moving := to.length() > 0.15
 	if moving:
-		var spd := 5.0 if scare > 0.0 else 0.9
+		var spd := 5.0 if scare > 0.0 else speed
 		position += to.normalized() * minf(spd * dt, to.length())
+		if ground.is_valid():
+			position.y = ground.call(position.x, position.z)
 		rotation.y = lerp_angle(rotation.y, atan2(-to.x, -to.z), minf(dt * 10.0, 1.0))
 	else:
 		wait -= dt
@@ -145,5 +163,5 @@ func _process(dt: float) -> void:
 	# dururken ara ara yere eğilip gagalar; yürürken başı ileri geri sallanır
 	var peck := maxf(sin(t * 1.3 + position.x), 0.0) * absf(sin(t * 9.0))
 	head.rotation.x = sin(t * 9.0) * 0.12 if moving else -peck * 0.9
-	for i in 2:
+	for i in wings.size():
 		wings[i].rotation.z = (1.0 if i == 0 else -1.0) * (absf(sin(t * 28.0)) * 1.1 if run else 0.0)

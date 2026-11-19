@@ -74,9 +74,11 @@ func variants(name: String) -> Array:
 	if not _files.has(name):
 		var a: Array = []
 		var base := "res://audio/%s" % name
-		for path in [base + ".ogg"] + range(1, 30).map(func(i: int) -> String: return "%s_%d.ogg" % [base, i]):
-			if ResourceLoader.exists(path):
-				a.append(load(path))
+		for stem in [base] + range(1, 30).map(func(i: int) -> String: return "%s_%d" % [base, i]):
+			for ext in [".ogg", ".wav", ".mp3"]:
+				if ResourceLoader.exists(stem + ext):
+					a.append(load(stem + ext))
+					break
 		_files[name] = a
 	return _files[name]
 
@@ -135,7 +137,10 @@ func play2d(stream: AudioStream, db := 0.0, bus := &"SFX") -> void:
 
 ## Arayüz sesi: "click" / "hover" (UI bus'ı).
 func ui(name: String) -> void:
-	play2d(get("ui_" + name), -6.0, &"UI")
+	var fb = get("ui_" + name) # buy / error için prosedürel yedek yok
+	var s := pick("ui_" + name, fb if fb is AudioStream else null)
+	if s != null:
+		play2d(s, -6.0, &"UI")
 
 
 ## Silah sesi: audio/weapons/<id>_<event>.ogg (event: fire, reload, empty); yoksa fallback (boş olabilir).

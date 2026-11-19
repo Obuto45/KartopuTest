@@ -38,3 +38,4 @@ Kullanılan her dosyanın kaynağını ve lisansını aşağıya yaz:
 
 | Dosya | Kaynak | Lisans |
 |---|---|---|
+| Tüm dosyalar | Kenney.nl / OpenGameArt.org (ayrıntı: audio/LISANS.md) | CC0 |

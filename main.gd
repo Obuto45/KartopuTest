@@ -3,6 +3,7 @@ extends Node3D
 
 const PlayerScript := preload("res://player.gd")
 const ForestScript := preload("res://forest.gd")
+const WorldScript := preload("res://world.gd")
 const ExplosionScript := preload("res://explosion.gd")
 const Chars := preload("res://characters.gd")
 const TdUi := preload("res://td_ui.gd")
@@ -23,7 +24,8 @@ const SPAWNS := [Vector3(-14, 1, -14), Vector3(14, 1, 14), Vector3(-14, 1, 14), 
 const TD_CLEAR := [Vector3(0, 0, 0), Vector3(6, 0, 0), Vector3(-6, 0, 0), Vector3(0, 0, 6), Vector3(0, 0, -6)]
 const TD_SPAWNS := [Vector3(5, 1, 0), Vector3(-5, 1, 0), Vector3(0, 1, 5), Vector3(0, 1, -5)]
 const MODES := {"arena": ["ARENA", "Lobi kur, arkadaşlarını davet et, savaşı başlat.", "▶  Oyunu Başlat (host)"],
-	"td": ["TOWER DEFENSE", "Rapunzel'in kulesini birlikte savunun. Tek başına da başlatabilirsin.", "▶  Savunmayı Başlat (host)"]}
+	"td": ["TOWER DEFENSE", "Rapunzel'in kulesini birlikte savunun. Tek başına da başlatabilirsin.", "▶  Savunmayı Başlat (host)"],
+	"world": ["AÇIK DÜNYA", "Lanetli topraklarda birlikte dolaşın. Tek başına da başlatabilirsin.", "▶  Dünyayı Başlat (host)"]}
 const MENU_SPOT := Vector3(14, 0, 14) # menü sahnesi bir doğma noktasında: etrafı ağaçsız
 const MENU_CREW := [40, 50, 34, 8, 26] # seçilen karakterin yanında duranlar
 # Menü kamerası [konum, bakılan nokta], ekibe göre: giriş ekranı geniş ve ortalı, menüde ekip sağda.
@@ -85,6 +87,7 @@ var spec_lbl: Label
 var slots := [] # [[StyleBoxFlat, Label], ...]
 var settings_wrap: ColorRect
 var vol_lbl: Label
+var bus_sliders: Array[HSlider] = [] # dil değişince etiketleri yenilenir
 const BUS_LABELS := {"sfx": "Efekt sesi: %d%%", "music": "Müzik: %d%%", "ui": "Arayüz sesi: %d%%", "ambient": "Ortam sesi: %d%%"}
 var res_opt: OptionButton
 var close_btn: Button
@@ -469,6 +472,9 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
 		"Rapunzel'in kulesini savun. 10 dalga yaratık, seviye atladıkça kart seç, molada mağazadan duvar, tuzak ve taret al.",
 		"▶  KULEYİ SAVUN", _pick_mode.bind("td"))
+	_mode_card(cards, "AÇIK DÜNYA", "Co-op  •  1–4 oyuncu", Color(0.7, 0.45, 1.0),
+		"Lanetli orman, sis bataklığı, kül dağları ve yıkık krallık: 1 km'lik karanlık dünyayı keşfet.",
+		"▶  DÜNYAYA ÇIK", _pick_mode.bind("world"))
 	var quick := HBoxContainer.new()
 	quick.alignment = BoxContainer.ALIGNMENT_CENTER
 	quick.add_theme_constant_override("separation", 20)
@@ -633,7 +639,7 @@ func _gap(h: float) -> Control:
 
 func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String, btn: String, cb: Callable) -> void:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(400, 380)
+	card.custom_minimum_size = Vector2(370, 380)
 	var sb := _sb(Color(0.05, 0.06, 0.1, 0.88), 16, 28)
 	sb.set_border_width_all(2)
 	sb.border_width_top = 6
@@ -648,7 +654,7 @@ func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String
 	t.add_theme_color_override("font_color", c.lightened(0.4))
 	var dl := _txt(v, desc, 17, 0.9)
 	dl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dl.custom_minimum_size.x = 340 # sıfır genişlikte sarma, kutuyu dev yüksekliğe şişirmesin
+	dl.custom_minimum_size.x = 310 # sıfır genişlikte sarma, kutuyu dev yüksekliğe şişirmesin
 	var b := _btn(v, btn, cb if cb.is_valid() else func(): pass)
 	b.custom_minimum_size.y = 54
 	b.add_theme_font_size_override("font_size", 20)
@@ -1266,7 +1272,7 @@ func _open_growth() -> void:
 					Profile.cosm_select(slot, "" if on else id)
 				elif Profile.cosm_buy(id):
 					Profile.cosm_select(slot, id)
-					Sfx.play2d(Sfx.hurt, -6.0)
+					Sfx.ui("buy")
 				_open_growth())
 			b.custom_minimum_size.x = 140
 			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1310,6 +1316,8 @@ func _retranslate() -> void:
 	_update_char_btn()
 	_on_volume(Settings.volume)
 	shake_slider.value_changed.emit(shake_slider.value)
+	for sl in bus_sliders:
+		sl.value_changed.emit(sl.value)
 	set_mode(mode) # lobi yazıları, zorluk listesi, silah düğmesi, üyeler
 	if page == "growth":
 		_open_growth()
@@ -1344,11 +1352,17 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 	settings_wrap.add_child(center)
 	var panel := PanelContainer.new()
 	center.add_child(panel)
+	var sc := ScrollContainer.new() # ekrana sığmazsa kaydırılır
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size = Vector2(450, minf(640.0, get_viewport().get_visible_rect().size.y * 0.85))
+	panel.add_child(sc)
 	var v := VBoxContainer.new()
 	v.custom_minimum_size = Vector2(420, 0)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 10)
-	panel.add_child(v)
+	sc.add_child(v)
 	_lbl(v, "AYARLAR", 32).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lbl(v, "— SES —", 15).modulate = Color(1, 1, 1, 0.6)
 
 	vol_lbl = _lbl(v, "", 17)
 	var vol := HSlider.new()
@@ -1367,8 +1381,10 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 			lbl.text = tr(BUS_LABELS[k]) % roundi(x * 100.0))
 		sl.value = Settings.bus_vol[k]
 		sl.value_changed.emit(sl.value)
+		bus_sliders.append(sl)
 		v.add_child(sl)
 
+	_lbl(v, "— GÖRÜNTÜ —", 15).modulate = Color(1, 1, 1, 0.6)
 	_lbl(v, "Ekran modu", 17)
 	var mode := OptionButton.new()
 	for m in Settings.MODES:
@@ -1502,8 +1518,8 @@ func _refresh() -> void:
 	members.visible = members.text != "" # boşken sütunda yer kaplamasın (720p'de Geri sığsın)
 	start_btn.disabled = not (Net.online() and multiplayer.is_server())
 	if not Net.online():
-		start_btn.disabled = mode != "td"
-		start_btn.text = "▶  Tek Başına Başla" if mode == "td" else "Önce lobi kur (Steam)"
+		start_btn.disabled = mode == "arena"
+		start_btn.text = "▶  Tek Başına Başla" if mode != "arena" else "Önce lobi kur (Steam)"
 	elif not multiplayer.is_server():
 		start_btn.text = "Host'un başlatması bekleniyor…"
 	else:
@@ -1607,6 +1623,8 @@ func _on_start() -> void:
 		var d := diff_id if solo_free_diff or _unlocked("diff:" + diff_id) else "normal"
 		solo_free_diff = false
 		start_td.rpc(ids, {"difficulty": d, "endless": endless and _unlocked("mode:endless")})
+	elif mode == "world":
+		start_world.rpc(ids)
 	else:
 		start_game.rpc(ids)
 
@@ -1623,6 +1641,36 @@ func start_game(ids: Array) -> void:
 		p.name = str(ids[i])
 		p.set_multiplayer_authority(ids[i])
 		p.spawn_pos = SPAWNS[i % SPAWNS.size()]
+		players.add_child(p)
+	round_over = false
+	center_lbl.text = ""
+	ui.hide()
+	hud.show()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Açık dünya: harita world.gd'den, oyuncular merkezdeki düzlükte doğar; düşman ve tur yok.
+@rpc("authority", "call_local", "reliable")
+func start_world(ids: Array) -> void:
+	_clear_world()
+	_set_menu_bg(false)
+	world = Node3D.new()
+	world.name = "World"
+	add_child(world)
+	var w: Node3D = WorldScript.new()
+	w.name = "OpenWorld"
+	world.add_child(w)
+	players = Node3D.new()
+	players.name = "Players"
+	world.add_child(players)
+	w.players = players
+	Sfx.music("world")
+	var sp: Array = w.spawns()
+	for i in ids.size():
+		var p: CharacterBody3D = PlayerScript.new()
+		p.name = str(ids[i])
+		p.set_multiplayer_authority(ids[i])
+		p.spawn_pos = sp[i % sp.size()]
 		players.add_child(p)
 	round_over = false
 	center_lbl.text = ""
@@ -1669,6 +1717,10 @@ func start_td(ids: Array, opts := {}) -> void:
 func report_death(dead_id: int) -> void:
 	if not multiplayer.is_server() or round_over or players == null:
 		return
+	if mode == "world":
+		await get_tree().create_timer(3.0).timeout
+		respawn_peer.rpc(dead_id)
+		return
 	var alive := players.get_children().filter(func(p): return p.hp > 0 and p.name.to_int() != dead_id)
 	if alive.size() > 1:
 		return
@@ -1696,6 +1748,13 @@ func restart_round() -> void:
 	if players:
 		for p in players.get_children():
 			p.respawn()
+
+
+@rpc("authority", "call_local", "reliable")
+func respawn_peer(id: int) -> void:
+	var p: Node = players.get_node_or_null(str(id)) if players else null
+	if p:
+		p.respawn()
 
 
 func _on_peer_left(id: int) -> void:
