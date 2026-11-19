@@ -2931,3 +2931,24 @@ msgstr "Select"
 
 msgid "Seçili"
 msgstr "Selected"
+
+msgid "AÇIK DÜNYA"
+msgstr "OPEN WORLD"
+
+msgid "Lanetli topraklarda birlikte dolaşın. Tek başına da başlatabilirsin."
+msgstr "Roam the cursed lands together. You can also start alone."
+
+msgid "▶  Dünyayı Başlat (host)"
+msgstr "▶  Start World (host)"
+
+msgid "Lanetli orman, sis bataklığı, kül dağları ve yıkık krallık: 1 km'lik karanlık dünyayı keşfet."
+msgstr "Cursed forest, misty swamp, ash mountains and a ruined kingdom: explore a dark 1 km world."
+
+msgid "▶  DÜNYAYA ÇIK"
+msgstr "▶  ENTER THE WORLD"
+
+msgid "— SES —"
+msgstr "— AUDIO —"
+
+msgid "— GÖRÜNTÜ —"
+msgstr "— DISPLAY —"

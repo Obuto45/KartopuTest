@@ -217,7 +217,11 @@ func _state(a: Array) -> void:
 	if state != _seen_state:
 		_seen_state = state
 		if state == "fight":
-			Sfx.play2d(Sfx.thunder, -8.0)
+			var horn := Sfx.pick("wave", Sfx.thunder) # önce boru, bitince savaş davulu
+			Sfx.play2d(horn, -8.0)
+			var drums := Sfx.pick("wave_drums")
+			if drums != null:
+				get_tree().create_timer(horn.get_length()).timeout.connect(Sfx.play2d.bind(drums, -8.0))
 			wave_started.emit(wave)
 		elif state == "won" or state == "lost":
 			if state == "lost":

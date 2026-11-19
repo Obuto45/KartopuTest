@@ -20,10 +20,10 @@ func _init() -> void:
 
 	var sfx: Node = root.get_node("Sfx")
 	_eq(sfx.pick("fire", sfx.fire) == sfx.fire, "dosyasız fire yedeğe düşmedi")
-	_eq(sfx.variants("weapons/pistol_fire").is_empty(), "olmayan dosya bulundu")
-	sfx.weapon("pistol", "fire", Vector3.ZERO, 0.0, sfx.fire)
-	sfx.weapon("pistol", "reload") # dosya ve yedek yok: sessiz, hatasız
-	sfx.music("battle")
+	_eq(sfx.variants("weapons/boomerang_fire").is_empty(), "olmayan dosya bulundu")
+	sfx.weapon("boomerang", "fire", Vector3.ZERO, 0.0, sfx.fire)
+	sfx.weapon("boomerang", "reload") # dosya ve yedek yok: sessiz, hatasız
+	sfx.music("yok_muzik")
 	sfx.ambient("forest")
 	_eq(sfx._loops["music"].p == null, "dosyasız müzik oynuyor")
 	sfx.ui("click")

@@ -1891,6 +1891,7 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 					if em.distance_to(origin) < w.range + 1.0 and (em - origin).normalized().dot(fl) > 0.3:
 						Ragdoll.poke(em, fl * 5.0 * k)
 						Ragdoll.flinch(e.get("model"), em, fl * 5.0 * k)
+						Sfx.weapon("sword", "hit", em, -4.0)
 				if mine:
 					_td_arc(w, origin, d)
 
