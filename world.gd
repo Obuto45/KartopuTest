@@ -13,20 +13,23 @@ const CELLS := 32 # chunk başına ızgara: 2 m'lik kareler
 const NAMES := ["cursed_forest", "swamp", "ash_mountains", "ruins"]
 # Görünüm forest.gd'nin (kule savunması) zemin/ağaç/kaya/gök stilidir; biyomlar onun tonlamasıdır.
 # Zemin tonu: rgb çarpan, a doygunluk (ground.gdshader köşe rengi).
-const GROUND := [Color(0.62, 0.48, 0.8, 0.5), Color(0.72, 0.8, 0.68, 0.45), Color(1.55, 0.95, 0.72, 0.0), Color(1.05, 1.0, 0.85, 0.8)]
+const GROUND := [Color(0.62, 0.48, 0.8, 0.5), Color(0.72, 0.8, 0.68, 0.45), Color(1.3, 0.94, 0.62, 0.0), Color(1.05, 1.0, 0.85, 0.8)]
 # Yaprak: forest rengini bu renge doğru çeker (a = miktar).
+const CURSED_LEAF := [Color(0.2, 0.06, 0.24), Color(0.3, 0.05, 0.1), Color(0.1, 0.08, 0.3), Color(0.15, 0.12, 0.2)] # ağaç başına ton: mor, kızıl, mavi-mor, gri-mor
 const LEAF := [Color(0.2, 0.06, 0.24, 0.6), Color(0.24, 0.26, 0.18, 0.55), Color(0.2, 0.2, 0.2, 1.0), Color(0, 0, 0, 0.0)]
-const FOG := [Color(0.5, 0.36, 0.62), Color(0.56, 0.62, 0.52), Color(0.8, 0.5, 0.36), Color(0.82, 0.74, 0.62)]
-const FOG_DENSITY := [0.011, 0.01, 0.008, 0.005]
-const SUN := [Color(0.82, 0.66, 0.9), Color(0.82, 0.9, 0.78), Color(1.0, 0.62, 0.42), Color(1.0, 0.84, 0.64)]
+const FOG := [Color(0.5, 0.36, 0.62), Color(0.56, 0.62, 0.52), Color(0.62, 0.45, 0.32), Color(0.82, 0.74, 0.62)]
+const FOG_DENSITY := [0.011, 0.006, 0.005, 0.005]
+# Biyom renk derecelemesi: [kontrast, doygunluk]; forest.gd'nin 1.06/1.12 değerine karşı (TD env'i ayrı kaynak, dokunulmaz)
+const GRADE := [Vector2(1.12, 1.2), Vector2(1.1, 1.08), Vector2(1.16, 1.12), Vector2(1.06, 1.12)]
+const SUN := [Color(0.82, 0.66, 0.9), Color(0.82, 0.9, 0.78), Color(1.0, 0.68, 0.38), Color(1.0, 0.84, 0.64)]
 const RADIUS := [2, 3, 4] # Settings.quality -> yüklü chunk yarıçapı
 const VIS := [90.0, 140.0, 200.0] # dekor görünürlük mesafesi
 const GRASS_VIS := [30.0, 45.0, 60.0]
-const GRASS_N := [2500, 4000, 6000] # chunk başına çimen denemesi (görsel; çarpışmayı etkilemez)
+const GRASS_N := [6000, 10000, 15000] # chunk başına çimen denemesi (görsel; çarpışmayı etkilemez)
 # Gök ortam ışığı payı ve yerine gelen renk: kül dağında morumsu gök, kızıl-gri zemini maviye boyamasın.
-const FILL := [Color(0.6, 0.72, 1.0), Color(0.6, 0.72, 1.0), Color(1.0, 0.55, 0.4), Color(0.6, 0.72, 1.0)] # dolgu ışığı rengi
+const FILL := [Color(0.6, 0.72, 1.0), Color(0.6, 0.72, 1.0), Color(0.95, 0.6, 0.32), Color(0.6, 0.72, 1.0)] # dolgu ışığı rengi
 const SKY_AMB := [1.0, 1.0, 0.15, 1.0]
-const AMB_COL := [Color(0.45, 0.32, 0.55), Color(0.4, 0.45, 0.38), Color(0.7, 0.4, 0.28), Color(0.6, 0.52, 0.42)]
+const AMB_COL := [Color(0.45, 0.32, 0.55), Color(0.4, 0.45, 0.38), Color(0.52, 0.37, 0.25), Color(0.6, 0.52, 0.42)]
 const HILL := [Color(0.13, 0.07, 0.17), Color(0.12, 0.16, 0.1), Color(0.24, 0.12, 0.08), Color(0.15, 0.18, 0.1)]
 const ROADS := 6 # merkezden dışarı kıvrılan toprak yol sayısı
 const SMALL := ["grass", "stem", "cap", "glow", "fstem", "fhead", "lily"] # kısa mesafede görünür, gölgesiz
@@ -41,7 +44,7 @@ var stage_ms := {} # adım -> en uzun süre (ms): far, decor, flora, build
 var _hn := FastNoiseLite.new()
 var _bn := FastNoiseLite.new()
 var _f: Node3D # forest.gd örneği (ağaca eklenmez): ağ üreticileri, ağaç yerleşimi, malzemeler
-var _water := StandardMaterial3D.new()
+var _water := ShaderMaterial.new()
 var _meshes := {}
 var _mats := {}
 var _ground_mat: ShaderMaterial
@@ -93,7 +96,7 @@ func height(x: float, z: float, w := PackedFloat32Array()) -> float:
 		w = weights(x, z)
 	var n := _hn.get_noise_2d(x, z)
 	var ridge := 1.0 - absf(n)
-	var h := w[0] * (2.0 + 6.0 * n) + w[1] * (-0.8 + 1.4 * n) + w[2] * (4.0 + 40.0 * ridge * ridge) + w[3] * (1.5 + 3.0 * n)
+	var h := w[0] * (2.0 + 6.0 * n) + w[1] * (-0.8 + 1.4 * n) + w[2] * (3.0 + 19.0 * ridge * ridge) + w[3] * (1.5 + 3.0 * n)
 	return lerpf(1.5, h, smoothstep(24.0, 80.0, Vector2(x, z).length())) # merkez düz: doğma alanı
 
 
@@ -116,7 +119,7 @@ func path_dist(x: float, z: float) -> float:
 
 ## Zemindeki toprak oranı (0..1): yolun ortasında 1, 1.3-2.8 m arasında söner.
 func path_at(x: float, z: float) -> float:
-	return 1.0 - smoothstep(1.3, 2.8, path_dist(x, z))
+	return 1.0 - smoothstep(1.4, 2.3, path_dist(x, z))
 
 
 ## Merkezdeki düzlükte dört doğma noktası (zeminin 1 m üstü).
@@ -128,9 +131,10 @@ func spawns() -> Array:
 
 
 func _ready() -> void:
-	_water.albedo_color = Color(0.1, 0.15, 0.11, 0.78)
-	_water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_water.roughness = 0.04
+	var wsh := Shader.new() # Düşük kalitede depth'siz ucuz yol (#define CHEAP)
+	wsh.code = ("#define CHEAP
+" if Settings.quality == 0 else "") + FileAccess.get_file_as_string("res://shaders/world_water.gdshader")
+	_water.shader = wsh
 	_make_meshes()
 	_horizon()
 	_particles()
@@ -196,14 +200,25 @@ func _process(dt: float) -> void:
 				_decor(pk, chunks[pk], chunks[pk].get_node("Body"))
 				_pending.append([pk, 2])
 				_took("decor", t0)
-			elif e[1] == 2:
+			elif e[1] == 2 or e[1] == 5 or e[1] == 6: # çimen üç karede, üçte bir (en ağır iş); tek MultiMesh'e birleşir
 				var grng := RandomNumberGenerator.new()
-				grng.seed = chunks[pk].get_meta("grass_seed")
-				var items: Dictionary = chunks[pk].get_meta("items")
-				_grass(items, chunks[pk], grng)
-				_add_items(chunks[pk], items)
+				grng.seed = chunks[pk].get_meta("grass_seed") + e[1]
+				var buf := _grass(chunks[pk], grng)
+				if e[1] == 2:
+					chunks[pk].set_meta("grass_buf", buf)
+					_pending.append([pk, 5])
+				elif e[1] == 5:
+					chunks[pk].set_meta("grass_buf", chunks[pk].get_meta("grass_buf") + buf)
+					_pending.append([pk, 6])
+				else:
+					_add_items(chunks[pk], {"grass": chunks[pk].get_meta("grass_buf") + buf})
+					chunks[pk].remove_meta("grass_buf")
+					_pending.append([pk, 3])
+				_took("grass", t0)
+			elif e[1] == 3:
+				_add_items(chunks[pk], chunks[pk].get_meta("items"))
 				chunks[pk].remove_meta("items")
-				_pending.append([pk, 3])
+				_pending.append([pk, 4])
 				_took("items", t0)
 			else:
 				_flora(pk, chunks[pk])
@@ -268,6 +283,10 @@ func _build(k: Vector2i) -> void:
 			var c := Color(0, 0, 0, 0)
 			for b in 4:
 				c += GROUND[b] * w[b]
+			var v := _hn.get_noise_2d(x * 6.0 + 300.0, z * 6.0) # ikincil leke: koyu/açık, hafif sıcak-soğuk
+			c.r *= 1.0 + 0.3 * v
+			c.g *= 1.0 + 0.2 * v
+			c.b *= 1.0 - 0.15 * v
 			var h := height(x, z, w)
 			hs.append(h)
 			ps.append(path_at(x, z))
@@ -330,6 +349,8 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED ^ (k.x * 73856093) ^ (k.y * 19349663)
 	_f._vis.seed = rng.seed
+	var vr := RandomNumberGenerator.new() # yalnız görsel ekler: çarpışan sıranın rng'sine dokunmaz
+	vr.seed = rng.seed ^ 0x5bd1e995
 	_tree_list = []
 	var items := {}
 	for key in _meshes:
@@ -348,26 +369,56 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 			0: # sık, koyu-morumsu orman
 				if n % 3 != 2:
 					_tree(items, body, lp, s, rng, b)
-				else:
-					_bush(items, lp, rng, b)
+				else: # alt katman: çalı öbeği, eğrelti, dibinde mantar (_flora ağaç listesinden okur)
+					for c in 2:
+						_bush(items, lp + Vector3(rng.randf_range(-1.5, 1.5), 0, rng.randf_range(-1.5, 1.5)), rng, b)
+					for c in 7:
+						var tilt := Basis(Vector3.UP, c * TAU / 7.0 + rng.randf()) * Basis(Vector3.RIGHT, rng.randf_range(0.6, 1.0))
+						items.reed.append([Transform3D(tilt.scaled(Vector3(2.0, rng.randf_range(0.7, 1.1), 0.6)), lp + Vector3(1.8, -0.05, 0.8)),
+							Color(0.1, 0.16, 0.08).lerp(Color(0.2, 0.1, 0.22), rng.randf())])
+					_tree_list.append([lp, 0.6, b])
+					if n % 9 == 2: # mor-gri yosunlu kaya
+						var r := vr.randf_range(0.6, 1.4)
+						var q := lp + Vector3(-1.5, -r * 0.35, -1.0)
+						items.rock.append([Transform3D(Basis(Vector3.UP, vr.randf() * TAU).scaled(Vector3(r, r * 0.7, r)), q), Color(0.26, 0.22, 0.3)])
+						_sats(items, "rock", q + Vector3(0, r * 0.35, 0), r, Color(0.22, 0.2, 0.26), vr)
 			1: # sazlık, seyrek solgun ağaç
 				if lp.y < 0.4:
-					for c in 4:
+					for c in 8:
 						var o := Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))
-						items.reed.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(1, rng.randf_range(1.2, 2.2), 1)), lp + o), Color(0.36, 0.38, 0.2)])
+						items.reed.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(1, rng.randf_range(1.2, 2.2), 1)), lp + o),
+							Color(0.2, 0.3, 0.1).lerp(Color(0.38, 0.4, 0.14), rng.randf())]) # yeşil-zeytin
 				elif n % 6 == 0:
 					_tree(items, body, lp, s * 0.8, rng, b)
 				elif n % 3 == 0:
 					_bush(items, lp, rng, b)
+				elif n % 5 == 1: # yosunlu koyu kaya, yarısı gömülü
+					var r := rng.randf_range(0.6, 1.8)
+					items.rock.append([Transform3D(rot.scaled(Vector3(r, r * 0.7, r)), lp - Vector3(0, r * 0.35, 0)),
+						Color(0.2, 0.26, 0.2).lerp(Color(0.3, 0.33, 0.26), rng.randf())])
+					_sats(items, "rock", lp, r, Color(0.2, 0.27, 0.18), vr)
 			2: # kül dağı: yosunsuz gri/kızıl forest kayaları, seyrek kuru ağaç
 				if n % 2 == 0:
 					var r := rng.randf_range(0.8, 3.5)
-					items.ash.append([Transform3D(rot.scaled(Vector3(r, r * rng.randf_range(0.6, 0.9), r)), lp - Vector3(0, r * 0.2, 0)),
-						Color(0.34, 0.32, 0.31).lerp(Color(0.5, 0.2, 0.13), rng.randf() * 0.7)])
+					items.ash.append([Transform3D(rot.scaled(Vector3(r, r * rng.randf_range(0.6, 0.9), r)), lp - Vector3(0, r * 0.35, 0)),
+						Color(0.3, 0.31, 0.32).lerp(Color(0.34, 0.3, 0.27), rng.randf())])
+					_sats(items, "ash", lp, r, Color(0.22, 0.2, 0.19), vr)
+					var sl := absf(height(wx + 2.0, wz) - lp.y) + absf(height(wx, wz + 2.0) - lp.y)
+					if sl > 1.2: # dik yamaç: kayalık çıkıntı öbeği, yamaca yaslı
+						for c in vr.randi_range(2, 4):
+							var cr := vr.randf_range(0.9, 2.2)
+							var q := lp + Vector3(vr.randf_range(-3, 3), 0, vr.randf_range(-3, 3))
+							q.y = height(node.position.x + q.x, node.position.z + q.z) - cr * 0.7
+							items.ash.append([Transform3D(Basis.from_euler(Vector3(vr.randf_range(-0.5, 0.5), vr.randf() * TAU, vr.randf_range(-0.5, 0.5))).scaled(Vector3(cr * 0.8, cr * 1.3, cr * 0.8)), q),
+								Color(0.2, 0.19, 0.19).lerp(Color(0.3, 0.29, 0.28), vr.randf())])
 					if r > 2.0:
 						_shape(body, SphereShape3D.new(), lp, Vector3(r * 0.75, 0, 0))
-				elif n % 9 == 1:
+				elif n % 9 == 1: # dallı ölü ağaç: gövdeden açılı çıkan yapraksız dallar
 					items.trunk.append([Transform3D(rot.scaled(Vector3(0.7 * s, 6.0 * s, 0.7 * s)), lp), Color(0.32, 0.3, 0.3)])
+					for c in 4:
+						var br := Basis(Vector3.UP, c * TAU / 4.0 + rng.randf()) * Basis(Vector3.RIGHT, rng.randf_range(0.6, 1.1))
+						var bl := rng.randf_range(1.5, 2.8) * s
+						items.trunk.append([Transform3D(br.scaled(Vector3(0.22 * s, bl, 0.22 * s)), lp + Vector3(0, rng.randf_range(2.5, 5.3) * s, 0)), Color(0.3, 0.28, 0.28)])
 					_shape(body, CylinderShape3D.new(), lp + Vector3(0, 3.0 * s, 0), Vector3(0.4 * s, 6.0 * s, 0))
 			3: # kalıntı: forest duvarı gibi örülmüş taş, payanda, sarmaşık; arada forest ağaçları
 				if n % 4 == 0:
@@ -375,21 +426,42 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 					var c := lp + Vector3(0, sz.y * 0.5 - 0.3, 0)
 					items.wall.append([Transform3D(rot.scaled(sz), c), Color(1, 1, 1)])
 					_shape(body, BoxShape3D.new(), c, sz, rot)
+					var st := vr.randf_range(0.25, 0.45) # basamak: bir uçta yükselen kırık blok
+					var sx := vr.randf_range(0.6, 1.2) * signf(vr.randf() - 0.5)
+					items.wall.append([Transform3D(rot.scaled(Vector3(sz.x * st, sz.y * 0.5, 0.95)), lp + rot * Vector3(sx * sz.x * 0.35, sz.y * 0.8 - 0.3, 0)), Color(0.95, 0.93, 0.9)])
+					for v in vr.randi_range(1, 3): # düşmüş bloklar ve moloz duvar dibinde
+						var bs := vr.randf_range(0.35, 0.8)
+						var q := lp + rot * Vector3(vr.randf_range(-0.5, 0.5) * sz.x, bs * 0.3, vr.randf_range(0.8, 1.8) * signf(vr.randf() - 0.5))
+						items.pillar.append([Transform3D(Basis.from_euler(Vector3(vr.randf_range(-0.4, 0.4), vr.randf() * TAU, vr.randf_range(-0.4, 0.4))).scaled(Vector3(bs * 1.4, bs, bs)), q), Color(1.1, 1.07, 1.0)])
+					_sats(items, "rock", lp + rot * Vector3(0, 0, 0.9), 1.2, Color(0.4, 0.37, 0.33), vr)
 					for v in 2: # tepede sarmaşık, dipte çalı
 						var r := rng.randf_range(0.6, 1.0)
-						var q := lp + rot * Vector3(rng.randf_range(-0.4, 0.4) * sz.x, sz.y - 0.4 if v == 0 else r * 0.3, 0.0 if v == 0 else 0.7)
+						var ux := rng.randf_range(-0.4, 0.4) # wall ağı üst kenarı birim x'te 0.35*|sin(9x)| oyulur: sarmaşık oyuğa otursun
+						var q := lp + rot * Vector3(ux * sz.x, sz.y - 0.3 - 0.35 * sz.y * absf(sin(ux * 9.0)) if v == 0 else 0.0, 0.0 if v == 0 else 0.7)
 						items.blob.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(r * 1.3, r * (0.5 if v == 0 else 0.75), r * 1.3)), q),
 							Color(0.06, 0.2, 0.05).lerp(Color(0.16, 0.3, 0.06), rng.randf())])
 				elif n % 4 == 1:
 					var ph := rng.randf_range(1.5, 3.7)
 					var c := lp + Vector3(0, ph * 0.5 - 0.2, 0)
+					if n % 3 == 0 and path_dist(wx, wz) > 8.0: # devrik kırık sütun (yoldan uzakta): yatay yarım gövde + yerinde kalan kütük
+						var hl := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.FORWARD, PI * 0.5)
+						var hc := lp + hl * Vector3(0, ph * 0.5 + 0.8, 0) + Vector3(0, 0.5, 0)
+						items.pillar.append([Transform3D(hl.scaled(Vector3(1.2, ph, 1.2)), hc), Color(1.15, 1.12, 1.05)])
+						_shape(body, BoxShape3D.new(), hc, Vector3(1.2, ph, 1.2), hl)
+						ph = 0.8
+						c = lp + Vector3(0, 0.2, 0)
 					items.pillar.append([Transform3D(rot.scaled(Vector3(1.5, ph, 1.5)), c), Color(1.2, 1.17, 1.1)])
 					_shape(body, BoxShape3D.new(), c, Vector3(1.5, ph, 1.5), rot)
+					items.pillar.append([Transform3D(rot.scaled(Vector3(2.0, 0.4, 2.0)), lp + Vector3(0, 0.0, 0)), Color(1.05, 1.02, 0.96)]) # kaide
+					if ph > 1.0:
+						items.pillar.append([Transform3D(rot.scaled(Vector3(1.9, 0.35, 1.9)), lp + Vector3(0, ph - 0.2 + 0.17, 0)), Color(1.05, 1.02, 0.96)]) # başlık
 				elif n % 4 == 2:
 					_tree(items, body, lp, s, rng, b)
 				else:
 					var r := rng.randf_range(0.4, 1.0)
-					items.rock.append([Transform3D(rot.scaled(Vector3(r, r * 0.7, r)), lp), _f._rock_cols[n % 3]])
+					items.rock.append([Transform3D(rot.scaled(Vector3(r, r * 0.7, r)), lp - Vector3(0, r * 0.25, 0)), # gri-kahve, yarı gömülü
+						[Color(0.4, 0.37, 0.33), Color(0.46, 0.41, 0.35), Color(0.34, 0.33, 0.31)][n % 3]])
+					_sats(items, "rock", lp, r, Color(0.38, 0.35, 0.31), vr)
 	node.set_meta("trees", _tree_list)
 	node.set_meta("items", items)
 	node.set_meta("grass_seed", rng.seed + 1)
@@ -404,8 +476,12 @@ func _add_items(node: Node3D, items: Dictionary) -> void:
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_colors = true
 		mm.mesh = _meshes[key]
-		mm.instance_count = items[key].size()
-		for i in mm.instance_count:
+		if items[key] is PackedFloat32Array: # hazır tampon: 12 dönüşüm + 4 renk
+			mm.instance_count = items[key].size() / 16
+			mm.buffer = items[key]
+		else:
+			mm.instance_count = items[key].size()
+		for i in (0 if items[key] is PackedFloat32Array else mm.instance_count):
 			mm.set_instance_transform(i, items[key][i][0])
 			mm.set_instance_color(i, items[key][i][1])
 		var mmi := MultiMeshInstance3D.new()
@@ -419,11 +495,23 @@ func _add_items(node: Node3D, items: Dictionary) -> void:
 		node.add_child(mmi)
 
 
+## Büyük kayanın çevresine 2-4 küçük gömülü uydu taş (görsel; çarpışmasız).
+func _sats(items: Dictionary, key: String, p: Vector3, r: float, col: Color, vr: RandomNumberGenerator) -> void:
+	for i in vr.randi_range(2, 4):
+		var a := vr.randf() * TAU
+		var pr := r * vr.randf_range(0.2, 0.4)
+		items[key].append([Transform3D(Basis.from_euler(Vector3(vr.randf(), vr.randf() * TAU, vr.randf())).scaled(Vector3(pr, pr * 0.7, pr)),
+			p + Vector3(cos(a) * r * 1.15, -pr * 0.3, sin(a) * r * 1.15)), col.lerp(Color(0.5, 0.48, 0.45), vr.randf() * 0.3)])
+
+
 ## forest.gd ağacı; yaprak ve gövde biyoma göre tonlanır.
 func _tree(items: Dictionary, body: StaticBody3D, lp: Vector3, s: float, rng: RandomNumberGenerator, b: int) -> void:
 	_f._tree(lp, s, rng, false)
 	_tree_list.append([lp, s, b])
 	var leaf: Color = LEAF[b]
+	if b == 0:
+		var t: Color = CURSED_LEAF[rng.randi() % CURSED_LEAF.size()].lerp(Color(0.2, 0.06, 0.24), rng.randf() * 0.4)
+		leaf = Color(t.r, t.g, t.b, rng.randf_range(0.5, 0.7))
 	for src in [[_f._blobs, items.blob], [_f._cones, items.cone]]:
 		for it in src[0]:
 			var c: Color = it[1]
@@ -440,31 +528,37 @@ func _tree(items: Dictionary, body: StaticBody3D, lp: Vector3, s: float, rng: Ra
 func _bush(items: Dictionary, lp: Vector3, rng: RandomNumberGenerator, b: int) -> void:
 	var r := rng.randf_range(0.55, 1.0)
 	var leaf: Color = LEAF[b]
-	items.blob.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(r, r * 0.75, r)), lp + Vector3(0, r * 0.3, 0)),
+	items.blob.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(r, r * 0.75, r)), lp + Vector3(0, r * 0.05, 0)), # eğimde havada kalmasın
 		Color(0.06, 0.2, 0.05).lerp(Color(0.16, 0.3, 0.06), rng.randf()).lerp(Color(leaf.r, leaf.g, leaf.b), leaf.a)])
 
 
 ## Forest çimeni: yükseklik zemin ızgarasının en yakın köşesinden (ucuz); su altında ve kül dağında yok.
-func _grass(items: Dictionary, node: Node3D, rng: RandomNumberGenerator) -> void:
+## MultiMesh tamponuna doğrudan yazar (örnek başına set_instance_* çağrısı 15000 çimende çok yavaş).
+func _grass(node: Node3D, rng: RandomNumberGenerator) -> PackedFloat32Array:
 	var hs: PackedFloat32Array = node.get_meta("hs")
 	var ps: PackedFloat32Array = node.get_meta("ps")
 	var ws: Array = node.get_meta("ws")
 	var step := CHUNK / CELLS
-	var tints := [Color(0.85, 0.62, 1.0), Color(0.78, 0.86, 0.66), Color(1, 1, 1), Color(1.0, 1.0, 0.9)]
-	for n in GRASS_N[Settings.quality]:
+	var tints := [Color(0.3, 0.2, 0.42), Color(0.78, 0.8, 0.45), Color(0.8, 0.55, 0.32), Color(1, 1, 1)] # orman koyu mor-yeşil, bataklık zeytin, kül kuru kahve, kalıntı TD
+	var buf := PackedFloat32Array()
+	for n in GRASS_N[Settings.quality] / 3:
 		var x := rng.randf() * CHUNK
 		var z := rng.randf() * CHUNK
 		var id := roundi(z / step) * (CELLS + 1) + roundi(x / step)
 		var w: PackedFloat32Array = ws[id]
-		if hs[id] < 0.15 or ps[id] > 0.2 or rng.randf() < w[2] * 1.3:
+		if hs[id] < 0.15 or ps[id] > 0.2 or rng.randf() < w[2] * 0.97: # kül dağında çok seyrek
 			continue
 		var h := rng.randf_range(0.5, 1.1)
 		var sw := rng.randf_range(0.8, 1.4)
 		var c := Color(0, 0, 0)
 		for b in 4:
 			c += tints[b] * w[b]
-		items.grass.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(sw, h, sw)), Vector3(x, hs[id] - 0.05, z)),
-			c * Color(0.9, 0.95, 0.85).lerp(Color(1.15, 1.1, 0.8), rng.randf())])
+		c *= Color(0.9, 0.95, 0.85).lerp(Color(1.15, 1.1, 0.8), rng.randf())
+		var a := rng.randf() * TAU
+		var co := cos(a) * sw
+		var si := sin(a) * sw
+		buf.append_array([co, 0.0, si, x, 0.0, h, 0.0, hs[id] - 0.05, -si, 0.0, co, z, c.r, c.g, c.b, 1.0])
+	return buf
 
 
 ## Mantar, çiçek, nilüfer, diken: biyoma göre. Dekordan ayrı tohum (çarpışan dekorun sırası değişmesin).
@@ -487,6 +581,11 @@ func _flora(k: Vector2i, node: Node3D) -> void:
 		match biome_at(wx, wz):
 			1: # nilüfer: su yüzünde yaprak, kimine pembe/beyaz çiçek
 				if lp.y < -0.15:
+					for c in 2: # yoğunluk 2 kat
+						var q := lp + Vector3(rng.randf_range(-1.2, 1.2), 0, rng.randf_range(-1.2, 1.2))
+						var r2 := rng.randf_range(0.35, 0.7)
+						items.lily.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(r2, 1, r2)), Vector3(q.x, 0.015, q.z)),
+							Color(0.16, 0.3, 0.1).lerp(Color(0.3, 0.38, 0.12), rng.randf())])
 					var r := rng.randf_range(0.35, 0.7)
 					items.lily.append([Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(r, 1, r)), Vector3(lp.x, 0.015, lp.z)),
 						Color(0.16, 0.3, 0.1).lerp(Color(0.3, 0.38, 0.12), rng.randf())])
@@ -645,6 +744,8 @@ func _environment() -> void:
 	_env = r[0]
 	_sun = r[1]
 	_fill = r[2]
+	_sun.directional_shadow_blend_splits = false # gölge maliyeti: Lanetli Orman'da ağaç gölgeleri en pahalı kalem
+	_sun.directional_shadow_max_distance = minf(_sun.directional_shadow_max_distance, 60.0)
 	_update_env(100.0)
 
 
@@ -669,6 +770,15 @@ func _update_env(dt: float) -> void:
 	_env.ambient_light_color = _env.ambient_light_color.lerp(amb, t)
 	_env.ambient_light_sky_contribution = lerpf(_env.ambient_light_sky_contribution, sky, t)
 	_sun.light_color = _sun.light_color.lerp(sun, t)
+	var skym := _env.sky.sky_material as ShaderMaterial # kül dağında gök pembe/mora kaymasın: kömür-kahve tepe, sıcak ufuk
+	skym.set_shader_parameter("top_col", Color(0.16, 0.36, 0.72).lerp(Color(0.34, 0.27, 0.22), w[2]))
+	skym.set_shader_parameter("horizon_col", Color(0.98, 0.78, 0.56).lerp(Color(0.85, 0.5, 0.28), w[2]))
+	var gr := Vector2.ZERO
+	for i in 4:
+		gr += GRADE[i] * w[i]
+	_env.adjustment_enabled = true
+	_env.adjustment_contrast = lerpf(_env.adjustment_contrast, gr.x, t)
+	_env.adjustment_saturation = lerpf(_env.adjustment_saturation, gr.y, t)
 	var fill := Color(0, 0, 0)
 	for i in 4:
 		fill += FILL[i] * w[i]
@@ -695,22 +805,80 @@ func _cam_pos() -> Vector3:
 ## [yaprak mı, yarı boy, sayı, renkler, yerçekimi, boyut, kameraya göre y]
 func _particles() -> void:
 	var cfg := [
-		[[false, Vector3(22, 3, 22), 500, [Color(1.5, 0.5, 2.4, 0.8)], Vector3(0, 0.05, 0), 0.9, 1.5], # mor sporlar
+		[[false, Vector3(22, 3, 22), 700, [Color(1.8, 0.6, 2.8, 0.9)], Vector3(0, 0.05, 0), 1.4, 1.5], # mor sporlar
 			[false, Vector3(18, 2, 18), 90, [Color(2.6, 1.0, 3.2)], Vector3(0, 0.3, 0), 0.6, 0.5]], # yükselen kıvılcım
-		[[false, Vector3(20, 1.5, 20), 110, [Color(2.2, 2.6, 0.6)], Vector3.ZERO, 1.9, 1.0], # ateşböceği
+		[[false, Vector3(20, 1.5, 20), 110, [Color(2.2, 2.6, 0.6)], Vector3.ZERO, 2.2, 1.0, true], # ateşböceği
 			[true, Vector3(14, 1.2, 14), 260, [Color(0.05, 0.05, 0.04), Color(0.14, 0.13, 0.1)], Vector3(0, 0.02, 0), 0.22, 0.8]], # sinek
-		[[true, Vector3(22, 5, 22), 600, [Color(0.22, 0.21, 0.2), Color(0.55, 0.53, 0.5), Color(0.35, 0.33, 0.32)], Vector3(0.2, -0.3, 0.05), 0.45, 4.0], # kül
-			[false, Vector3(20, 3, 20), 140, [Color(2.6, 0.8, 0.2)], Vector3(0.05, 0.25, 0), 0.7, 0.5]], # kor
-		[[false, Vector3(22, 3, 22), 650, ForestScript.POLLEN, Vector3(0.03, 0.01, 0.0), 1.0, 1.5], # polen
-			[true, Vector3(22, 0.5, 22), 60, ForestScript.LEAF_TONES, Vector3(0.25, -0.55, 0.1), 1.0, 7.0]]] # yaprak
+		[[true, Vector3(16, 5, 16), 700, [Color(0.3, 0.27, 0.25), Color(0.7, 0.65, 0.6), Color(0.45, 0.4, 0.36)], Vector3(0.2, -0.3, 0.05), 1.5, 3.5], # kül
+			[false, Vector3(16, 3, 16), 220, [Color(4.0, 1.2, 0.3)], Vector3(0.05, 0.5, 0), 2.6, 0.5]], # kor
+		[[false, Vector3(22, 3, 22), 650, ForestScript.POLLEN, Vector3(0.03, 0.01, 0.0), 1.7, 1.5], # polen
+			[true, Vector3(16, 0.5, 16), 90, ForestScript.LEAF_TONES, Vector3(0.25, -0.55, 0.1), 1.8, 4.0]]] # yaprak
 	for b in 4:
 		for c in cfg[b]:
-			var pt: GPUParticles3D = _f._particles(c[0], c[1], c[2], c[3], c[4], c[5])
+			var pt: GPUParticles3D = _f._particles(c[0], c[1], int(c[2] * [0.4, 0.75, 1.0][Settings.quality]), c[3], c[4], c[5])
 			pt.set_meta("y", c[6])
+			if c.size() > 7: # ateşböcekleri: ömür boyu üç kısa parlama, parçacıklar birbirinden bağımsız yanıp söner
+				var blink := Gradient.new()
+				blink.offsets = PackedFloat32Array([0.0, 0.08, 0.16, 0.34, 0.42, 0.5, 0.7, 0.78, 0.86, 1.0])
+				blink.colors = PackedColorArray([Color(1, 1, 1, 0), Color.WHITE, Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color.WHITE, Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color.WHITE, Color(1, 1, 1, 0), Color(1, 1, 1, 0)])
+				var bt := GradientTexture1D.new()
+				bt.gradient = blink
+				pt.process_material.color_ramp = bt
 			pt.amount_ratio = 0.0
 			pt.emitting = false
 			add_child(pt)
 			_amb[b].append(pt)
+	_ground_fog()
+
+
+## Bataklık yer sisi: büyük, çok yarı saydam, yavaş bulutlar (yumuşak billboard).
+func _ground_fog() -> void:
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(24, 0.3, 24)
+	pm.direction = Vector3(1, 0, 0.3)
+	pm.spread = 40.0
+	pm.initial_velocity_min = 0.1
+	pm.initial_velocity_max = 0.3
+	pm.gravity = Vector3.ZERO
+	pm.scale_min = 0.8
+	pm.scale_max = 1.5
+	var fade := GradientTexture1D.new()
+	fade.gradient = Gradient.new()
+	fade.gradient.offsets = PackedFloat32Array([0.0, 0.3, 0.7, 1.0])
+	fade.gradient.colors = PackedColorArray([Color(1, 1, 1, 0), Color.WHITE, Color.WHITE, Color(1, 1, 1, 0)])
+	pm.color_ramp = fade
+	var puff := GradientTexture2D.new()
+	puff.width = 64; puff.height = 64
+	puff.fill = GradientTexture2D.FILL_RADIAL
+	puff.fill_from = Vector2(0.5, 0.5); puff.fill_to = Vector2(0.5, 0.0)
+	puff.gradient = Gradient.new()
+	puff.gradient.colors = PackedColorArray([Color.WHITE, Color(1, 1, 1, 0)])
+	var mat := StandardMaterial3D.new()
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.albedo_texture = puff
+	mat.albedo_color = Color(0.62, 0.7, 0.6, 0.16)
+	mat.proximity_fade_enabled = Settings.quality > 0 # yumuşak kenar (düşükte kapalı)
+	mat.proximity_fade_distance = 1.5
+	var quad := QuadMesh.new()
+	quad.size = Vector2(10, 10)
+	quad.material = mat
+	var pt := GPUParticles3D.new()
+	pt.amount = [8, 14, 20][Settings.quality]
+	pt.lifetime = 14.0
+	pt.preprocess = 14.0
+	pt.process_material = pm
+	pt.draw_pass_1 = quad
+	pt.visibility_aabb = AABB(Vector3(-30, -10, -30), Vector3(60, 16, 60))
+	pt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	pt.set_meta("y", -1.2)
+	pt.amount_ratio = 0.0
+	pt.emitting = false
+	add_child(pt)
+	_amb[1].append(pt)
 
 
 ## Ufuk: kamerayla gezen tepe halkası (forest.gd'nin uzak tepeleri) ve kaba uzak zemin.
@@ -720,12 +888,13 @@ func _horizon() -> void:
 	_hills.transform_format = MultiMesh.TRANSFORM_3D
 	_hills.use_colors = true
 	_hills.mesh = _f._blob_mesh(14, 6, 0.25, 1.2)
-	_hills.instance_count = 24
-	for i in 24: # yüklü chunk'ların ötesinde, sisin içinde silüet
-		var a := TAU * i / 24.0 + rng.randf_range(-0.08, 0.08)
-		var d := rng.randf_range(300.0, 370.0)
-		_hills.set_instance_transform(i, Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(90, rng.randf_range(30, 70), 90)),
-			Vector3(cos(a) * d, -8, sin(a) * d)))
+	_hills.instance_count = 36
+	for i in 36: # iki halka: 0-23 uzak (alçak, soluk), 24-35 yakın (yüksek); ikisi de dünya kenarının (512) ötesinde değil, kamerayla gezer
+		var near := i >= 24
+		var a := TAU * (i - 24 if near else i) / (12.0 if near else 24.0) + rng.randf_range(-0.1, 0.1)
+		var d := rng.randf_range(300.0, 340.0) if near else rng.randf_range(400.0, 470.0)
+		var hs := Vector3(rng.randf_range(70, 110), rng.randf_range(28, 48), rng.randf_range(70, 110)) if near else Vector3(130, rng.randf_range(18, 30), 130)
+		_hills.set_instance_transform(i, Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(hs), Vector3(cos(a) * d, -10, sin(a) * d)))
 	_hills_mi = MultiMeshInstance3D.new()
 	_hills_mi.multimesh = _hills
 	_hills_mi.material_override = _mats.blob
@@ -775,4 +944,7 @@ func _far_ground(cell: Vector2i) -> void:
 		var hc := Color(0, 0, 0)
 		for b in 4:
 			hc += HILL[b] * w[b]
-		_hills.set_instance_color(i, hc)
+		var fc := Color(0, 0, 0)
+		for b in 4:
+			fc += FOG[b] * w[b]
+		_hills.set_instance_color(i, hc.lerp(fc, 0.55 if i < 24 else 0.25)) # uzak halka sise daha çok karışır
