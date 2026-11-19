@@ -273,13 +273,7 @@ func _ready() -> void:
 	me.choose_card(0)
 	chk("biriken seviyeler sırayla seçilir", second_ok and me.cards.is_empty() and me.pending == 0)
 	me.level_up()
-	var g0: String = Weapons._group(me.cards[0])
-	var b_ok: bool = me.banish_card(0)
-	me.reroll_cards()
-	chk("eleme: kart grubu bu maçta bir daha çıkmaz (yeniden çekince de)", b_ok and me.banished.has(g0) and me.cards.size() == 3
-		and not me.cards.any(func(c): return Weapons._group(c) == g0), me.cards.map(func(c): return c.id))
 	me.choose_card(0)
-	me.banished.clear()
 
 	# --- can statı: üst sınır canı da artırır
 	var hp0: int = me.max_hp

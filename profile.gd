@@ -1,20 +1,21 @@
 extends RefCounted
-## Kalıcı oyuncu profili: Altın Saç, açılımlar, kalıcı yükseltmeler, istatistikler, başarımlar, öğretici.
+## Kalıcı oyuncu profili: Altın Saç, açılımlar, kozmetikler, istatistikler, başarımlar, öğretici.
 ## Kullanım: const Profile := preload("res://profile.gd") — hepsi statik; user://profile.cfg (+ .bak yedek).
 ##
 ## GENEL API
-##   load_data() -> Dictionary                 kopya: {gold, stats, upgrades, ach, tutorial}
+##   load_data() -> Dictionary                 kopya: {gold, stats, owned, sel, ach, tutorial}
 ##   save_data(d: Dictionary)                  d'yi temizleyip kaydeder
 ##   is_unlocked(id: String) -> bool           "weapon:<id>", "diff:<id>", "mode:endless"
 ##   unlock_progress(id) -> Array              [şimdiki, hedef]; başta açıklar [1, 1]
 ##   add_run(summary, me) -> Array             Altın Saç + istatistik + başarım; YENİ açılan id'ler
 ##   gold() -> int
-##   upgrade_level(id) -> int                  id: tower_hp | start_money | reroll | banish
-##   upgrade_max(id) -> int
-##   upgrade_cost(id) -> int                   sıradaki kademe fiyatı; azami ise -1
-##   buy_upgrade(id) -> bool                   yetersiz gold / azami ise false
-##   tower_hp_mult() -> float                  1 + 0,04 x kademe
-##   start_money_bonus() -> int                10 x kademe   (reroll / banish hakkı: upgrade_level)
+##   COSMETICS                                 katalog: id -> {slot: tint|title|fx, name, price, color | text}
+##   cosm_owned(id) / cosm_buy(id) -> bool     yetersiz gold / zaten sahip / bilinmeyen id ise false
+##   cosm_select(slot, id) -> bool             "" = varsayılan; sahip olunmayan seçilemez
+##   cosm_sel() -> Dictionary                  {tint, title, fx} -> id ("" yok)
+##   cosm_clean(v) -> Dictionary               ağdan gelen seçimi doğrular (katalogda olmayan atılır)
+##   cosm_color(id) -> Color / cosm_title(id) -> String
+## Eski kalıcı yükseltmeler kaldırıldı: eski kayıttaki kademeler _read'de bir kez iade edilir (LEGACY_MAX + PRICES).
 ##   achieve(id: String)                       bir kez yazar (Steam'e de; App ID 480 iken yazmaz)
 ##   achievements() -> Dictionary              id -> unix zamanı
 ##   stat_add(key, n := 1)                     istatistik (diske yazar; sık çağırma). "chickens" 10'da ACH_CHICKEN_HUNTER
@@ -37,8 +38,27 @@ static func use_path(p: String) -> void:
 
 const MAX_GOLD := 9999999
 const MAX_STAT := 1000000000
-const PRICES := [60, 120, 200, 300, 450]
-const UPGRADE_MAX := {"tower_hp": 5, "start_money": 5, "reroll": 3, "banish": 2}
+const PRICES := [60, 120, 200, 300, 450] # eski yükseltme kademe fiyatları (göç iadesi)
+const LEGACY_MAX := {"tower_hp": 5, "start_money": 5, "reroll": 3, "banish": 2} # yalnız göç iadesi için
+const SECTIONS := ["stats", "owned", "sel", "ach"]
+const SLOTS := ["tint", "title", "fx"]
+## Yalnız kozmetik; oyuna avantaj vermez. tint: karakter rengi, title: isim rozeti, fx: kurşun izi / namlu ateşi rengi.
+const COSMETICS := {
+	"tint:red": {"slot": "tint", "name": "Kızıl Ton", "price": 60, "color": Color(1.0, 0.55, 0.5)},
+	"tint:blue": {"slot": "tint", "name": "Buz Mavisi", "price": 60, "color": Color(0.55, 0.75, 1.0)},
+	"tint:green": {"slot": "tint", "name": "Orman Yeşili", "price": 90, "color": Color(0.6, 1.0, 0.6)},
+	"tint:purple": {"slot": "tint", "name": "Gece Moru", "price": 140, "color": Color(0.8, 0.6, 1.0)},
+	"tint:gold": {"slot": "tint", "name": "Saç Sarısı", "price": 300, "color": Color(1.0, 0.85, 0.35)},
+	"title:hunter": {"slot": "title", "name": "Avcı", "price": 80, "text": "Avcı"},
+	"title:guard": {"slot": "title", "name": "Kule Bekçisi", "price": 150, "text": "Bekçi"},
+	"title:legend": {"slot": "title", "name": "Efsane", "price": 220, "text": "Efsane"},
+	"title:king": {"slot": "title", "name": "Saç Kralı", "price": 300, "text": "Saç Kralı"},
+	"fx:blue": {"slot": "fx", "name": "Mavi Kıvılcım", "price": 80, "color": Color(0.35, 0.7, 1.0)},
+	"fx:green": {"slot": "fx", "name": "Zehir Yeşili", "price": 80, "color": Color(0.4, 1.0, 0.45)},
+	"fx:pink": {"slot": "fx", "name": "Pembe Parıltı", "price": 140, "color": Color(1.0, 0.45, 0.85)},
+	"fx:purple": {"slot": "fx", "name": "Mor Şimşek", "price": 200, "color": Color(0.7, 0.4, 1.0)},
+	"fx:gold": {"slot": "fx", "name": "Altın Işık", "price": 260, "color": Color(1.0, 0.85, 0.3)},
+}
 const START_WEAPONS := ["pistol", "shotgun", "smg", "sword", "bazooka"]
 ## Açılım id -> [istatistik, hedef]. Listede olmayan başlangıç öğeleri hep açık.
 const QUESTS := {
@@ -57,6 +77,7 @@ const ACHIEVEMENTS := ["ACH_FIRST_BLOOD", "ACH_HALFWAY", "ACH_RAPUNZEL_SAFE", "A
 
 static var _cache := {}
 static var _cache_path := ""
+static var _migrated := false
 
 
 static func _path() -> String:
@@ -64,7 +85,7 @@ static func _path() -> String:
 
 
 static func _defaults() -> Dictionary:
-	return {"gold": 0, "stats": {}, "upgrades": {}, "ach": {}, "tutorial": false}
+	return {"gold": 0, "stats": {}, "owned": {}, "sel": {}, "ach": {}, "tutorial": false}
 
 
 static func _num(v: Variant, lo: int, hi: int) -> int:
@@ -76,16 +97,19 @@ static func _clean(d: Dictionary) -> Dictionary:
 	var o := _defaults()
 	o.gold = _num(d.get("gold"), 0, MAX_GOLD)
 	o.tutorial = d.get("tutorial") is bool and d.tutorial
-	for sec in ["stats", "upgrades", "ach"]:
+	for sec in SECTIONS:
 		var src: Variant = d.get(sec)
 		if not src is Dictionary:
 			continue
 		for k in src:
 			if not k is String:
 				continue
-			if sec == "upgrades":
-				if UPGRADE_MAX.has(k):
-					o.upgrades[k] = _num(src[k], 0, UPGRADE_MAX[k])
+			if sec == "owned":
+				if COSMETICS.has(k):
+					o.owned[k] = 1
+			elif sec == "sel":
+				if SLOTS.has(k) and src[k] is String and (src[k] == "" or COSMETICS.get(src[k], {}).get("slot") == k):
+					o.sel[k] = src[k]
 			elif sec == "ach":
 				o.ach[k] = _num(src[k], 0, MAX_STAT * 10)
 			else:
@@ -99,12 +123,21 @@ static func _read(path: String) -> Dictionary:
 	if cfg.load(path) != OK or not cfg.has_section("meta"):
 		return {}
 	var d := {"gold": cfg.get_value("meta", "gold", 0), "tutorial": cfg.get_value("meta", "tutorial", false)}
-	for sec in ["stats", "upgrades", "ach"]:
+	for sec in SECTIONS:
 		var m := {}
 		if cfg.has_section(sec):
 			for k in cfg.get_section_keys(sec):
 				m[k] = cfg.get_value(sec, k)
 		d[sec] = m
+	# Göç: kaldırılan yükseltmelere harcanan Altın Saç bir kez iade edilir (kayıt sonraki _flush'ta silinir).
+	if cfg.has_section("upgrades"):
+		var refund := 0
+		for k in cfg.get_section_keys("upgrades"):
+			if LEGACY_MAX.has(k):
+				for i in _num(cfg.get_value("upgrades", k), 0, LEGACY_MAX[k]):
+					refund += PRICES[i]
+		d.gold = _num(d.gold, 0, MAX_GOLD) + refund
+		_migrated = true
 	return _clean(d)
 
 
@@ -116,6 +149,9 @@ static func _data() -> Dictionary:
 			d = _read(p + ".bak")
 		_cache = d if not d.is_empty() else _defaults()
 		_cache_path = p
+		if _migrated:
+			_migrated = false
+			_flush()
 	return _cache
 
 
@@ -139,13 +175,14 @@ static func _flush() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("meta", "gold", d.gold)
 	cfg.set_value("meta", "tutorial", d.tutorial)
-	for sec in ["stats", "upgrades", "ach"]:
+	for sec in SECTIONS:
 		for k in d[sec]:
 			cfg.set_value(sec, k, d[sec][k])
 	# Eski dosya yalnız sağlamsa yedeğe alınır (bozuk dosya iyi yedeğin üstüne yazılmasın).
 	if FileAccess.file_exists(p) and not _read(p).is_empty():
 		DirAccess.copy_absolute(ProjectSettings.globalize_path(p), ProjectSettings.globalize_path(p + ".bak"))
 	cfg.save(p)
+	_migrated = false # yukarıdaki yedek kontrolü _read'i çağırıp bayrağı yeniden kurmuş olabilir
 
 
 # ---------- İstatistik ----------
@@ -191,41 +228,58 @@ static func unlock_progress(id: String) -> Array:
 	return [1, 1] if is_unlocked(id) else [0, 1]
 
 
-# ---------- Altın Saç ve kalıcı yükseltmeler ----------
+# ---------- Altın Saç ve kozmetikler ----------
 
 static func gold() -> int:
 	return _data().gold
 
 
-static func upgrade_level(id: String) -> int:
-	return _data().upgrades.get(id, 0)
+static func cosm_owned(id: String) -> bool:
+	return _data().owned.has(id)
 
 
-static func upgrade_max(id: String) -> int:
-	return UPGRADE_MAX.get(id, 0)
-
-
-static func upgrade_cost(id: String) -> int:
-	var l := upgrade_level(id)
-	return -1 if l >= upgrade_max(id) else PRICES[l]
-
-
-static func buy_upgrade(id: String) -> bool:
-	var c := upgrade_cost(id)
-	if c < 0 or c > gold():
+static func cosm_buy(id: String) -> bool:
+	if not COSMETICS.has(id) or cosm_owned(id) or COSMETICS[id].price > gold():
 		return false
-	_data().gold -= c
-	_data().upgrades[id] = upgrade_level(id) + 1
+	_data().gold -= COSMETICS[id].price
+	_data().owned[id] = 1
 	_flush()
 	return true
 
 
-static func tower_hp_mult() -> float:
-	return 1.0 + 0.04 * upgrade_level("tower_hp")
+## id "" = o yuvayı varsayılana döndürür.
+static func cosm_select(slot: String, id: String) -> bool:
+	if not SLOTS.has(slot) or (id != "" and not (cosm_owned(id) and COSMETICS[id].slot == slot)):
+		return false
+	_data().sel[slot] = id
+	_flush()
+	return true
 
 
-static func start_money_bonus() -> int:
-	return 10 * upgrade_level("start_money")
+static func cosm_sel() -> Dictionary:
+	var o := {}
+	for s in SLOTS:
+		o[s] = _data().sel.get(s, "")
+	return o
+
+
+## Ağdan gelen {tint, title, fx} sözlüğünü doğrular; geçersiz / katalogda olmayan yuva "" olur.
+static func cosm_clean(v: Variant) -> Dictionary:
+	var o := {"tint": "", "title": "", "fx": ""}
+	if v is Dictionary:
+		for s in SLOTS:
+			var id: Variant = v.get(s)
+			if id is String and COSMETICS.get(id, {}).get("slot") == s:
+				o[s] = id
+	return o
+
+
+static func cosm_color(id: String) -> Color:
+	return COSMETICS.get(id, {}).get("color", Color.WHITE)
+
+
+static func cosm_title(id: String) -> String:
+	return COSMETICS.get(id, {}).get("text", "")
 
 
 # ---------- Başarımlar ----------

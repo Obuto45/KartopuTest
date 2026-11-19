@@ -8,9 +8,7 @@ const Chars := preload("res://characters.gd")
 const TdUi := preload("res://td_ui.gd")
 const Profile := preload("res://profile.gd")
 const Balance := preload("res://balance.gd")
-const UPGRADES := {"tower_hp": "Kule Zırhı", "start_money": "Başlangıç Altını", "reroll": "Yeniden Çekme", "banish": "Eleme"}
-const UPGRADE_DESC := {"tower_hp": "Kule canı +%4 / kademe", "start_money": "Maç başı parası +10 ₺ / kademe",
-	"reroll": "Maç başına +1 kart yeniden çekme hakkı", "banish": "Maç başına +1 kart eleme hakkı"}
+const COSM_SLOTS := {"tint": "Karakter Rengi", "title": "Unvan", "fx": "Kurşun ve Namlu Ateşi Rengi"}
 ## Profile.QUESTS istatistiği -> açılma koşulu ("%d" hedef). wins_<zorluk> ayrıca _quest_text'te.
 const QUEST_TEXT := {"best_match_kills": "Tek maçta %d öldürme", "best_wave": "%d. dalgaya ulaş", "builds": "Toplam %d yapı kur",
 	"hard_best_wave": "Zor ya da Kabus'ta %d. dalgaya ulaş", "wins": "%d maç kazan"}
@@ -87,6 +85,7 @@ var spec_lbl: Label
 var slots := [] # [[StyleBoxFlat, Label], ...]
 var settings_wrap: ColorRect
 var vol_lbl: Label
+const BUS_LABELS := {"sfx": "Efekt sesi: %d%%", "music": "Müzik: %d%%", "ui": "Arayüz sesi: %d%%", "ambient": "Ortam sesi: %d%%"}
 var res_opt: OptionButton
 var close_btn: Button
 var ver_lbl: Label
@@ -121,6 +120,7 @@ func _ready() -> void:
 		if multiplayer.is_server():
 			set_mode.rpc_id(id, mode))
 	_set_menu_bg(true)
+	Sfx.music("menu")
 	_show_page("intro")
 	set_mode("arena")
 	if "--selftest" in OS.get_cmdline_user_args(): # yayın öncesi: paketlenmiş exe'de haritayı açıp bir kare kaydeder
@@ -1241,31 +1241,36 @@ func _open_growth() -> void:
 		_lbl(growth_box, "Yakında", 22)
 		return
 	_lbl(growth_box, tr("Altın Saç: %d") % int(gold), 24).add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
-	for id in UPGRADES: # [ad + açıklama + kademe ●●○○○]  [Satın Al · fiyat]
-		var lvl := int(_pf("upgrade_level", [id], 0))
-		var mx := int(_pf("upgrade_max", [id], 5))
-		var cost := int(_pf("upgrade_cost", [id], [60, 120, 200, 300, 450][clampi(lvl, 0, 4)] if lvl < mx else -1))
-		var row := PanelContainer.new()
-		row.add_theme_stylebox_override("panel", _sb(Color(0.07, 0.08, 0.13, 0.88), 8, 10))
-		growth_box.add_child(row)
-		var h := HBoxContainer.new()
-		h.add_theme_constant_override("separation", 10)
-		row.add_child(h)
-		var tv := VBoxContainer.new()
-		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tv.add_theme_constant_override("separation", 0)
-		h.add_child(tv)
-		_lbl(tv, UPGRADES[id], 19)
-		_lbl(tv, UPGRADE_DESC.get(id, ""), 14).modulate.a = 0.72
-		var pips := _lbl(tv, "●".repeat(lvl) + "○".repeat(maxi(mx - lvl, 0)) + "   %d/%d" % [lvl, mx], 18)
-		pips.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
-		var b := _btn(h, tr("AZAMİ") if cost < 0 else tr("Satın Al  ·  %d") % cost, func():
-			if _pf("buy_upgrade", [id], false):
-				Sfx.play2d(Sfx.hurt, -6.0)
-			_open_growth())
-		b.custom_minimum_size.x = 140
-		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		b.disabled = cost < 0 or cost > int(_pf("gold", [], 0)) or not _pf_names.has("buy_upgrade")
+	_lbl(growth_box, "Yalnızca görünüm: oyuna avantaj vermez. Diğer oyuncular da görür.", 14).modulate.a = 0.72
+	var sel: Dictionary = Profile.cosm_sel()
+	for slot in Profile.SLOTS:
+		_lbl(growth_box, tr(COSM_SLOTS[slot]), 20)
+		for id in Profile.COSMETICS:
+			var c: Dictionary = Profile.COSMETICS[id]
+			if c.slot != slot:
+				continue
+			var row := PanelContainer.new()
+			row.add_theme_stylebox_override("panel", _sb(Color(0.07, 0.08, 0.13, 0.88), 8, 10))
+			growth_box.add_child(row)
+			var h := HBoxContainer.new()
+			h.add_theme_constant_override("separation", 10)
+			row.add_child(h)
+			var nm := _lbl(h, ("●  " if slot != "title" else "[%s]  " % tr(c.text)) + tr(c.name), 18)
+			nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			if c.has("color"):
+				nm.add_theme_color_override("font_color", c.color)
+			var owned: bool = Profile.cosm_owned(id)
+			var on: bool = sel[slot] == id
+			var b := _btn(h, tr("Seçili") if on else tr("Seç") if owned else tr("Satın Al  ·  %d") % c.price, func():
+				if owned:
+					Profile.cosm_select(slot, "" if on else id)
+				elif Profile.cosm_buy(id):
+					Profile.cosm_select(slot, id)
+					Sfx.play2d(Sfx.hurt, -6.0)
+				_open_growth())
+			b.custom_minimum_size.x = 140
+			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			b.disabled = not owned and c.price > Profile.gold()
 	_lbl(growth_box, "Açılımlar", 20)
 	var rows := []
 	for w in weapon_list:
@@ -1352,6 +1357,17 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 	vol.value_changed.connect(_on_volume)
 	v.add_child(vol)
 	_on_volume(vol.value)
+	for k in Settings.BUSES: # SFX / Müzik / Arayüz / Ortam
+		var lbl := _lbl(v, "", 17)
+		var sl := HSlider.new()
+		sl.min_value = 0.0; sl.max_value = 1.0; sl.step = 0.05
+		sl.value_changed.connect(func(x: float) -> void:
+			Settings.bus_vol[k] = x
+			Settings.apply_audio()
+			lbl.text = tr(BUS_LABELS[k]) % roundi(x * 100.0))
+		sl.value = Settings.bus_vol[k]
+		sl.value_changed.emit(sl.value)
+		v.add_child(sl)
 
 	_lbl(v, "Ekran modu", 17)
 	var mode := OptionButton.new()
@@ -1600,6 +1616,8 @@ func start_game(ids: Array) -> void:
 	_clear_world()
 	_set_menu_bg(false)
 	_build_world()
+	Sfx.music("battle")
+	Sfx.ambient("forest")
 	for i in ids.size():
 		var p: CharacterBody3D = PlayerScript.new()
 		p.name = str(ids[i])
@@ -1620,6 +1638,8 @@ func start_td(ids: Array, opts := {}) -> void:
 	_clear_world()
 	_set_menu_bg(false)
 	_build_world(TD_CLEAR)
+	Sfx.music("battle")
+	Sfx.ambient("forest")
 	for i in ids.size():
 		var p: CharacterBody3D = PlayerScript.new()
 		p.name = str(ids[i])
@@ -1703,6 +1723,8 @@ func _back_to_menu() -> void:
 	if Net.steam_ok and Net.lobby_id != 0 and multiplayer.is_server():
 		Steam.setLobbyJoinable(Net.lobby_id, true)
 	_clear_world()
+	Sfx.music("menu")
+	Sfx.ambient("")
 	round_over = false
 	hud.hide()
 	settings_wrap.hide()

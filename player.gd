@@ -163,7 +163,6 @@ var bag: Array = Weapons.empty_bag() # çanta: el slotu doluyken öğeler buraya
 var ups := {} # yükseltme seviyeleri: "<silah>:<id>" ve "char:<id>"
 var cards: Array = [] # seçim bekleyen kartlar
 var pending := 0 # kartı seçilmemiş seviye sayısı
-var banished: Array = [] # bu maçta elenen kart grupları (bir daha çıkmaz)
 var respawn_t := 0.0
 var burns := {} # yaratık adı -> [yaratık, hasar/sn, kalan sn, etki sözlüğü (evrim alanları), son konum]
 var _last_crit := false # son td_dmg kritik miydi (evrim: kritik zinciri)
@@ -172,6 +171,8 @@ var vm: Node3D # kendi gözünden eller + silah (yalnız yerel oyuncuda; viewmod
 var held_id := "" # çıkarılmış silah; _held() değişince _switched
 var busy := "" # ateşi kilitleyen animasyon: draw, reload, drink, prime, charge ("" = serbest)
 var reloading := false
+var _step_d := 0.0 # son adımdan beri yol
+var _air_t := 0.0 # havada geçen süre
 var reload_t := 0.0 # doldurmanın kalan süresi (HUD çubuğu)
 var anim_gen := 0 # vm'siz oyuncuda zamanlanmış klip olaylarını geçersiz kılar
 var flame_t := 0.0 # alev pilotu büyük kalsın
@@ -292,7 +293,7 @@ func _ready() -> void:
 		name_lbl.font_size = 36
 		name_lbl.outline_size = 12
 		name_lbl.modulate = col.lightened(0.35)
-		name_lbl.text = Net.display_name(get_multiplayer_authority())
+		name_lbl.text = Net.tagged_name(get_multiplayer_authority())
 		add_child(name_lbl)
 		# Can barı: ismin altında, her karede kameraya döner.
 		hp_bar = Node3D.new()
@@ -369,8 +370,16 @@ func _load_model() -> void:
 	var outline := ShaderMaterial.new() # koyu dış çizgi: karakter ormandan ayrışsın
 	outline.shader = preload("res://shaders/outline.gdshader")
 	model_fx.next_pass = outline
+	var tint := Profile.cosm_color(Net.cosm_of(get_multiplayer_authority()).tint) # kozmetik renk tonu
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		mi.material_overlay = model_fx
+		if tint != Color.WHITE and mi.mesh:
+			for si in mi.mesh.get_surface_count():
+				var sm := mi.get_active_material(si) as StandardMaterial3D
+				if sm:
+					sm = sm.duplicate()
+					sm.albedo_color *= tint
+					mi.set_surface_override_material(si, sm)
 	anim = model.find_children("*", "AnimationPlayer", true, false)[0]
 	for n in ["Idle", "Run", "Walk"]: # dosyada döngü işareti yok
 		if anim.has_animation(n):
@@ -507,11 +516,30 @@ func _physics_process(dt: float) -> void:
 	_animate(dt)
 
 
+## Adım (yürürken her ~2.3 m), zıplama ve iniş sesleri.
+func _foley(dt: float, on_floor: bool) -> void:
+	var flat := Vector2(velocity.x, velocity.z).length()
+	if on_floor:
+		if _air_t > 0.3:
+			Sfx.foley("land", global_position)
+		_air_t = 0.0
+		_step_d += flat * dt if flat > 1.0 else 0.0
+		if _step_d >= 2.3:
+			_step_d = 0.0
+			Sfx.foley("step", global_position)
+	else:
+		if _air_t == 0.0 and velocity.y > 0.0:
+			Sfx.foley("jump", global_position)
+		_air_t += dt
+
+
 func _local(dt: float) -> void:
 	var alive := hp > 0
 	var active := alive and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and bt("stun") <= 0.0
 	var can_act := active and bt("silence") <= 0.0
 	var on_floor := is_on_floor()
+	if alive:
+		_foley(dt, on_floor)
 	if not alive:
 		_spectate(dt)
 	if on_floor:
@@ -961,6 +989,12 @@ func _ring_fx(pos: Vector3, c: Color, r: float, fade: float) -> void:
 	tw.chain().tween_callback(mi.queue_free)
 
 
+## Sahibin seçtiği kurşun izi / namlu ateşi rengi (kozmetik); yoksa varsayılan.
+func _fx_color(def: Color) -> Color:
+	var id: String = Net.cosm_of(get_multiplayer_authority()).fx
+	return def if id == "" else Profile.cosm_color(id)
+
+
 ## İki nokta arasında kısa süre görünen ışın (kurşun, kement, iğne).
 func _beam_fx(from: Vector3, to: Vector3, c: Color) -> void:
 	var d := to - from
@@ -1090,7 +1124,7 @@ func _animate(dt: float) -> void:
 		sword.rotation = sword.rotation.lerp(Vector3(0.9, 0.2, 0), 0.2)
 	_feel(dt, mine, spd, air, hidden)
 	if name_lbl: # isim lobiden sonra gelebilir
-		var n := Net.display_name(get_multiplayer_authority())
+		var n := Net.tagged_name(get_multiplayer_authority())
 		if name_lbl.text != n:
 			name_lbl.text = n
 		name_lbl.visible = not hidden
@@ -1414,6 +1448,8 @@ func _td_use(just: bool) -> void:
 			if busy != "":
 				return
 			if mag > 0 and int(it.get("ammo", mag)) <= 0:
+				if just:
+					Sfx.weapon(it.id, "empty", global_position)
 				start_reload() # yedek sınırsız: boşken tetik doldurur
 				return
 			if it.id == "grenade": # bas: pim çek; bırakınca at (_release_throw)
@@ -1491,6 +1527,7 @@ func start_reload() -> void:
 		return
 	reloading = true
 	busy = "reload"
+	Sfx.weapon(held_id, "reload", global_position, -4.0)
 	var a := st("attack")
 	if w.get("per_shell", false): # pompalı: başla, fişek fişek, bitir
 		reload_t = Weapons.reload_time(w, a, false) * (mag - ammo) + 0.6 / a
@@ -1808,7 +1845,7 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 	w.dmg *= _pow(w) * k
 	kick = w.kick
 	shake(origin, w.kick * 0.2)
-	Sfx.play3d(Sfx.fire if w.kind in ["shot", "rocket"] else Sfx.whoosh, origin, -8.0 if w.rate < 0.2 else -2.0)
+	Sfx.weapon(id, "fire", origin, -8.0 if w.rate < 0.2 else -2.0, Sfx.fire if w.kind in ["shot", "rocket"] else Sfx.whoosh)
 	if w.kind in ["shot", "rocket"] and dirs.size() > 0:
 		_muzzle_fx(_muzzle(), dirs[0], w.kind == "shot")
 	for i in dirs.size():
@@ -1897,9 +1934,10 @@ func _slash_fx(at: Vector3, d: Vector3, k: float) -> void:
 
 ## Namlu ateşi: parlak alev çiçeği + kısa ışık; mermili silahta sağa sekip düşen pirinç kovan.
 func _muzzle_fx(at: Vector3, d: Vector3, casing: bool) -> void:
+	var fc := _fx_color(Color(1.0, 0.9, 0.5))
 	var fp := vm != null and vm.visible # kendi gözümüzde alev küçük: ekranı kapatmasın
 	var p := ExplosionScript.parts(ExplosionScript.quad("glow", 0.15 if fp else 0.35), 6, 0.06 if fp else 0.08, 0.5 if fp else 1.0, 2.0 if fp else 4.0,
-		[Color(1.0, 0.9, 0.5, 0.9), Color(1.0, 0.5, 0.1, 0.0)], 1.0, 0.3)
+		[Color(fc, 0.9), Color(_fx_color(Color(1.0, 0.5, 0.1)), 0.0)], 1.0, 0.3)
 	p.direction = d
 	p.spread = 25.0
 	p.position = at
@@ -1907,7 +1945,7 @@ func _muzzle_fx(at: Vector3, d: Vector3, casing: bool) -> void:
 	_world().add_child(p)
 	p.emitting = true
 	var l := OmniLight3D.new()
-	l.light_color = Color(1.0, 0.75, 0.4)
+	l.light_color = _fx_color(Color(1.0, 0.75, 0.4))
 	l.light_energy = 3.0
 	l.omni_range = 4.0
 	l.position = at
@@ -2022,8 +2060,8 @@ func _td_shot(w: Dictionary, from: Vector3, d: Vector3, mine: bool) -> void:
 	var extra := 0 # evrim (Altıpatlar Lordu): kritik vuruş ek sekme
 	for h in Weapons.ray(get_tree(), from, to).slice(0, w.pierce + 1):
 		seen.append(h[1])
-		Ragdoll.poke(h[2], d * (2.0 + w.knock)) # ölürse bu yöne savrulur
-		Ragdoll.flinch(h[1].get("model"), h[2], d * (2.0 + w.knock))
+		Ragdoll.poke(h[2], d * (0.6 + w.knock * 0.5)) # ölürse bu yöne savrulur
+		Ragdoll.flinch(h[1].get("model"), h[2], d * (0.6 + w.knock * 0.5))
 		_impact_fx(h[2], -d, true)
 		if mine:
 			td_affect(h[1], w, from)
@@ -2031,7 +2069,7 @@ func _td_shot(w: Dictionary, from: Vector3, d: Vector3, mine: bool) -> void:
 				extra = w.get("crit_chain", 0)
 		if seen.size() > w.pierce:
 			to = h[2] # son yaratıkta durdu
-	_beam_fx(_muzzle(), to, w.color)
+	_beam_fx(_muzzle(), to, _fx_color(w.color))
 	if r and seen.size() <= w.pierce: # duvar / zemin: kıvılcım, toz, kısa süren delik
 		_impact_fx(r.position, r.normal, false)
 	if seen.is_empty():
@@ -2044,7 +2082,7 @@ func _td_shot(w: Dictionary, from: Vector3, d: Vector3, mine: bool) -> void:
 		w.dmg *= Weapons.CHAIN_K
 		if w.has("burn"): # sinerji ateş + sekme: sekerken yanığı da taşır, üstüne 1,5 kat uzun yanar
 			w.burn = [w.fire, Weapons.BURN_T * 1.5]
-		_beam_fx(to, Weapons.e_mid(nx), w.color)
+		_beam_fx(to, Weapons.e_mid(nx), _fx_color(w.color))
 		if mine:
 			td_affect(nx, w, to)
 		seen.append(nx)
@@ -2217,31 +2255,8 @@ func choose_card(i: int) -> void:
 	_td_changed()
 
 
-## 3 kart; elenen gruplar atlanır (fazladan çekip süzer).
 func _roll() -> Array:
-	return Weapons.roll_cards(self, 3 + banished.size()).filter(func(c): return not banished.has(Weapons._group(c))).slice(0, 3)
-
-
-## Yeniden çekme hakkı (sayacı td_ui tutar): eldeki kartlar yenilenir.
-func reroll_cards() -> void:
-	if not cards.is_empty():
-		cards = _roll()
-
-
-## Eleme: kart bu maçta bir daha çıkmaz, yerine yenisi gelir (yeni yoksa düşer; son kart elenmez). Olduysa true.
-func banish_card(i: int) -> bool:
-	if i < 0 or i >= cards.size():
-		return false
-	var keep := cards.map(func(c): return Weapons._group(c))
-	var fresh := _roll().filter(func(c): return not keep.has(Weapons._group(c)))
-	if fresh.is_empty() and cards.size() == 1:
-		return false
-	banished.append(Weapons._group(cards[i]))
-	if fresh.is_empty():
-		cards.remove_at(i)
-	else:
-		cards[i] = fresh[0]
-	return true
+	return Weapons.roll_cards(self, 3)
 
 
 ## Sahibinde stat / envanter / yükseltme değişti: diğer makinelere yay (silah modeli, can barı, mermi sayısı).

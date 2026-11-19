@@ -2856,3 +2856,78 @@ msgstr "Level up: %d card(s) to pick at the break"
 #: td_ui.gd
 msgid "MOLA   •   sıradaki dalgaya %d sn   (kart seçerken süre durur)"
 msgstr "BREAK   •   next wave in %d s   (timer pauses while picking a card)"
+
+msgid "Efekt sesi: %d%%"
+msgstr "Effects: %d%%"
+
+msgid "Müzik: %d%%"
+msgstr "Music: %d%%"
+
+msgid "Arayüz sesi: %d%%"
+msgstr "UI: %d%%"
+
+msgid "Ortam sesi: %d%%"
+msgstr "Ambience: %d%%"
+
+msgid "Kızıl Ton"
+msgstr "Crimson Tint"
+
+msgid "Buz Mavisi"
+msgstr "Ice Blue"
+
+msgid "Orman Yeşili"
+msgstr "Forest Green"
+
+msgid "Gece Moru"
+msgstr "Midnight Purple"
+
+msgid "Saç Sarısı"
+msgstr "Hair Blonde"
+
+msgid "Avcı"
+msgstr "Hunter"
+
+msgid "Kule Bekçisi"
+msgstr "Tower Guard"
+
+msgid "Bekçi"
+msgstr "Guard"
+
+msgid "Efsane"
+msgstr "Legend"
+
+msgid "Saç Kralı"
+msgstr "Hair King"
+
+msgid "Mavi Kıvılcım"
+msgstr "Blue Spark"
+
+msgid "Zehir Yeşili"
+msgstr "Toxic Green"
+
+msgid "Pembe Parıltı"
+msgstr "Pink Glow"
+
+msgid "Mor Şimşek"
+msgstr "Purple Lightning"
+
+msgid "Altın Işık"
+msgstr "Golden Light"
+
+msgid "Karakter Rengi"
+msgstr "Character Color"
+
+msgid "Unvan"
+msgstr "Title"
+
+msgid "Kurşun ve Namlu Ateşi Rengi"
+msgstr "Bullet and Muzzle Flash Color"
+
+msgid "Yalnızca görünüm: oyuna avantaj vermez. Diğer oyuncular da görür."
+msgstr "Cosmetic only: no gameplay advantage. Other players can see them."
+
+msgid "Seç"
+msgstr "Select"
+
+msgid "Seçili"
+msgstr "Selected"
