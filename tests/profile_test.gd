@@ -69,17 +69,51 @@ func _ready() -> void:
 	nw = Profile.add_run(_run(false, 2, "easy", 150, 99), 1)
 	check("yay açıldı", nw == ["weapon:bow"])
 
-	# Yükseltme
+	# Kozmetik
 	_clear()
-	check("yetersiz gold reddi", not Profile.buy_upgrade("tower_hp") and Profile.upgrade_level("tower_hp") == 0)
+	check("yetersiz gold reddi", not Profile.cosm_buy("tint:red") and not Profile.cosm_owned("tint:red"))
 	var d := Profile.load_data()
 	d.gold = 200
 	Profile.save_data(d)
-	check("satın alma", Profile.buy_upgrade("tower_hp") and Profile.gold() == 140 and Profile.upgrade_level("tower_hp") == 1)
-	check("2. kademe 120", Profile.buy_upgrade("tower_hp") and Profile.gold() == 20)
-	check("hp çarpanı", is_equal_approx(Profile.tower_hp_mult(), 1.08))
-	check("reroll azami 3", Profile.upgrade_max("reroll") == 3 and Profile.upgrade_cost("banish") == 60)
-	check("bilinmeyen yükseltme", not Profile.buy_upgrade("xyz"))
+	check("satın alma", Profile.cosm_buy("tint:red") and Profile.gold() == 140 and Profile.cosm_owned("tint:red"))
+	check("tekrar alınmaz", not Profile.cosm_buy("tint:red") and Profile.gold() == 140)
+	check("bilinmeyen id", not Profile.cosm_buy("xyz"))
+	check("sahip olunmayan seçilemez", not Profile.cosm_select("tint", "tint:blue"))
+	check("yuva uyuşmazlığı", not Profile.cosm_select("fx", "tint:red"))
+	check("seçim", Profile.cosm_select("tint", "tint:red") and Profile.cosm_sel().tint == "tint:red")
+	var ok_prices := true
+	for id in Profile.COSMETICS:
+		var cc: Dictionary = Profile.COSMETICS[id]
+		ok_prices = ok_prices and cc.price >= 60 and cc.price <= 300 and id.begins_with(cc.slot + ":") and Profile.SLOTS.has(cc.slot)
+	check("katalog: fiyat 60-300, yuva tutarlı", ok_prices)
+	check("ağ doğrulama: katalog dışı / yanlış yuva / tip atılır",
+		Profile.cosm_clean({"tint": "fx:blue", "title": "title:king", "fx": 5, "x": "tint:red"}) == {"tint": "", "title": "title:king", "fx": ""}
+		and Profile.cosm_clean(7) == {"tint": "", "title": "", "fx": ""} and Profile.cosm_clean({"fx": "fx:nope"}).fx == "")
+	check("renk / unvan", Profile.cosm_color("tint:red") != Color.WHITE and Profile.cosm_title("title:king") == "Saç Kralı" and Profile.cosm_title("") == "")
+	Profile.cosm_select("tint", "")
+	check("seçim kaldırma", Profile.cosm_sel().tint == "")
+	Profile.cosm_select("tint", "tint:red")
+
+	# Göç: eski yükseltme kademeleri bir kez iade edilir, kayıt silinir
+	_clear()
+	_write(TMP, "[meta]
+gold=10
+[upgrades]
+tower_hp=2
+reroll=1
+bilinmeyen=3
+")
+	Profile.reload()
+	check("göç iadesi 180+60", Profile.gold() == 250)
+	Profile.reload()
+	check("göç tek sefer (dosya yeniden yazıldı)", Profile.gold() == 250 and not FileAccess.get_file_as_string(TMP).contains("[upgrades]"))
+	_clear()
+	Profile.reload()
+	d = Profile.load_data()
+	d.gold = 200
+	Profile.save_data(d)
+	Profile.cosm_buy("tint:red")
+	Profile.cosm_select("tint", "tint:red")
 
 	# Başarım
 	Profile.achieve("ACH_EVOLVED")
@@ -97,27 +131,27 @@ func _ready() -> void:
 	var g := Profile.gold()
 	Profile.set_tutorial_done()
 	Profile.reload()
-	check("yeniden yükleme", Profile.gold() == g and Profile.upgrade_level("tower_hp") == 2 and Profile.tutorial_done()
+	check("yeniden yükleme", Profile.gold() == g and Profile.cosm_owned("tint:red") and Profile.cosm_sel().tint == "tint:red" and Profile.tutorial_done()
 		and Profile.achievements().has("ACH_EVOLVED") and Profile.stat("chickens") == 10)
 
 	# Bozuk dosya -> .bak
 	check("bak var", FileAccess.file_exists(TMP + ".bak"))
 	_write(TMP, "bozuk [[[ = =")
 	Profile.reload()
-	check("bak'tan yükleme", Profile.upgrade_level("tower_hp") == 2 and Profile.gold() > 0)
+	check("bak'tan yükleme", Profile.cosm_owned("tint:red") and Profile.gold() > 0)
 
 	# İkisi de bozuk
 	_write(TMP, "bozuk [[[ = =")
 	_write(TMP + ".bak", "[meta\n gold=")
 	Profile.reload()
-	check("ikisi bozuk -> varsayılan", Profile.gold() == 0 and Profile.upgrade_level("tower_hp") == 0 and not Profile.tutorial_done())
+	check("ikisi bozuk -> varsayılan", Profile.gold() == 0 and not Profile.cosm_owned("tint:red") and not Profile.tutorial_done())
 	check("varsayılan sonrası çalışır", Profile.add_run(_run(true, 1, "normal"), 1) is Array)
 
 	# Bozuk değerler clamp
 	_write(TMP, "[meta]\ngold=-50\ntutorial=\"x\"\n[upgrades]\ntower_hp=99\n[stats]\nkills=\"abc\"\n")
 	_clear_bak()
 	Profile.reload()
-	check("clamp", Profile.gold() == 0 and Profile.upgrade_level("tower_hp") == 5 and Profile.stat("kills") == 0)
+	check("clamp (+ azami yükseltme iadesi 1130)", Profile.gold() == 1130 and Profile.stat("kills") == 0)
 
 	# Sonsuz modda 10. dalgayı geçmek zafer sayılır (Zor -> Kabus açılır)
 	_clear()

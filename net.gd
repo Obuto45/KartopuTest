@@ -9,6 +9,7 @@ signal lobbies_found(list: Array) # [{id, name, mode, diff, n}, ...]
 
 const APP_ID := 480 # Spacewar test App ID'si; kendi App ID'n olunca değiştir.
 const LOCAL_PORT := 7777
+const Profile := preload("res://profile.gd")
 
 var steam_ok := false
 var lobby_id := 0
@@ -17,6 +18,7 @@ var chars := {} # peer_id -> karakter numarası (characters.gd LIST sırası)
 var my_char := 0
 var weapons := {} # peer_id -> TD başlangıç silahı (weapons.gd LIST sırası)
 var my_weapon := 0
+var cosm := {} # peer_id -> {tint, title, fx} kozmetik seçimi (profile.gd COSMETICS id'leri; doğrulanmış)
 var public_lobby := false # kurulacak lobi herkese açık mı
 var meta := {"mode": "arena", "diff": "normal"} # lobi verisi: host main.gd'den günceller
 
@@ -34,7 +36,7 @@ func _ready() -> void:
 	else:
 		push_warning("Steam başlatılamadı: %s" % r)
 	multiplayer.peer_connected.connect(func(_id): lobby_changed.emit())
-	multiplayer.peer_disconnected.connect(func(id): names.erase(id); chars.erase(id); weapons.erase(id); lobby_changed.emit())
+	multiplayer.peer_disconnected.connect(func(id): names.erase(id); chars.erase(id); weapons.erase(id); cosm.erase(id); lobby_changed.emit())
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(func(): status.emit("Bağlantı başarısız."); leave())
 	multiplayer.server_disconnected.connect(func(): status.emit("Host ayrıldı."); leave())
@@ -46,6 +48,19 @@ func my_name() -> String:
 
 func display_name(id: int) -> String:
 	return names.get(id, tr("Oyuncu %d") % id)
+
+
+## Unvan rozetiyle: "[Avcı] Ad".
+func tagged_name(id: int) -> String:
+	var t := Profile.cosm_title(cosm_of(id).title)
+	return display_name(id) if t == "" else "[%s] %s" % [tr(t), display_name(id)]
+
+
+## Oyuncunun kozmetik seçimi; kendimiz için profilden (çevrimdışı / lobi öncesi de çalışsın).
+func cosm_of(id: int) -> Dictionary:
+	if id == multiplayer.get_unique_id():
+		return Profile.cosm_sel()
+	return cosm.get(id, Profile.cosm_clean(null))
 
 
 func online() -> bool:
@@ -203,6 +218,7 @@ func leave() -> void:
 	names.clear()
 	chars.clear()
 	weapons.clear()
+	cosm.clear()
 	left.emit()
 
 
@@ -219,10 +235,12 @@ func _register_self() -> void:
 		names[1] = n
 		chars[1] = my_char
 		weapons[1] = my_weapon
+		cosm[1] = Profile.cosm_sel()
 		lobby_changed.emit()
 	else:
 		register_name.rpc_id(1, n, my_char)
 		register_weapon.rpc_id(1, my_weapon)
+		register_cosm.rpc_id(1, Profile.cosm_sel())
 
 
 ## Karakter değişince lobiye bildir (bağlı değilsek sadece hatırla).
@@ -284,4 +302,21 @@ func register_weapon(i: int) -> void:
 @rpc("authority", "reliable")
 func sync_weapons(w: Dictionary) -> void:
 	weapons = w
+	lobby_changed.emit()
+
+
+## Kozmetikler: gelen veri katalogla doğrulanır, bilinmeyen id yok sayılır.
+@rpc("any_peer", "reliable")
+func register_cosm(c: Dictionary) -> void:
+	cosm[multiplayer.get_remote_sender_id()] = Profile.cosm_clean(c)
+	sync_cosm.rpc(cosm)
+	lobby_changed.emit()
+
+
+@rpc("authority", "reliable")
+func sync_cosm(d: Dictionary) -> void:
+	cosm.clear()
+	for k in d:
+		if k is int:
+			cosm[k] = Profile.cosm_clean(d[k])
 	lobby_changed.emit()

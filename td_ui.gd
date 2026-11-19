@@ -84,11 +84,6 @@ var boss_name: Label
 var boss_fill: ColorRect
 var boss_txt: Label
 var cards_at := 0 # kartlar bu zamandan önce görünmez (dalga afişiyle çakışmasın)
-var reroll_btn: Button
-var banish_btn: Button
-var rerolls: int = Profile.upgrade_level("reroll") # maç başında kalıcı yükseltmeden, maç boyunca azalır
-var banishes: int = Profile.upgrade_level("banish")
-var banish_mode := false # Ele'ye basıldı: sıradaki 1/2/3 kartı eler
 var tut := -1 if Profile.tutorial_done() else 0 # rehber adımı; -1 = kapalı
 var tut_n := 0 # adımın başlangıç sayacı (yapı sayısı)
 var tut_seen := false # kart adımı: kartlar göründü mü
@@ -617,15 +612,6 @@ func _build_cards() -> void:
 	cards_row.mouse_filter = MOUSE_FILTER_IGNORE
 	cards_row.add_theme_constant_override("separation", 18)
 	cards_box.add_child(cards_row)
-	var rb := HBoxContainer.new() # kalıcı yükseltmeden gelen haklar
-	rb.alignment = BoxContainer.ALIGNMENT_CENTER
-	rb.mouse_filter = MOUSE_FILTER_IGNORE
-	rb.add_theme_constant_override("separation", 14)
-	cards_box.add_child(rb)
-	reroll_btn = _button(rb, "", _reroll)
-	banish_btn = _button(rb, "", _banish_toggle)
-	for b in [reroll_btn, banish_btn]:
-		b.custom_minimum_size = Vector2(300, 40)
 
 
 func _build_shop() -> void:
@@ -779,16 +765,7 @@ func _process(dt: float) -> void:
 		banner_tw.kill()
 		banner_tw = create_tween()
 		banner_tw.tween_property(banner, "modulate:a", 0.0, 0.2)
-	if cards.is_empty():
-		banish_mode = false
-	cards_hint.text = "Elemek istediğin kartı seç: bu maçta bir daha çıkmaz" if banish_mode \
-		else "1 / 2 / 3 tuşuyla ya da tıklayarak seç" if st == "break" else "1 / 2 / 3 tuşuyla seç"
-	if cards_box.visible:
-		reroll_btn.text = tr("↻  Yeniden Çek  [4]   •   %d hak") % rerolls
-		reroll_btn.disabled = rerolls <= 0
-		banish_btn.text = "✕  Hangisi? 1 / 2 / 3   ([5] vazgeç)" if banish_mode else tr("✕  Ele  [5]   •   %d hak") % banishes
-		banish_btn.disabled = banishes <= 0
-		cards_row.modulate = Color(1.0, 0.6, 0.55) if banish_mode else Color.WHITE
+	cards_hint.text = "1 / 2 / 3 tuşuyla ya da tıklayarak seç" if st == "break" else "1 / 2 / 3 tuşuyla seç"
 	_tut_tick(st, ended, cards_box.visible)
 
 	if inv_wrap.visible:
@@ -836,10 +813,6 @@ func _input(e: InputEvent) -> void:
 		_toggle_inv()
 	elif cards_open() and key in [KEY_1, KEY_2, KEY_3]:
 		_choose(key - KEY_1)
-	elif cards_open() and key == KEY_4:
-		_reroll()
-	elif cards_open() and key == KEY_5:
-		_banish_toggle()
 	elif tut >= 0 and key == KEY_H:
 		tut = TUT.size() - 1
 		_tut_next()
@@ -965,7 +938,7 @@ func _refresh_ready(st: String) -> void:
 		return
 	var names := PackedStringArray()
 	for id in Net.names:
-		names.append(("✔ " if _is_ready(id) else "○ ") + Net.display_name(id))
+		names.append(("✔ " if _is_ready(id) else "○ ") + Net.tagged_name(id))
 	var mine := _is_ready(multiplayer.get_unique_id())
 	ready_lbl.text = (tr("Hazırsın") if mine else tr("G: Hazır")) + "      " + "    ".join(names)
 
@@ -1078,26 +1051,9 @@ func card_text(d: Dictionary) -> Array:
 
 
 func _choose(i: int) -> void:
-	if banish_mode:
-		banish_mode = false
-		if banishes > 0 and player and player.has_method("banish_card") and player.banish_card(i):
-			banishes -= 1
-			Sfx.play2d(Sfx.whoosh, -4.0)
-	elif player and player.has_method("choose_card") and i < _g(player, "cards", []).size():
+	if player and player.has_method("choose_card") and i < _g(player, "cards", []).size():
 		player.choose_card(i)
 		Sfx.play2d(Sfx.whoosh, -4.0)
-
-
-func _reroll() -> void:
-	if rerolls > 0 and player and player.has_method("reroll_cards"):
-		rerolls -= 1
-		banish_mode = false
-		player.reroll_cards()
-		Sfx.play2d(Sfx.whoosh, -4.0)
-
-
-func _banish_toggle() -> void:
-	banish_mode = banishes > 0 and not banish_mode
 
 
 # ---------- Mağaza ----------
@@ -1373,7 +1329,7 @@ func _end_players(parent: Node, ps: Dictionary, mvp: int) -> void:
 	peers.sort()
 	for peer in peers:
 		var st: Dictionary = ps[peer]
-		rows.append([Net.display_name(int(peer)), str(st.get("dmg", 0)), str(st.get("kills", 0)), str(st.get("crits", 0)),
+		rows.append([Net.tagged_name(int(peer)), str(st.get("dmg", 0)), str(st.get("kills", 0)), str(st.get("crits", 0)),
 			str(st.get("builds", 0)), str(st.get("deaths", 0)), "  •  ".join(PackedStringArray(titles[peer])), peer])
 	for r in rows:
 		var head: bool = r.size() == 7

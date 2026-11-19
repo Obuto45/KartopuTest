@@ -17,7 +17,7 @@ func _wait(t: float) -> void:
 
 func _ready() -> void:
 	Profile.use_path("user://shots_profile.cfg") # kalıcı profil kirlenmesin
-	Profile.save_data({"gold": 300, "upgrades": {"reroll": 2, "banish": 1}, "stats": {"best_match_kills": 112}})
+	Profile.save_data({"gold": 300, "stats": {"best_match_kills": 112}})
 	get_window().size = Vector2i(1920, 1080)
 	var main = load("res://main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)
@@ -60,10 +60,6 @@ func _ready() -> void:
 		{"id": "up:bazooka:blast", "title": "Bazuka: Dev Patlama", "desc": "Patlama alanı +1 m.", "rarity": "epic", "type": "weapon_up"}]
 	await _wait(0.9)
 	await _shot("evo")
-	ui._banish_toggle()
-	await _wait(0.2)
-	await _shot("banish")
-	ui.banish_mode = false
 	me.cards = []
 	# Maç sonu özeti (3 oyuncu): zafer, sonra sonsuz kayıp
 	Net.names[2] = "Sinan"

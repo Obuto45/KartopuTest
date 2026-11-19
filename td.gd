@@ -98,11 +98,8 @@ func _ready() -> void:
 	tower_max = Balance.tower_hp(_n)
 	money = Balance.START_MONEY * _n
 	time_left = Balance.BREAK_TIME
-	if multiplayer.is_server(): # kalıcı yükseltmeler ve ilk maç rehberi: yalnız host'un profili (değerler _state ile yayılır)
-		tower_max = roundi(Balance.tower_hp(_n) * Profile.tower_hp_mult())
-		money += Profile.start_money_bonus()
-		if not Profile.tutorial_done():
-			time_left = 90.0 # ilk mola rehber bitene dek (en çok 90 sn); herkes hazır olunca yine 3 sn'ye iner
+	if multiplayer.is_server() and not Profile.tutorial_done(): # ilk maç rehberi: yalnız host'un profili
+		time_left = 90.0 # ilk mola rehber bitene dek (en çok 90 sn); herkes hazır olunca yine 3 sn'ye iner
 	tower_hp = tower_max
 	_seen_hp = tower_hp
 	xp_next = Balance.xp_for(1, _n)
