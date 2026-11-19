@@ -96,8 +96,8 @@ func _ready() -> void:
 	var leaf_mat := _smat("res://shaders/foliage.gdshader")
 	_multimesh(_trunk_mesh(), _trunks, bark_mat, true)
 	_multimesh(_cone_mesh(), _cones, leaf_mat, true)
-	_multimesh(_blob_mesh(10, 5, 0.3, 1.4), _blobs, leaf_mat, true)
-	_multimesh(_blob_mesh(8, 4, 0.22, 1.7), _pebbles, _rock_mat, false)
+	_multimesh(_blob_mesh(16, 9, 0.3, 1.4), _blobs, leaf_mat, true)
+	_multimesh(_blob_mesh(8, 4, 0.22, 1.7, 0.5), _pebbles, _rock_mat, false)
 	# Uzak tepeler: sisin içinde silüet, ufku kapatır.
 	var hills := []
 	for i in 18:
@@ -153,16 +153,18 @@ func _environment(host: Node = self) -> Array:
 	env.sky.sky_material = _smat("res://shaders/sky.gdshader")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 1.2 # gölgedeki karakterler seçilsin
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_white = 6.0
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX # yumuşak vurgu sönümü: güneşli yaprak yanmaz
+	env.tonemap_exposure = 1.1
+	env.tonemap_agx_white = 6.0
+	env.tonemap_agx_contrast = 1.1
 	env.glow_enabled = true # yalnızca çok parlak şeyler (güneş, patlama) parlar
-	env.glow_intensity = 0.6
-	env.glow_bloom = 0.0
-	env.glow_hdr_threshold = 1.4 # güneşli yapraklar değil, yalnız patlama / kıvılcım parlasın
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	env.glow_intensity = 0.5
+	env.glow_bloom = 0.06 # hafif painterly hale
+	env.glow_hdr_threshold = 1.0
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.12
+	env.adjustment_saturation = 1.18
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.6 # çimenin altı kapkara olmasın
@@ -172,6 +174,11 @@ func _environment(host: Node = self) -> Array:
 	env.fog_density = 0.004
 	env.fog_sun_scatter = 0.25
 	env.fog_sky_affect = 0.2 # gök kendi rengini korusun
+	env.fog_aerial_perspective = 0.6 # uzak tepeler gök rengine erisin
+	env.fog_height = 1.0 # vadi tabanında hafif yer sisi
+	env.fog_height_density = 0.025
+	env.ssil_radius = 5.0
+	env.ssil_intensity = 0.8
 	# Hacimsel sis: ağaç aralarından güneş huzmeleri. Pahalı olan tek ayar bu; yoğunluk düşük tutulur.
 	env.volumetric_fog_enabled = true
 	env.volumetric_fog_density = 0.007
@@ -181,6 +188,11 @@ func _environment(host: Node = self) -> Array:
 	env.volumetric_fog_sky_affect = 0.2
 	var we := WorldEnvironment.new()
 	we.environment = env
+	var cam_attr := CameraAttributesPractical.new() # Yüksek: uzak tepeleri hafifçe yumuşatan DoF
+	cam_attr.dof_blur_far_distance = 120.0
+	cam_attr.dof_blur_far_transition = 60.0
+	cam_attr.dof_blur_amount = 0.04
+	we.camera_attributes = cam_attr
 	host.add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-34, 40, 0) # alçak güneş: uzun gölgeler
@@ -191,6 +203,7 @@ func _environment(host: Node = self) -> Array:
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	sun.directional_shadow_max_distance = 80.0
 	sun.directional_shadow_blend_splits = true
+	sun.shadow_blur = 1.5
 	host.add_child(sun)
 	var fill := DirectionalLight3D.new() # karşıdan soğuk dolgu: gölge tarafı kapkara kalmaz
 	fill.rotation_degrees = Vector3(-25, 220, 0)
@@ -204,6 +217,11 @@ func _environment(host: Node = self) -> Array:
 		var q: int = Settings.quality
 		env.ssao_enabled = q >= 1
 		env.volumetric_fog_enabled = q >= 2
+		env.ssil_enabled = q >= 2
+		env.glow_enabled = q >= 1
+		cam_attr.dof_blur_far_enabled = q >= 2
+		sun.light_angular_distance = [0.0, 1.0, 1.5][q] # yumuşak gölge kenarı (PCSS); 2.5 kül dağlarında ~%30 fps yiyordu
+		sun.directional_shadow_blend_splits = q >= 2
 		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if q >= 1 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 		sun.directional_shadow_max_distance = 80.0 if q >= 1 else 50.0
 	apply.call()
@@ -248,7 +266,8 @@ func _box(pos: Vector3, size: Vector3, mat: Material) -> void:
 
 ## Hazır ağın her köşesini f'den geçirir, düz (yüzey başına) normalle yeniden kurar: low-poly görünüm.
 ## UV.y = yükseklik (0 alt, 1 üst): gölgelendiriciler alt-üst renk geçişinde kullanır.
-func _deform(src: PrimitiveMesh, f: Callable, col := Color.WHITE) -> ArrayMesh:
+## soft: 1 = tam yumuşak normal (bitki), 0 = düz yüzey (kaya); arası karışım.
+func _deform(src: PrimitiveMesh, f: Callable, col := Color.WHITE, soft := 1.0) -> ArrayMesh:
 	var a := src.get_mesh_arrays()
 	var vs: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
 	var lo := INF
@@ -259,21 +278,33 @@ func _deform(src: PrimitiveMesh, f: Callable, col := Color.WHITE) -> ArrayMesh:
 		hi = maxf(hi, vs[i].y)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.set_smooth_group(-1)
+	st.set_smooth_group(0)
 	st.set_color(col)
 	for i in a[Mesh.ARRAY_INDEX]:
-		st.set_uv(Vector2(0, (vs[i].y - lo) / (hi - lo)))
+		st.set_uv(Vector2((lo + hi) * 0.5, (vs[i].y - lo) / (hi - lo))) # x: ağ merkezi (taç küre normali için)
 		st.add_vertex(vs[i])
 	st.generate_normals()
-	return st.commit()
+	if soft >= 1.0:
+		return st.commit()
+	var m := st.commit_to_arrays()
+	var ps: PackedVector3Array = m[Mesh.ARRAY_VERTEX]
+	var ns: PackedVector3Array = m[Mesh.ARRAY_NORMAL]
+	for t in range(0, ns.size(), 3): # her üçgen: düz normal ile yumuşak normal karışımı
+		var fn := (ps[t + 1] - ps[t]).cross(ps[t + 2] - ps[t]).normalized()
+		for j in 3:
+			ns[t + j] = fn.lerp(ns[t + j], soft).normalized()
+	m[Mesh.ARRAY_NORMAL] = ns
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, m)
+	return am
 
 
 ## Gürültüyle yamultulmuş birim küre: yaprak kümesi, çakıl, tepe.
-func _blob_mesh(segs: int, rings: int, amp: float, freq: float) -> ArrayMesh:
+func _blob_mesh(segs: int, rings: int, amp: float, freq: float, soft := 1.0) -> ArrayMesh:
 	var sm := SphereMesh.new()
 	sm.radius = 1.0; sm.height = 2.0
 	sm.radial_segments = segs; sm.rings = rings
-	return _deform(sm, func(v: Vector3) -> Vector3: return v * (1.0 + amp * _fn.get_noise_3dv(v * freq)))
+	return _deform(sm, func(v: Vector3) -> Vector3: return v * (1.0 + amp * _fn.get_noise_3dv(v * freq)), Color.WHITE, soft)
 
 
 func _tree(pos: Vector3, s: float, rng: RandomNumberGenerator, collide: bool) -> void:
@@ -593,15 +624,26 @@ func _sway_mat(ground_mat: ShaderMaterial, tint_mix: float, top: float) -> Shade
 		"mask_half": MASK_HALF, "tint_mix": tint_mix, "top": top})
 
 
-## Çimen öbeği: dışa yatık üç sivri yaprak (9 üçgen). Normal gölgelendiricide verilir. world.gd de kullanır.
+## Çimen öbeği: dışa yatık, kıvrık sivri bıçaklar (kalitede 1/3/4 bıçak). UV.y = yükseklik oranı. world.gd de kullanır.
 func _grass_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for k in 3:
-		var b := Basis(Vector3.UP, k * TAU / 3.0 + 0.4)
-		var pts := [Vector3(-0.04, 0, 0.02), Vector3(0.04, 0, 0.02), Vector3(-0.028, 0.2, 0.06), Vector3(0.028, 0.2, 0.06), Vector3(0, 0.4, 0.15)]
-		for i in [0, 1, 2, 1, 3, 2, 2, 3, 4]:
-			st.add_vertex(b * pts[i])
+	var n: int = [1, 3, 4][Settings.quality]
+	var ys := [0.0, 0.13, 0.27, 0.4]
+	var zs := [0.02, 0.045, 0.09, 0.17] # öne doğru artan eğim
+	var ws := [0.04, 0.033, 0.021, 0.0] # uca doğru incelir
+	for k in n:
+		var b := Basis(Vector3.UP, k * TAU / n + 0.4)
+		var off := b * Vector3(0, 0, -0.03) if n > 1 else Vector3.ZERO
+		var hk := 1.0 - 0.12 * (k % 3)
+		var wk := 1.0 if n > 1 else 1.5 # tek bıçakta daha geniş
+		var v := []
+		for r in 4:
+			for sd in [-1.0, 1.0]:
+				v.append([b * Vector3(sd * ws[r] * wk, ys[r] * hk, zs[r] * hk) + off, ys[r] / 0.4])
+		for i in [0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4, 4, 5, 6]: # iki dörtgen + uç üçgeni
+			st.set_uv(Vector2(0, v[i][1]))
+			st.add_vertex(v[i][0])
 	return st.commit()
 
 
