@@ -37,8 +37,9 @@ func _ready() -> void:
 ## Kenar yumuşatma burada; ışık/sis ayarlarını "changed" ile ortam uygular.
 func apply_quality() -> void:
 	var vp := get_tree().root
-	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][quality]
-	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if quality == 0 else Viewport.SCREEN_SPACE_AA_DISABLED
+	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_2X][quality]
+	vp.screen_space_aa = [Viewport.SCREEN_SPACE_AA_FXAA, Viewport.SCREEN_SPACE_AA_SMAA, Viewport.SCREEN_SPACE_AA_DISABLED][quality]
+	vp.use_taa = quality == 2 # ince çim/yaprak titremesini TAA bastırır
 	changed.emit()
 
 

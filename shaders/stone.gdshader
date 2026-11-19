@@ -21,7 +21,10 @@ void fragment() {
 	float n = texture(noise_tex, uv * 0.13).r;
 	float fine = texture(noise_tex, uv * vec2(1.1, mix(1.1, 0.12, streak))).r;
 	vec3 col = tint * COLOR.rgb * (0.7 + 0.6 * n) * (0.8 + 0.4 * fine);
-	float m = smoothstep(0.5, 0.8, wn.y * 0.55 + n * 0.6);
+	// Yumuşak renk kırılımı: düşük frekanslı gürültüyle sıcak/soğuk ton kayması (düz yüz hissi azalır).
+	float br = texture(noise_tex, uv * 0.045 + 0.3).r;
+	col *= mix(vec3(0.94, 0.96, 1.05), vec3(1.08, 1.02, 0.92), smoothstep(0.3, 0.7, br));
+	float m = smoothstep(0.35, 0.85, wn.y * 0.6 + n * 0.55); // geniş geçiş: üst yüzlerde yosun
 	if (blocks > 0.5) {
 		if (an.y < 0.6) {
 			float row = floor(uv.y / 0.5);
@@ -39,6 +42,9 @@ void fragment() {
 	}
 	col = mix(col, moss_col * (0.6 + 0.8 * fine), m * moss);
 	col *= mix(0.65, 1.0, smoothstep(0.0, 0.6, wp.y));
+	// Hafif rim: kenarlar açılır, sert siluet yumuşar.
+	float rim = pow(1.0 - clamp(dot(normalize(NORMAL), VIEW), 0.0, 1.0), 3.0);
+	col += col * rim * 0.35;
 	ALBEDO = col;
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.2;

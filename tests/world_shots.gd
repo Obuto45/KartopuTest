@@ -30,8 +30,10 @@ func _ready() -> void:
 		var h: float = w.height(spot.x, spot.y)
 		cam.position = Vector3(spot.x, h + 3.0, spot.y)
 		cam.look_at(Vector3(spot.x + 30, w.height(spot.x + 30, spot.y + 30) + 2.0, spot.y + 30))
+		w._update_env(100.0)
 		for i in 150:
 			await get_tree().process_frame
+		w._update_env(100.0)
 		await RenderingServer.frame_post_draw
 		var f: String = OS.get_user_data_dir() + "/world_" + WorldScript.NAMES[b] + ".png"
 		get_viewport().get_texture().get_image().save_png(f)
