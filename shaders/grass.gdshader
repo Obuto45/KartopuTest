@@ -1,6 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled, world_vertex_coords;
-// Çimen ve çiçek: rüzgârda sallanır (kök sabit, uç oynar). tint_mix=1 -> zemin renginden kök-uç geçişi.
+// Çimen ve çiçek: çok dalgalı rüzgâr, kök AO, güneş geçirgenliği (subsurface) ve uç parıltısı.
 #include "ground_tint.gdshaderinc"
 #include "wind.gdshaderinc"
 uniform float tint_mix = 1.0;
@@ -10,6 +10,7 @@ uniform float fade_end = 38.0;
 varying vec3 base;
 varying float h;
 varying float far;
+varying float gust_v;
 
 void vertex() {
 	vec3 root = MODEL_MATRIX[3].xyz;
@@ -19,7 +20,10 @@ void vertex() {
 	far = 1.0 - fade;
 	VERTEX = root + (VERTEX - root) * vec3(1.0, fade, 1.0);
 	float gust = textureLod(noise_tex, root.xz * 0.02 + TIME * vec2(0.05, 0.03), 0.0).r;
-	vec2 sway = wind_dir_n() * (0.05 + 0.2 * wind_wave(root.xz, TIME) + 0.1 * (gust - 0.42)) * wind_strength;
+	// İnce yaprak titreşimi: rüzgâr yönünde küçük dalgacık.
+	float ripple = textureLod(noise_tex, root.xz * 0.075 - TIME * wind_dir_n() * 0.1, 0.0).r;
+	gust_v = gust;
+	vec2 sway = wind_dir_n() * (0.05 + 0.2 * wind_wave(root.xz, TIME) + 0.1 * (gust - 0.42) + 0.1 * (ripple - 0.5)) * wind_strength;
 	sway += vec2(sin(TIME * 1.9 + root.x * 0.7 + root.z * 0.3), cos(TIME * 1.4 + root.z * 0.6)) * 0.02;
 	VERTEX.xz += sway * h * h * top * 2.0 * fade;
 	VERTEX.y -= length(sway) * h * h * top * 0.6 * fade;
@@ -29,13 +33,15 @@ void vertex() {
 void fragment() {
 	// Kök koyu, uç açık ve sarımsı; uzakta zemin rengine yaklaşır.
 	vec3 root_c = base * 0.45;
-	vec3 tip_c = base * 1.9 + vec3(0.05, 0.06, 0.0);
-	vec3 grass = mix(root_c, tip_c, smoothstep(0.0, 1.0, h)) * COLOR.rgb;
+	vec3 tip_c = base * 1.9 + vec3(0.05, 0.06, 0.0) * (0.7 + 0.6 * gust_v);
+	vec3 grass = mix(root_c, tip_c, smoothstep(0.0, 1.0, pow(h, 1.35))) * COLOR.rgb;
 	grass = mix(grass, base * COLOR.rgb, far * 0.85);
 	ALBEDO = mix(COLOR.rgb, grass, tint_mix);
 	BACKLIGHT = tip_c * h * h * 0.5 * (1.0 - far) * tint_mix; // uçta sahte subsurface
-	// Çift yüzlü ince yaprak: normal hep yukarı -> zeminle aynı ışığı alır, arka yüz kararmaz.
-	NORMAL = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-	ROUGHNESS = 1.0;
-	SPECULAR = 0.0;
+	// Normal yukarı (zeminle aynı ışık, arka yüz kararmaz); rüzgâr yönüne hafif eğim ışıkta ipek dalgası verir.
+	vec2 tilt = wind_dir_n() * (gust_v - 0.45) * 0.38 * h * (1.0 - far);
+	NORMAL = normalize((VIEW_MATRIX * vec4(normalize(vec3(tilt.x, 1.0, tilt.y)), 0.0)).xyz);
+	float sp = h * h * tint_mix * (1.0 - far);
+	ROUGHNESS = mix(1.0, 0.6, sp);
+	SPECULAR = mix(0.0, 0.24, sp);
 }

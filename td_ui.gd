@@ -248,15 +248,24 @@ func _build_top() -> void:
 	top.add_child(trow)
 	tower_title = _t(trow, "♜  RAPUNZEL'İN KULESİ", 21, Color(1.0, 0.9, 0.7), true)
 	diff_lbl = _chip(trow, "", DIFF_COLORS.normal, Color.WHITE, 14)
-	var bar := Control.new()
-	bar.custom_minimum_size = Vector2(620, 26)
+	var bar := Panel.new()
+	bar.custom_minimum_size = Vector2(620, 28)
 	bar.size_flags_horizontal = SIZE_SHRINK_CENTER
+	bar.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	bar.mouse_filter = MOUSE_FILTER_IGNORE
+	var bar_sb: StyleBoxFlat = main._sb(Color(0.04, 0.05, 0.09, 0.86), 8, 0)
+	bar_sb.set_border_width_all(1)
+	bar_sb.border_color = Color(1.0, 0.86, 0.55, 0.28)
+	bar_sb.shadow_color = Color(0, 0, 0, 0.4)
+	bar_sb.shadow_size = 8
+	bar.add_theme_stylebox_override("panel", bar_sb)
 	top.add_child(bar)
-	_rect(bar, Color(0, 0, 0, 0.7))
-	tower_fill = _rect(bar, Color(0.3, 0.9, 0.35))
+	tower_fill = _rect(bar, Color(0.26, 0.88, 0.40))
 	tower_fill.offset_left = 3; tower_fill.offset_top = 3; tower_fill.offset_bottom = -3
-	tower_txt = _t(bar, "", 18)
+	var t_gloss := _rect(bar, Color(1, 1, 1, 0.16))
+	t_gloss.anchor_bottom = 0.45
+	t_gloss.offset_left = 3; t_gloss.offset_top = 3; t_gloss.offset_right = -3
+	tower_txt = _t(bar, "", 17)
 	tower_txt.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	tower_txt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tower_txt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -282,13 +291,22 @@ func _build_top() -> void:
 	top.add_child(boss_box)
 	boss_name = _t(boss_box, "", 26, BOSS_C, true)
 	boss_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var bb := Control.new()
-	bb.custom_minimum_size = Vector2(780, 22)
+	var bb := Panel.new()
+	bb.custom_minimum_size = Vector2(780, 24)
+	bb.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	bb.mouse_filter = MOUSE_FILTER_IGNORE
+	var bb_sb: StyleBoxFlat = main._sb(Color(0.06, 0.03, 0.10, 0.88), 8, 0)
+	bb_sb.set_border_width_all(1)
+	bb_sb.border_color = Color(0.85, 0.52, 1.0, 0.42)
+	bb_sb.shadow_color = Color(0, 0, 0, 0.45)
+	bb_sb.shadow_size = 10
+	bb.add_theme_stylebox_override("panel", bb_sb)
 	boss_box.add_child(bb)
-	_rect(bb, Color(0, 0, 0, 0.75))
-	boss_fill = _rect(bb, Color(0.62, 0.2, 0.85))
+	boss_fill = _rect(bb, Color(0.66, 0.22, 0.88))
 	boss_fill.offset_left = 3; boss_fill.offset_top = 3; boss_fill.offset_bottom = -3
+	var b_gloss := _rect(bb, Color(1, 1, 1, 0.16))
+	b_gloss.anchor_bottom = 0.45
+	b_gloss.offset_left = 3; b_gloss.offset_top = 3; b_gloss.offset_right = -3
 	boss_txt = _t(bb, "", 15)
 	boss_txt.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	boss_txt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -385,63 +403,97 @@ func _build_bottom() -> void:
 	hint_lbl.offset_top = -196; hint_lbl.offset_bottom = -172
 	hint_lbl.modulate.a = 0.7
 
-	# Envanter: 1-3 silah/ekipman, 4-5 yapı/eşya, sonra Q yeteneği; gruplar başlıkla ayrılır.
+	# Envanter: koyu cam dock içinde 1-3 silah/ekipman, 4-5 yapı/eşya, Q yeteneği; tuş rozetleri ve taşmayan simgeler.
+	var dock := PanelContainer.new()
+	dock.set_anchors_preset(PRESET_CENTER_BOTTOM)
+	dock.grow_horizontal = GROW_DIRECTION_BOTH
+	dock.grow_vertical = GROW_DIRECTION_BEGIN
+	dock.offset_bottom = -22
+	dock.mouse_filter = MOUSE_FILTER_IGNORE
+	var dock_sb: StyleBoxFlat = main._sb(Color(0.04, 0.05, 0.09, 0.74), 14, 0)
+	dock_sb.content_margin_left = 14; dock_sb.content_margin_right = 14
+	dock_sb.content_margin_top = 7; dock_sb.content_margin_bottom = 9
+	dock_sb.set_border_width_all(1)
+	dock_sb.border_color = Color(1.0, 0.86, 0.55, 0.22)
+	dock_sb.shadow_color = Color(0, 0, 0, 0.45)
+	dock_sb.shadow_size = 12
+	dock.add_theme_stylebox_override("panel", dock_sb)
+	add_child(dock)
 	var inv := HBoxContainer.new()
-	inv.set_anchors_preset(PRESET_CENTER_BOTTOM)
-	inv.grow_horizontal = GROW_DIRECTION_BOTH
-	inv.grow_vertical = GROW_DIRECTION_BEGIN
-	inv.offset_bottom = -26
 	inv.mouse_filter = MOUSE_FILTER_IGNORE
-	inv.add_theme_constant_override("separation", 22)
-	add_child(inv)
+	inv.add_theme_constant_override("separation", 18)
+	dock.add_child(inv)
 	var key := 1
 	for g in [["SİLAH  /  EKİPMAN", 3], ["YAPI  /  EŞYA", 2], ["YETENEK", 1]]:
 		var gv := VBoxContainer.new()
 		gv.mouse_filter = MOUSE_FILTER_IGNORE
-		gv.add_theme_constant_override("separation", 2)
+		gv.add_theme_constant_override("separation", 3)
 		inv.add_child(gv)
-		var cap := _t(gv, g[0], 16)
+		var cap := _t(gv, g[0], 13, Color(0.86, 0.90, 0.96))
 		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cap.modulate.a = 0.6
+		cap.modulate.a = 0.72
 		var gh := HBoxContainer.new()
 		gh.mouse_filter = MOUSE_FILTER_IGNORE
 		gh.add_theme_constant_override("separation", 8)
 		gv.add_child(gh)
 		for i in g[1]:
+			var is_q := key > 5
 			var cell := PanelContainer.new()
-			cell.custom_minimum_size = Vector2(112, 92)
+			cell.custom_minimum_size = Vector2(130 if is_q else 116, 94)
 			cell.mouse_filter = MOUSE_FILTER_IGNORE
-			var sb: StyleBoxFlat = main._sb(Color(0, 0, 0, 0.5), 8, 6)
-			sb.set_border_width_all(3)
+			var sb: StyleBoxFlat = main._sb(Color(0.08, 0.10, 0.16, 0.86), 10, 6)
+			sb.set_border_width_all(2)
 			cell.add_theme_stylebox_override("panel", sb)
 			gh.add_child(cell)
+			var icon_m := MarginContainer.new()
+			icon_m.mouse_filter = MOUSE_FILTER_IGNORE
+			icon_m.add_theme_constant_override("margin_top", 12)
+			icon_m.add_theme_constant_override("margin_bottom", 22)
+			icon_m.add_theme_constant_override("margin_left", 6)
+			icon_m.add_theme_constant_override("margin_right", 6)
+			cell.add_child(icon_m)
 			var icon := TextureRect.new() # silah simgesi (yalnız silah slotunda dolu)
 			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			icon.mouse_filter = MOUSE_FILTER_IGNORE
-			cell.add_child(icon)
-			var k := _t(cell, str(key) if key <= 5 else "Q", 14)
-			k.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-			k.modulate.a = 0.75
-			var n := _t(cell, "", 15)
+			icon_m.add_child(icon)
+			var kwrap := PanelContainer.new()
+			kwrap.size_flags_horizontal = SIZE_SHRINK_BEGIN
+			kwrap.size_flags_vertical = SIZE_SHRINK_BEGIN
+			kwrap.mouse_filter = MOUSE_FILTER_IGNORE
+			var ksb: StyleBoxFlat = main._sb(Color(0.03, 0.04, 0.07, 0.88), 5, 0)
+			ksb.content_margin_left = 5; ksb.content_margin_right = 5
+			ksb.content_margin_top = 0; ksb.content_margin_bottom = 0
+			ksb.set_border_width_all(1)
+			ksb.border_color = Color(1, 1, 1, 0.22)
+			kwrap.add_theme_stylebox_override("panel", ksb)
+			cell.add_child(kwrap)
+			var k := _t(kwrap, "Q" if is_q else str(key), 12, Color(1.0, 0.90, 0.65) if is_q else Color(0.9, 0.94, 1.0))
+			k.add_theme_constant_override("outline_size", 0)
+			var n_wrap := MarginContainer.new()
+			n_wrap.mouse_filter = MOUSE_FILTER_IGNORE
+			n_wrap.add_theme_constant_override("margin_top", 20 if is_q else 0)
+			n_wrap.add_theme_constant_override("margin_bottom", 4)
+			cell.add_child(n_wrap)
+			var n := _t(n_wrap, "", 13 if is_q else 14)
 			n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			n.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			var cnt := _t(cell, "", 16, GOLD)
+			var cnt := _t(cell, "", 14, GOLD)
 			cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			cnt.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-			var pips := _t(cell, "", 14, GOLD)
-			pips.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+			var pips := _t(cell, "", 13, GOLD)
+			pips.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 			pips.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			pips.size_flags_vertical = SIZE_SHRINK_BEGIN
 			var cdb := ProgressBar.new() # bekleme süresi: dolu = yeni kullanıldı, boşalınca hazır
 			cdb.show_percentage = false
 			cdb.max_value = 1.0
-			cdb.custom_minimum_size.y = 5
+			cdb.custom_minimum_size.y = 4
 			cdb.size_flags_vertical = SIZE_SHRINK_END
 			cdb.mouse_filter = MOUSE_FILTER_IGNORE
 			cdb.add_theme_stylebox_override("background", StyleBoxEmpty.new())
-			cdb.add_theme_stylebox_override("fill", main._sb(Color(1, 1, 1, 0.85), 2, 0))
+			cdb.add_theme_stylebox_override("fill", main._sb(Color(1.0, 0.82, 0.32, 0.92), 2, 0))
 			cell.add_child(cdb)
 			cells.append({"sb": sb, "name": n, "count": cnt, "pips": pips, "icon": icon, "cd": cdb, "cd_max": 0.0})
 			key += 1
@@ -452,7 +504,12 @@ func _build_inv() -> void:
 	inv_wrap.set_anchors_preset(PRESET_CENTER)
 	inv_wrap.grow_horizontal = GROW_DIRECTION_BOTH
 	inv_wrap.grow_vertical = GROW_DIRECTION_BOTH
-	inv_wrap.add_theme_stylebox_override("panel", main._sb(Color(0.05, 0.06, 0.1, 0.97), 12, 18))
+	var inv_sb: StyleBoxFlat = main._sb(Color(0.05, 0.06, 0.10, 0.96), 14, 18)
+	inv_sb.set_border_width_all(1)
+	inv_sb.border_color = Color(1.0, 0.72, 0.28, 0.38)
+	inv_sb.shadow_color = Color(0, 0, 0, 0.55)
+	inv_sb.shadow_size = 18
+	inv_wrap.add_theme_stylebox_override("panel", inv_sb)
 	inv_wrap.hide()
 	add_child(inv_wrap)
 	var v := VBoxContainer.new()
@@ -915,9 +972,9 @@ func _update_inv() -> void:
 				c.count.modulate = Color(1.0, 0.6, 0.15)
 		c.pips.text = "●".repeat(clampi(int(d.get("lvl", 0)), 0, 8))
 		c.sb.border_color = it.color
-		c.sb.bg_color = Color(0.95, 0.5, 0.1, 0.42) if sel == i + 1 else Color(0, 0, 0, 0.5)
-		c.sb.shadow_color = Color(1.0, 0.85, 0.3, 0.75)
-		c.sb.shadow_size = 12 if sel == i + 1 else 0
+		c.sb.bg_color = Color(0.24, 0.16, 0.05, 0.92) if sel == i + 1 else Color(0.08, 0.10, 0.16, 0.84)
+		c.sb.shadow_color = Color(1.0, 0.82, 0.28, 0.55)
+		c.sb.shadow_size = 10 if sel == i + 1 else 0
 	var ch: Dictionary = _g(player, "ch", {})
 	var cd: float = _g(player, "skill_cd", 0.0)
 	cells[5].name.text = "%s\n%s" % [tr(ch.get("skill_name", "")), main._cd_text(cd)]
@@ -1157,20 +1214,24 @@ func _night(on: bool) -> void:
 		for we in w.find_children("*", "WorldEnvironment", true, false):
 			if we.environment:
 				var env: Environment = we.environment
-				night_base[env] = [env.fog_density, env.volumetric_fog_density, env.fog_light_color]
+				night_base[env] = [env.fog_density, env.volumetric_fog_density, env.fog_light_color, env.ambient_light_energy, env.volumetric_fog_albedo]
 		for l in w.find_children("*", "DirectionalLight3D", true, false):
 			night_base[l] = l.light_energy
 	if night_tw:
 		night_tw.kill()
 	night_tw = create_tween().set_parallel()
 	for o in night_base:
+		if not is_instance_valid(o):
+			continue
 		if o is Environment:
 			var b: Array = night_base[o]
-			night_tw.tween_property(o, "fog_density", b[0] * (9.0 if on else 1.0), 2.0)
-			night_tw.tween_property(o, "volumetric_fog_density", b[1] * (4.0 if on else 1.0), 2.0)
-			night_tw.tween_property(o, "fog_light_color", b[2] * Color(0.2, 0.25, 0.45) if on else b[2], 2.0)
+			night_tw.tween_property(o, "fog_density", b[0] * (8.5 if on else 1.0), 2.0)
+			night_tw.tween_property(o, "volumetric_fog_density", b[1] * (3.6 if on else 1.0), 2.0)
+			night_tw.tween_property(o, "fog_light_color", b[2] * Color(0.18, 0.24, 0.48) if on else b[2], 2.0)
+			night_tw.tween_property(o, "ambient_light_energy", b[3] * (0.42 if on else 1.0), 2.0)
+			night_tw.tween_property(o, "volumetric_fog_albedo", Color(0.32, 0.42, 0.68) if on else b[4], 2.0)
 		else:
-			night_tw.tween_property(o, "light_energy", night_base[o] * (0.25 if on else 1.0), 2.0)
+			night_tw.tween_property(o, "light_energy", night_base[o] * (0.22 if on else 1.0), 2.0)
 
 
 # ---------- İlk maç rehberi ----------

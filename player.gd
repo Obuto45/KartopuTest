@@ -365,9 +365,12 @@ func _load_model() -> void:
 	model_fx.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	model_fx.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	model_fx.albedo_color = Color(1, 0.1, 0.1, 0)
-	var outline := ShaderMaterial.new() # koyu dış çizgi: karakter ormandan ayrışsın
+	var rim := ShaderMaterial.new() # altın saat kenar ışığı: karakter ormandan sinematik ayrışsın
+	rim.shader = preload("res://shaders/char_rim.gdshader")
+	var outline := ShaderMaterial.new() # koyu dış çizgi: mesafeye göre dengeli stilize kontur
 	outline.shader = preload("res://shaders/outline.gdshader")
-	model_fx.next_pass = outline
+	rim.next_pass = outline
+	model_fx.next_pass = rim
 	var tint := Profile.cosm_color(Net.cosm_of(get_multiplayer_authority()).tint) # kozmetik renk tonu
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		mi.material_overlay = model_fx

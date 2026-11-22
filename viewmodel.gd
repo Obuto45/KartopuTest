@@ -74,12 +74,29 @@ func setup(color: Color, model_path := "") -> void:
 	vcam.near = 0.01
 	vcam.cull_mask = 1 << (LAYER - 1)
 	vp.add_child(vcam)
-	var key := DirectionalLight3D.new() # güneşe karşı bakınca silah kapkara kalmasın: yalnız katman 2'yi aydınlatır
+	# Üç noktalı silah aydınlatması (yalnız katman 2): sıcak ana ışık + serin dolgu + metalik kenar parıltısı
+	var key := DirectionalLight3D.new()
 	key.light_cull_mask = 1 << (LAYER - 1)
-	key.light_energy = 0.6
+	key.light_color = Color(1.0, 0.90, 0.74)
+	key.light_energy = 0.85
 	key.rotation = Vector3(-0.6, 0.5, 0)
 	key.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
 	add_child(key)
+	var fill := DirectionalLight3D.new()
+	fill.light_cull_mask = 1 << (LAYER - 1)
+	fill.light_color = Color(0.62, 0.78, 1.0)
+	fill.light_energy = 0.35
+	fill.light_specular = 0.15
+	fill.rotation = Vector3(-0.3, -2.2, 0)
+	fill.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	add_child(fill)
+	var rim := DirectionalLight3D.new()
+	rim.light_cull_mask = 1 << (LAYER - 1)
+	rim.light_color = Color(1.0, 0.82, 0.55)
+	rim.light_energy = 0.55
+	rim.rotation = Vector3(0.25, 2.7, 0)
+	rim.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	add_child(rim)
 	var cl := CanvasLayer.new()
 	cl.layer = -1
 	add_child(cl)
@@ -157,7 +174,9 @@ func equip(new_id: String) -> void:
 		ap.stop()
 		ap.remove_animation_library("") # model silinmeden önce: eski klipler "Rig/Weapon" arayıp uyarmasın
 	if weapon:
-		weapon.free()
+		if weapon.get_parent() == rig:
+			rig.remove_child(weapon)
+		weapon.queue_free()
 		weapon = null
 	visible = id != ""
 	if id == "":
@@ -277,6 +296,8 @@ func _no_shadow(mi: MeshInstance3D) -> void:
 	mi.set_meta("ns", true)
 	if mi.material_override is BaseMaterial3D:
 		mi.material_override.disable_receive_shadows = true
+		return
+	if mi.mesh == null:
 		return
 	for s in mi.mesh.get_surface_count():
 		var m := mi.get_active_material(s)

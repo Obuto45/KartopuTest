@@ -809,6 +809,7 @@ func _update_env(dt: float) -> void:
 		sky_hor += SKY_HOR[i] * w[i]
 	skym.set_shader_parameter("top_col", sky_top)
 	skym.set_shader_parameter("horizon_col", sky_hor)
+	skym.set_shader_parameter("mid_col", sky_top.lerp(sky_hor, 0.45)) # 3 bantlı gök: orta bant biyomla kaysın
 	var gr := Vector2.ZERO
 	for i in 4:
 		gr += GRADE[i] * w[i]

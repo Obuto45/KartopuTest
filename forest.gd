@@ -88,11 +88,11 @@ func _ready() -> void:
 	_props(used)
 	ground_mat.set_shader_parameter("mask_tex", ImageTexture.create_from_image(_mask))
 	_grass(ground_mat, 18000)
-	_flowers(ground_mat, 750)
+	_flowers(ground_mat, 900)
 	_ambient()
 
 	# Toplanan parçalar: tür başına tek çizim.
-	var bark_mat := _smat("res://shaders/stone.gdshader", {"tint": BARK, "moss": 0.25, "streak": 1.0})
+	var bark_mat := _smat("res://shaders/stone.gdshader", {"tint": BARK, "moss": 0.32, "streak": 1.0})
 	var leaf_mat := _smat("res://shaders/foliage.gdshader")
 	_multimesh(_trunk_mesh(), _trunks, bark_mat, true)
 	_multimesh(_cone_mesh(), _cones, leaf_mat, true)
@@ -125,24 +125,27 @@ func _make_noise() -> void:
 ## Birim ağaç gövdesi (world.gd de kullanır).
 func _trunk_mesh() -> ArrayMesh:
 	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.3; trunk.bottom_radius = 0.55; trunk.height = 1.0
-	trunk.radial_segments = 8; trunk.rings = 5
-	# Birim gövde: taban y=0, dipte kök yayılması, hafif eğrilik. Örnek ölçeği boyu verir.
+	trunk.top_radius = 0.26; trunk.bottom_radius = 0.56; trunk.height = 1.0
+	trunk.radial_segments = 10; trunk.rings = 6
+	# Birim gövde: taban y=0, dipte boğumlu kök yayılması, kabuk dalgası, doğal kıvrım. Örnek ölçeği boyu verir.
 	return _deform(trunk, func(v: Vector3) -> Vector3:
 		v.y += 0.5
-		var k := 1.0 + 0.45 * exp(-v.y * 14.0) * (1.0 + 0.4 * sin(atan2(v.z, v.x) * 3.0))
-		return Vector3(v.x * k + sin(v.y * 4.0) * 0.05, v.y, v.z * k + cos(v.y * 3.0) * 0.04))
+		var ang := atan2(v.z, v.x)
+		var k := 1.0 + 0.52 * exp(-v.y * 12.0) * (1.0 + 0.42 * sin(ang * 4.0) + 0.2 * cos(ang * 3.0))
+		k *= 1.0 + 0.04 * sin(v.y * 9.0 + ang * 3.0)
+		return Vector3(v.x * k + sin(v.y * 3.6) * 0.06, v.y, v.z * k + cos(v.y * 2.8) * 0.05))
 
 
 ## Çam katı (world.gd de kullanır).
 func _cone_mesh() -> ArrayMesh:
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.04; cone.bottom_radius = 1.0; cone.height = 1.0
-	cone.radial_segments = 10; cone.rings = 1
-	return _deform(cone, func(v: Vector3) -> Vector3: # çam katı: etek uçları dişli ve sarkık
+	cone.radial_segments = 14; cone.rings = 2
+	return _deform(cone, func(v: Vector3) -> Vector3: # çam katı: çok loplu, sarkık doğal dallar
 		var a := atan2(v.z, v.x)
-		var k := 1.0 + 0.2 * sin(a * 5.0)
-		return Vector3(v.x * k, v.y + 0.5 - 0.12 * sin(a * 5.0) * Vector2(v.x, v.z).length(), v.z * k))
+		var rad := Vector2(v.x, v.z).length()
+		var k := 1.0 + (0.18 * sin(a * 6.0) + 0.09 * cos(a * 11.0 + 1.1)) * rad
+		return Vector3(v.x * k, v.y + 0.5 - (0.16 + 0.10 * sin(a * 6.0)) * rad * rad, v.z * k))
 
 
 ## host: ışık ve ortamın ekleneceği düğüm (world.gd kendini verir). [env, güneş] döner.
@@ -166,9 +169,11 @@ func _environment(host: Node = self) -> Array:
 	env.adjustment_contrast = 1.06
 	env.adjustment_saturation = 1.18
 	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.6 # çimenin altı kapkara olmasın
-	env.ssao_power = 1.5
+	env.ssao_radius = 1.35
+	env.ssao_intensity = 1.75
+	env.ssao_power = 1.45
+	env.ssao_detail = 0.6
+	env.ssil_sharpness = 0.9
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.86, 0.74, 0.6)
 	env.fog_density = 0.004
@@ -181,11 +186,11 @@ func _environment(host: Node = self) -> Array:
 	env.ssil_intensity = 0.8
 	# Hacimsel sis: ağaç aralarından güneş huzmeleri. Pahalı olan tek ayar bu; yoğunluk düşük tutulur.
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.007
-	env.volumetric_fog_albedo = Color(1.0, 0.9, 0.76)
-	env.volumetric_fog_anisotropy = 0.6
-	env.volumetric_fog_length = 70.0
-	env.volumetric_fog_sky_affect = 0.2
+	env.volumetric_fog_density = 0.0075
+	env.volumetric_fog_albedo = Color(1.0, 0.9, 0.75)
+	env.volumetric_fog_anisotropy = 0.64
+	env.volumetric_fog_length = 75.0
+	env.volumetric_fog_sky_affect = 0.18
 	var we := WorldEnvironment.new()
 	we.environment = env
 	var cam_attr := CameraAttributesPractical.new() # Yüksek: uzak tepeleri hafifçe yumuşatan DoF
@@ -200,8 +205,10 @@ func _environment(host: Node = self) -> Array:
 	sun.light_energy = 1.45
 	sun.light_volumetric_fog_energy = 1.6
 	sun.shadow_enabled = true
+	sun.shadow_bias = 0.04
+	sun.shadow_normal_bias = 1.4
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	sun.directional_shadow_max_distance = 80.0
+	sun.directional_shadow_max_distance = 85.0
 	sun.directional_shadow_blend_splits = true
 	sun.shadow_blur = 1.5
 	host.add_child(sun)
@@ -223,7 +230,7 @@ func _environment(host: Node = self) -> Array:
 		sun.light_angular_distance = [0.0, 1.0, 1.5][q] # yumuşak gölge kenarı (PCSS); 2.5 kül dağlarında ~%30 fps yiyordu
 		sun.directional_shadow_blend_splits = q >= 2
 		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if q >= 1 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-		sun.directional_shadow_max_distance = 80.0 if q >= 1 else 50.0
+		sun.directional_shadow_max_distance = 85.0 if q >= 1 else 50.0
 	apply.call()
 	Settings.changed.connect(apply)
 	host.tree_exiting.connect(func() -> void: Settings.changed.disconnect(apply))
@@ -264,7 +271,7 @@ func _box(pos: Vector3, size: Vector3, mat: Material) -> void:
 	add_child(b)
 
 
-## Hazır ağın her köşesini f'den geçirir, düz (yüzey başına) normalle yeniden kurar: low-poly görünüm.
+## Hazır ağın her köşesini f'den geçirir, normalle yeniden kurar (soft ile yumuşak/düz normal).
 ## UV.y = yükseklik (0 alt, 1 üst): gölgelendiriciler alt-üst renk geçişinde kullanır.
 ## soft: 1 = tam yumuşak normal (bitki), 0 = düz yüzey (kaya); arası karışım.
 func _deform(src: PrimitiveMesh, f: Callable, col := Color.WHITE, soft := 1.0) -> ArrayMesh:
@@ -331,12 +338,22 @@ func _tree(pos: Vector3, s: float, rng: RandomNumberGenerator, collide: bool) ->
 			var rad := lerpf(2.7, 1.1, f) * s
 			_cones.append([Transform3D(Basis(Vector3.UP, rot + k * 1.3).scaled(Vector3(rad, lerpf(3.8, 3.2, f) * s, rad)),
 				pos + Vector3(0, lerpf(3.8, 9.6, f) * s, 0)), leaf * lerpf(0.85, 1.15, f)])
-	else: # yanlarda sarkan küçük kümeler: taç düzgün top olmasın
+	else: # yanlarda sarkan küçük kümeler + gövdeden taca uzanan gerçekçi dallar
 		for k in 3:
 			var a := rot + k * TAU / 3.0 + _vis.randf_range(-0.5, 0.5)
-			var r := _vis.randf_range(1.2, 1.8) * s
-			_blobs.append([Transform3D(Basis(Vector3.UP, a).scaled(Vector3(r, r * 0.75, r)),
-				pos + top + Vector3(cos(a) * 2.3, _vis.randf_range(-1.6, -0.6), sin(a) * 2.3) * s), leaf * _vis.randf_range(0.8, 1.05)])
+			var r := _vis.randf_range(1.25, 1.9) * s
+			_blobs.append([Transform3D(Basis(Vector3.UP, a).scaled(Vector3(r, r * 0.78, r)),
+				pos + top + Vector3(cos(a) * 2.25, _vis.randf_range(-1.55, -0.5), sin(a) * 2.25) * s), leaf * _vis.randf_range(0.82, 1.08)])
+			# Gövdeden yaprak kümesine uzanan ana dal (yalnız görüntü)
+			var b_rot := Basis(Vector3.UP, -a + PI * 0.5) * Basis(Vector3.RIGHT, _vis.randf_range(0.62, 0.92))
+			var b_len := _vis.randf_range(2.2, 3.0) * s
+			var b_rad := _vis.randf_range(0.32, 0.44) * s
+			_trunks.append([Transform3D(b_rot.scaled(Vector3(b_rad, b_len, b_rad)),
+				pos + Vector3(0, trunk_h * _vis.randf_range(0.66, 0.80), 0)), Color(0.92, 0.90, 0.88) * _vis.randf_range(0.85, 1.1)])
+		# Taç tepesinde güneşli vurgulu üst öbek
+		var crown_r := _vis.randf_range(1.6, 2.2) * s
+		_blobs.append([Transform3D(Basis(Vector3.UP, rot + 0.9).scaled(Vector3(crown_r, crown_r * 0.72, crown_r)),
+			pos + top + Vector3(0, 1.35 * s, 0)), leaf * 1.12])
 	_trunks.append([Transform3D(Basis(Vector3.UP, rot).scaled(Vector3(s, trunk_h * (1.5 if pine else 1.0), s)), pos),
 		Color(1, 1, 1) * _vis.randf_range(0.8, 1.2)])
 	_stamp(Vector2(pos.x, pos.z), 4.5 * s, 0, 0.8)
@@ -371,11 +388,13 @@ func _rock(p: Vector2, r: float, rng: RandomNumberGenerator) -> void:
 	# Görüntü: aynı kürenin gürültüyle yontulmuş hali; çarpışma şeklinden belirgin taşmaz.
 	var vm := SphereMesh.new()
 	vm.radius = r; vm.height = sm.height
-	vm.radial_segments = 9; vm.rings = 4
+	vm.radial_segments = 14; vm.rings = 8
 	var seed_off := Vector3(p.x, 0, p.y)
 	var mi := MeshInstance3D.new()
 	mi.mesh = _deform(vm, func(v: Vector3) -> Vector3:
-		return v * (0.92 + 0.2 * _fn.get_noise_3dv(v * (1.5 / r) + seed_off)), col)
+		var n1 := _fn.get_noise_3dv(v * (1.4 / r) + seed_off)
+		var n2 := _fn.get_noise_3dv(v * (3.2 / r) + seed_off * 1.7)
+		return v * (0.91 + 0.18 * n1 + 0.06 * n2), col)
 	mi.material_override = _rock_mat
 	b.add_child(mi)
 	add_child(b)
@@ -421,26 +440,31 @@ func _paths() -> void:
 		_stamp(Vector2(_vis.randf_range(-HALF, HALF), _vis.randf_range(-HALF, HALF)), _vis.randf_range(1.5, 3.5), 1, 0.7)
 
 
-## Duvarı süsler: aralıklı payandalar, tepede sarmaşık öbekleri, dipte çalılar. Hepsi çarpışmasız.
+## Duvarı süsler: aralıklı payandalar, taş başlıklar, tepede sarmaşık öbekleri, dipte çalılar. Hepsi çarpışmasız.
 func _wall_dress(wall_mat: Material) -> void:
 	var pillars := []
+	var caps := []
 	for i in 36:
 		var t := (i % 9) / 9.0 * 2.0 - 1.0 # köşe payandası bir kez
 		var q := Vector3(t * HALF, 1.85, HALF).rotated(Vector3.UP, floorf(i / 9.0) * PI * 0.5)
-		pillars.append([Transform3D(Basis(), q), Color(1.2, 1.17, 1.1)]) # duvardan bir ton açık
+		pillars.append([Transform3D(Basis(), q), Color(1.18, 1.14, 1.08)]) # duvardan bir ton açık
+		caps.append([Transform3D(Basis(), Vector3(q.x, 3.82, q.z)), Color(1.24, 1.19, 1.10)])
 	var pb := BoxMesh.new()
 	pb.size = Vector3(1.5, 3.7, 1.5)
 	_multimesh(pb, pillars, wall_mat, true)
-	for i in 110:
+	var cb := BoxMesh.new()
+	cb.size = Vector3(1.78, 0.28, 1.78)
+	_multimesh(cb, caps, wall_mat, true)
+	for i in 140:
 		var q := Vector3(_vis.randf_range(-HALF, HALF), 0, HALF).rotated(Vector3.UP, (i % 4) * PI * 0.5)
 		var inward := Vector3(-signf(q.x) if absf(q.x) > HALF - 0.01 else 0.0, 0, -signf(q.z) if absf(q.z) > HALF - 0.01 else 0.0)
-		var r := _vis.randf_range(0.6, 1.1)
-		var col := Color(0.06, 0.2, 0.05).lerp(Color(0.16, 0.3, 0.06), _vis.randf())
+		var r := _vis.randf_range(0.6, 1.15)
+		var col := Color(0.06, 0.21, 0.05).lerp(Color(0.18, 0.33, 0.06), _vis.randf())
 		var yaw := Basis(Vector3.UP, _vis.randf() * TAU)
-		if i < 50: # tepede sarmaşık
-			_blobs.append([Transform3D(yaw.scaled(Vector3(r * 1.3, r * 0.5, r * 1.3)), q + Vector3(0, 3.0, 0)), col])
+		if i < 65: # tepede sarmaşık
+			_blobs.append([Transform3D(yaw.scaled(Vector3(r * 1.35, r * 0.52, r * 1.35)), q + Vector3(0, 3.05, 0)), col])
 		else: # dipte çalı
-			_blobs.append([Transform3D(yaw.scaled(Vector3(r, r * 0.75, r)), q + inward * 1.0 + Vector3(0, r * 0.3, 0)), col])
+			_blobs.append([Transform3D(yaw.scaled(Vector3(r, r * 0.78, r)), q + inward * 1.05 + Vector3(0, r * 0.3, 0)), col])
 
 
 ## Küçük süsler: kütükler, devrik gövdeler, mantarlar, çalılar, çakıllar. Çarpışmasız.
@@ -654,8 +678,8 @@ func _grass(ground_mat: ShaderMaterial, n: int) -> void:
 		var m := _mask_at(pos)
 		if m.g > _vis.randf_range(0.35, 0.6): # patikada çimen bitmez
 			continue
-		var h := _vis.randf_range(0.5, 1.1) * (1.0 - 0.3 * m.r) # ağaç altında kısa
-		var w := _vis.randf_range(0.8, 1.4)
+		var h := _vis.randf_range(0.55, 1.2) * (1.0 - 0.28 * m.r) # ağaç altında biraz kısa
+		var w := _vis.randf_range(0.85, 1.45)
 		items.append([Transform3D(Basis(Vector3.UP, _vis.randf() * TAU).scaled(Vector3(w, h, w)), pos),
 			Color(0.9, 0.95, 0.85).lerp(Color(1.15, 1.1, 0.8), _vis.randf())])
 	_multimesh(_grass_mesh(), items, _sway_mat(ground_mat, 1.0, 0.4))
@@ -672,14 +696,15 @@ func _flowers(ground_mat: ShaderMaterial, n: int) -> void:
 		if i % 15 == 0:
 			center = _rand_ground(_vis)
 			col = colors[_vis.randi() % colors.size()]
-		var pos := center + Vector3(_vis.randf_range(-1.5, 1.5), 0, _vis.randf_range(-1.5, 1.5))
+		var pos := center + Vector3(_vis.randf_range(-1.6, 1.6), 0, _vis.randf_range(-1.6, 1.6))
 		pos.x = clampf(pos.x, -HALF + 0.6, HALF - 0.6)
 		pos.z = clampf(pos.z, -HALF + 0.6, HALF - 0.6)
 		if _mask_at(pos).g > 0.45:
 			continue
-		# Örnek kökü zeminde kalır (rüzgâr köke göre hesaplanır); yükseklik ağın içinde.
-		stems.append([Transform3D(Basis(), pos), Color(0.1, 0.25, 0.06)])
-		heads.append([Transform3D(Basis(), pos), col])
+		var sc := _vis.randf_range(0.82, 1.28)
+		var xf := Transform3D(Basis(Vector3.UP, _vis.randf() * TAU).scaled(Vector3.ONE * sc), pos)
+		stems.append([xf, Color(0.09, 0.26, 0.06)])
+		heads.append([xf, col])
 	var mat := _sway_mat(ground_mat, 0.0, 0.35)
 	var m := _flower_meshes()
 	_multimesh(m[0], stems, mat)
