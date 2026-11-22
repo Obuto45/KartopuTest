@@ -14,7 +14,11 @@ const LEAF_TONES := [Color(0.3, 0.45, 0.1), Color(0.8, 0.6, 0.1), Color(0.75, 0.
 const FLOWER_COLS := [Color(0.95, 0.2, 0.25), Color(1.0, 0.85, 0.2), Color(0.97, 0.97, 0.97),
 	Color(0.7, 0.35, 0.9), Color(0.35, 0.55, 1.0), Color(1.0, 0.55, 0.15)]
 
-var spawns: Array = [] # oyuncu doğma noktaları, etrafı boş kalır
+var spawns: Array = [] # oyuncu doğma noktaları / hikaye bölgeleri, etrafı boş kalır
+var open_world := false # true -> 150x150 m geniş açık dünya ormanı (Hikaye modu)
+var _half := HALF
+var _mask_half := MASK_HALF
+var _mask_n := MASK_N
 var _vis := RandomNumberGenerator.new()
 var _fn := FastNoiseLite.new()
 var _noise: ImageTexture
@@ -39,37 +43,43 @@ func _smat(path: String, params := {}) -> ShaderMaterial:
 
 
 func _ready() -> void:
-	_vis.seed = 7
+	_half = 75.0 if open_world else HALF
+	_mask_half = 95.0 if open_world else MASK_HALF
+	_mask_n = 192 if open_world else MASK_N
+	_vis.seed = 17 if open_world else 7
 	_make_noise()
-	_mask = Image.create(MASK_N, MASK_N, false, Image.FORMAT_RGB8)
+	_mask = Image.create(_mask_n, _mask_n, false, Image.FORMAT_RGB8)
 	_rock_mat = _smat("res://shaders/stone.gdshader", {"moss": 0.75})
-	var ground_mat := _smat("res://shaders/ground.gdshader", {"arena_half": HALF, "mask_half": MASK_HALF})
+	var ground_mat := _smat("res://shaders/ground.gdshader", {"arena_half": _half, "mask_half": _mask_half})
 	var wall_mat := _smat("res://shaders/stone.gdshader", WALL)
 
 	_environment()
-	_box(Vector3(0, -0.5, 0), Vector3(HALF * 2, 1, HALF * 2), ground_mat) # çimen zemin
-	for w in [[Vector3(0, 1.5, -HALF), Vector3(HALF * 2, 3, 1)], [Vector3(0, 1.5, HALF), Vector3(HALF * 2, 3, 1)],
-			[Vector3(-HALF, 1.5, 0), Vector3(1, 3, HALF * 2)], [Vector3(HALF, 1.5, 0), Vector3(1, 3, HALF * 2)]]:
+	_box(Vector3(0, -0.5, 0), Vector3(_half * 2, 1, _half * 2), ground_mat) # çimen zemin
+	for w in [[Vector3(0, 1.5, -_half), Vector3(_half * 2, 3, 1)], [Vector3(0, 1.5, _half), Vector3(_half * 2, 3, 1)],
+			[Vector3(-_half, 1.5, 0), Vector3(1, 3, _half * 2)], [Vector3(_half, 1.5, 0), Vector3(1, 3, _half * 2)]]:
 		_box(w[0], w[1], wall_mat) # taş sınır duvarı
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 2024
 	var used := [] # [konum (Vector2), yarıçap]
-	for i in 24: # alan içindeki büyük ağaçlar (çarpışmalı)
+	var tree_count := 95 if open_world else 24
+	var rock_count := 62 if open_world else 28
+	for i in tree_count: # alan içindeki büyük ağaçlar (çarpışmalı)
 		var p = _free_spot(rng, 2.0, used)
 		if p != null:
 			_tree(Vector3(p.x, 0, p.y), rng.randf_range(0.9, 1.4), rng, true)
-	for i in 28: # kayalar: büyükler siper, küçükler süs
-		var big := i < 12
+	for i in rock_count: # kayalar: büyükler siper, küçükler süs
+		var big := i < (24 if open_world else 12)
 		var r := rng.randf_range(1.2, 2.2) if big else rng.randf_range(0.4, 0.9)
 		var p = _free_spot(rng, r + 0.6, used)
 		if p != null:
 			_rock(p, r, rng)
 	# --- Buradan sonrası yalnızca görüntü: rng yerine _vis. ---
 	var n := 0
-	while n < 250: # duvarın dışında sık orman: ufuk boş kalmaz
-		var p := Vector3(_vis.randf_range(-1, 1), 0, _vis.randf_range(-1, 1)) * (HALF + 34.0)
-		var d := maxf(absf(p.x), absf(p.z)) - HALF
+	var outer_trees := 280 if open_world else 250
+	while n < outer_trees: # duvarın dışında sık orman: ufuk boş kalmaz
+		var p := Vector3(_vis.randf_range(-1, 1), 0, _vis.randf_range(-1, 1)) * (_half + 34.0)
+		var d := maxf(absf(p.x), absf(p.z)) - _half
 		if d > 2.6 and _vis.randf() < 1.3 - d / 34.0: # duvara yakın daha sık
 			_tree(p, _vis.randf_range(1.1, 1.9), _vis, false)
 			n += 1
@@ -77,7 +87,7 @@ func _ready() -> void:
 	# Dış zemin: çarpışma kutusunun biraz altında dev düzlem (ağaçlar boşlukta durmasın).
 	var outer := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(700, 700)
+	pm.size = Vector2(900, 900)
 	outer.mesh = pm
 	outer.position.y = -0.04
 	outer.material_override = ground_mat
@@ -87,8 +97,8 @@ func _ready() -> void:
 	_wall_dress(wall_mat)
 	_props(used)
 	ground_mat.set_shader_parameter("mask_tex", ImageTexture.create_from_image(_mask))
-	_grass(ground_mat, 18000)
-	_flowers(ground_mat, 900)
+	_grass(ground_mat, 34000 if open_world else 18000)
+	_flowers(ground_mat, 1400 if open_world else 900)
 	_ambient()
 
 	# Toplanan parçalar: tür başına tek çizim.
@@ -170,8 +180,8 @@ func _environment(host: Node = self) -> Array:
 	env.adjustment_saturation = 1.18
 	env.ssao_enabled = true
 	env.ssao_radius = 1.35
-	env.ssao_intensity = 1.75
-	env.ssao_power = 1.45
+	env.ssao_intensity = 1.85
+	env.ssao_power = 1.5
 	env.ssao_detail = 0.6
 	env.ssil_sharpness = 0.9
 	env.fog_enabled = true
@@ -186,11 +196,11 @@ func _environment(host: Node = self) -> Array:
 	env.ssil_intensity = 0.8
 	# Hacimsel sis: ağaç aralarından güneş huzmeleri. Pahalı olan tek ayar bu; yoğunluk düşük tutulur.
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.0075
-	env.volumetric_fog_albedo = Color(1.0, 0.9, 0.75)
-	env.volumetric_fog_anisotropy = 0.64
-	env.volumetric_fog_length = 75.0
-	env.volumetric_fog_sky_affect = 0.18
+	env.volumetric_fog_density = 0.0042
+	env.volumetric_fog_albedo = Color(0.92, 0.84, 0.72)
+	env.volumetric_fog_anisotropy = 0.56
+	env.volumetric_fog_length = 90.0 if open_world else 75.0
+	env.volumetric_fog_sky_affect = 0.16
 	var we := WorldEnvironment.new()
 	we.environment = env
 	var cam_attr := CameraAttributesPractical.new() # Yüksek: uzak tepeleri hafifçe yumuşatan DoF
@@ -208,7 +218,7 @@ func _environment(host: Node = self) -> Array:
 	sun.shadow_bias = 0.04
 	sun.shadow_normal_bias = 1.4
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	sun.directional_shadow_max_distance = 85.0
+	sun.directional_shadow_max_distance = 110.0 if open_world else 85.0
 	sun.directional_shadow_blend_splits = true
 	sun.shadow_blur = 1.5
 	host.add_child(sun)
@@ -230,7 +240,7 @@ func _environment(host: Node = self) -> Array:
 		sun.light_angular_distance = [0.0, 1.0, 1.5][q] # yumuşak gölge kenarı (PCSS); 2.5 kül dağlarında ~%30 fps yiyordu
 		sun.directional_shadow_blend_splits = q >= 2
 		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if q >= 1 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-		sun.directional_shadow_max_distance = 85.0 if q >= 1 else 50.0
+		sun.directional_shadow_max_distance = (110.0 if open_world else 85.0) if q >= 1 else 55.0
 	apply.call()
 	Settings.changed.connect(apply)
 	host.tree_exiting.connect(func() -> void: Settings.changed.disconnect(apply))
@@ -239,11 +249,12 @@ func _environment(host: Node = self) -> Array:
 
 ## Doğma noktalarından ve diğer nesnelerden uzak boş bir nokta bulur; bulamazsa null.
 func _free_spot(rng: RandomNumberGenerator, r: float, used: Array):
+	var clear_r := 9.5 if open_world else 4.5
 	for t in 30:
-		var p := Vector2(rng.randf_range(-HALF + 2.5, HALF - 2.5), rng.randf_range(-HALF + 2.5, HALF - 2.5))
+		var p := Vector2(rng.randf_range(-_half + 2.5, _half - 2.5), rng.randf_range(-_half + 2.5, _half - 2.5))
 		var ok := true
 		for sp in spawns:
-			if p.distance_to(Vector2(sp.x, sp.z)) < 4.5 + r:
+			if p.distance_to(Vector2(sp.x, sp.z)) < clear_r + r:
 				ok = false
 		for u in used:
 			if p.distance_to(u[0]) < u[1] + r:
@@ -410,10 +421,10 @@ func _rock(p: Vector2, r: float, rng: RandomNumberGenerator) -> void:
 func _stamp(p: Vector2, rad: float, ch: int, amt: float) -> void:
 	if _mask == null: # world.gd ağaç üretirken maske yok
 		return
-	var c := (p / (MASK_HALF * 2.0) + Vector2(0.5, 0.5)) * MASK_N
-	var pr := rad / (MASK_HALF * 2.0) * MASK_N
-	for y in range(maxi(0, int(c.y - pr)), mini(MASK_N, int(c.y + pr) + 2)):
-		for x in range(maxi(0, int(c.x - pr)), mini(MASK_N, int(c.x + pr) + 2)):
+	var c := (p / (_mask_half * 2.0) + Vector2(0.5, 0.5)) * _mask_n
+	var pr := rad / (_mask_half * 2.0) * _mask_n
+	for y in range(maxi(0, int(c.y - pr)), mini(_mask_n, int(c.y + pr) + 2)):
+		for x in range(maxi(0, int(c.x - pr)), mini(_mask_n, int(c.x + pr) + 2)):
 			var k := 1.0 - Vector2(x + 0.5, y + 0.5).distance_to(c) / pr
 			if k > 0.0:
 				var col := _mask.get_pixel(x, y)
@@ -422,31 +433,33 @@ func _stamp(p: Vector2, rad: float, ch: int, amt: float) -> void:
 
 
 func _mask_at(p: Vector3) -> Color:
-	var c := (Vector2(p.x, p.z) / (MASK_HALF * 2.0) + Vector2(0.5, 0.5)) * MASK_N
-	return _mask.get_pixel(clampi(int(c.x), 0, MASK_N - 1), clampi(int(c.y), 0, MASK_N - 1))
+	var c := (Vector2(p.x, p.z) / (_mask_half * 2.0) + Vector2(0.5, 0.5)) * _mask_n
+	return _mask.get_pixel(clampi(int(c.x), 0, _mask_n - 1), clampi(int(c.y), 0, _mask_n - 1))
 
 
 ## Toprak patikalar: her doğma noktasından ortadaki açıklığa kıvrılarak gider.
 func _paths() -> void:
-	_stamp(Vector2.ZERO, 5.0, 1, 0.9)
+	_stamp(Vector2.ZERO, 6.0 if open_world else 5.0, 1, 0.9)
 	for i in spawns.size():
 		var a := Vector2(spawns[i].x, spawns[i].z)
-		_stamp(a, 3.5, 1, 0.85)
-		var side := a.orthogonal().normalized()
-		for t in 40:
-			var f := t / 40.0
-			_stamp(a.lerp(Vector2.ZERO, f) + side * sin(f * 7.0 + i * 2.0) * 1.6 * sin(f * PI), 1.9, 1, 0.8)
-	for i in 14: # rastgele çıplak yamalar
-		_stamp(Vector2(_vis.randf_range(-HALF, HALF), _vis.randf_range(-HALF, HALF)), _vis.randf_range(1.5, 3.5), 1, 0.7)
+		_stamp(a, 6.5 if open_world else 3.5, 1, 0.85)
+		var side := a.orthogonal().normalized() if a.length_squared() > 0.01 else Vector2.RIGHT
+		var steps := 70 if open_world else 40
+		for t in steps:
+			var f := float(t) / steps
+			_stamp(a.lerp(Vector2.ZERO, f) + side * sin(f * 7.0 + i * 2.0) * (2.6 if open_world else 1.6) * sin(f * PI), 2.3 if open_world else 1.9, 1, 0.8)
+	for i in (24 if open_world else 14): # rastgele çıplak yamalar
+		_stamp(Vector2(_vis.randf_range(-_half, _half), _vis.randf_range(-_half, _half)), _vis.randf_range(1.5, 3.5), 1, 0.7)
 
 
 ## Duvarı süsler: aralıklı payandalar, taş başlıklar, tepede sarmaşık öbekleri, dipte çalılar. Hepsi çarpışmasız.
 func _wall_dress(wall_mat: Material) -> void:
 	var pillars := []
 	var caps := []
-	for i in 36:
-		var t := (i % 9) / 9.0 * 2.0 - 1.0 # köşe payandası bir kez
-		var q := Vector3(t * HALF, 1.85, HALF).rotated(Vector3.UP, floorf(i / 9.0) * PI * 0.5)
+	var per_side := 15 if open_world else 9
+	for i in per_side * 4:
+		var t := (i % per_side) / float(per_side) * 2.0 - 1.0 # köşe payandası bir kez
+		var q := Vector3(t * _half, 1.85, _half).rotated(Vector3.UP, floorf(i / float(per_side)) * PI * 0.5)
 		pillars.append([Transform3D(Basis(), q), Color(1.18, 1.14, 1.08)]) # duvardan bir ton açık
 		caps.append([Transform3D(Basis(), Vector3(q.x, 3.82, q.z)), Color(1.24, 1.19, 1.10)])
 	var pb := BoxMesh.new()
@@ -455,13 +468,14 @@ func _wall_dress(wall_mat: Material) -> void:
 	var cb := BoxMesh.new()
 	cb.size = Vector3(1.78, 0.28, 1.78)
 	_multimesh(cb, caps, wall_mat, true)
-	for i in 140:
-		var q := Vector3(_vis.randf_range(-HALF, HALF), 0, HALF).rotated(Vector3.UP, (i % 4) * PI * 0.5)
-		var inward := Vector3(-signf(q.x) if absf(q.x) > HALF - 0.01 else 0.0, 0, -signf(q.z) if absf(q.z) > HALF - 0.01 else 0.0)
+	var bush_n := 220 if open_world else 140
+	for i in bush_n:
+		var q := Vector3(_vis.randf_range(-_half, _half), 0, _half).rotated(Vector3.UP, (i % 4) * PI * 0.5)
+		var inward := Vector3(-signf(q.x) if absf(q.x) > _half - 0.01 else 0.0, 0, -signf(q.z) if absf(q.z) > _half - 0.01 else 0.0)
 		var r := _vis.randf_range(0.6, 1.15)
 		var col := Color(0.06, 0.21, 0.05).lerp(Color(0.18, 0.33, 0.06), _vis.randf())
 		var yaw := Basis(Vector3.UP, _vis.randf() * TAU)
-		if i < 65: # tepede sarmaşık
+		if i < bush_n / 2: # tepede sarmaşık
 			_blobs.append([Transform3D(yaw.scaled(Vector3(r * 1.35, r * 0.52, r * 1.35)), q + Vector3(0, 3.05, 0)), col])
 		else: # dipte çalı
 			_blobs.append([Transform3D(yaw.scaled(Vector3(r, r * 0.78, r)), q + inward * 1.05 + Vector3(0, r * 0.3, 0)), col])
@@ -529,7 +543,7 @@ func _mushroom_meshes() -> Array:
 ## Ucuz ortam canlılığı: ışıkta süzülen polen ve dökülen yapraklar (GPU parçacıkları, gölgesiz).
 func _ambient() -> void:
 	for leaf in [false, true]:
-		var p := _particles(leaf, Vector3(HALF, 0.5 if leaf else 3.0, HALF), 90 if leaf else 1000,
+		var p := _particles(leaf, Vector3(_half, 0.5 if leaf else 3.0, _half), 90 if leaf else 1000,
 			LEAF_TONES if leaf else POLLEN, Vector3(0.25, -0.55, 0.1) if leaf else Vector3(0.03, 0.01, 0.0))
 		p.position.y = 8.5 if leaf else 3.2
 		add_child(p)
@@ -609,6 +623,7 @@ func _chickens() -> void:
 			var c: Node3D = ChickenScript.new()
 			c.name = "Chicken%d_%d" % [i, j] # sabit ad: ölüm ağda adla eşitlenir
 			c.chick = j > 0
+			c.bounds = Rect2(-_half + 1.5, -_half + 1.5, _half * 2.0 - 3.0, _half * 2.0 - 3.0)
 			c.rng.seed = _vis.randi()
 			c.position = home + Vector3(_vis.randf_range(-1, 1), 0, _vis.randf_range(-1, 1)) * float(j)
 			add_child(c)
@@ -639,13 +654,13 @@ func _vc_mat() -> StandardMaterial3D:
 
 
 func _rand_ground(rng: RandomNumberGenerator) -> Vector3:
-	return Vector3(rng.randf_range(-HALF + 0.6, HALF - 0.6), 0, rng.randf_range(-HALF + 0.6, HALF - 0.6))
+	return Vector3(rng.randf_range(-_half + 0.6, _half - 0.6), 0, rng.randf_range(-_half + 0.6, _half - 0.6))
 
 
 ## Çimen/çiçek malzemesi: zeminle aynı gürültü ve maske dokularını paylaşır.
 func _sway_mat(ground_mat: ShaderMaterial, tint_mix: float, top: float) -> ShaderMaterial:
 	return _smat("res://shaders/grass.gdshader", {"mask_tex": ground_mat.get_shader_parameter("mask_tex"),
-		"mask_half": MASK_HALF, "tint_mix": tint_mix, "top": top})
+		"mask_half": _mask_half, "tint_mix": tint_mix, "top": top})
 
 
 ## Çimen öbeği: dışa yatık, kıvrık sivri bıçaklar (kalitede 1/3/4 bıçak). UV.y = yükseklik oranı. world.gd de kullanır.
@@ -697,8 +712,8 @@ func _flowers(ground_mat: ShaderMaterial, n: int) -> void:
 			center = _rand_ground(_vis)
 			col = colors[_vis.randi() % colors.size()]
 		var pos := center + Vector3(_vis.randf_range(-1.6, 1.6), 0, _vis.randf_range(-1.6, 1.6))
-		pos.x = clampf(pos.x, -HALF + 0.6, HALF - 0.6)
-		pos.z = clampf(pos.z, -HALF + 0.6, HALF - 0.6)
+		pos.x = clampf(pos.x, -_half + 0.6, _half - 0.6)
+		pos.z = clampf(pos.z, -_half + 0.6, _half - 0.6)
 		if _mask_at(pos).g > 0.45:
 			continue
 		var sc := _vis.randf_range(0.82, 1.28)

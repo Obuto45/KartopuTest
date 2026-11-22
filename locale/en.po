@@ -156,6 +156,24 @@ msgstr "WASD move | Space jump (again for double jump) | Shift+WASD dash | 1-4 i
 msgid "WASD Yürü  •  Boşluk Zıpla (2x)  •  Shift Atıl  •  1-4 Eşya  •  Q Yetenek  •  Sol Tık Kullan  •  ESC Menü"
 msgstr "WASD Move  •  Space Jump (2x)  •  Shift Dash  •  1-4 Items  •  Q Skill  •  Left Click Use  •  ESC Menu"
 
+msgid "HİKAYE"
+msgstr "STORY"
+
+msgid "Açık Dünya  •  Tek Kişilik"
+msgstr "Open World  •  Singleplayer"
+
+msgid "Geniş açık ormanda silahsız uyan, köydeki NPC'lerle konuş, görevleri yap, kılıçtan bazukaya silahlarını kazan ve Orman Lordu'nu yen."
+msgstr "Wake up unarmed in a vast open forest, talk to village NPCs, complete quests, earn weapons from sword to bazooka, and defeat the Forest Lord."
+
+msgid "▶  HİKAYEYE BAŞLA"
+msgstr "▶  START STORY"
+
+msgid "Fare hassasiyeti: %.1fx"
+msgstr "Mouse sensitivity: %.1fx"
+
+msgid "Görüş açısı (FOV): %d°"
+msgstr "Field of view (FOV): %d°"
+
 #: main.gd:429
 msgid "BAZUKA SAVAŞI"
 msgstr "BAZOOKA BUDDIES"

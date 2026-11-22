@@ -92,6 +92,14 @@ var side_t := 0.0
 var block: Node3D # yolu kesen, saldırılan yapı
 var slow_t := 0.0
 var slow_k := 1.0
+# Açık dünya (Hikaye modu): aggro_r > 0 ise yaratık kendi kampında devriye gezer, oyuncu yaklaşınca saldırır.
+var home_pos := Vector3.ZERO
+var aggro_r := 0.0
+var leash_r := 0.0
+var camp_id := ""
+var _aggro := false
+var _patrol_t := 0.0
+var _patrol_pt := Vector3.ZERO
 
 
 ## Paylaşılan kaynak: yoksa make ile üretir.
@@ -304,6 +312,60 @@ func _think() -> void:
 	if td.state != "fight":
 		dir = Vector3.ZERO
 		return
+	# Açık dünya (Hikaye modu) yapay zekâsı: kamp çevresinde devriye, oyuncu yaklaşınca saldırı, uzaklaşınca kampa dönüş.
+	if aggro_r > 0.0:
+		var p := _nearest_player()
+		var home_d := Vector2(global_position.x - home_pos.x, global_position.z - home_pos.z).length()
+		if p:
+			var pd := Vector2(global_position.x - p.global_position.x, global_position.z - p.global_position.z).length()
+			var ph := Vector2(p.global_position.x - home_pos.x, p.global_position.z - home_pos.z).length()
+			if not _aggro and pd <= aggro_r:
+				_aggro = true
+				for o in td.elist:
+					if is_instance_valid(o) and o.get("camp_id") == camp_id:
+						o._aggro = true
+			elif _aggro and leash_r > 0.0 and ph > leash_r and home_d > leash_r * 0.75:
+				_aggro = false
+		else:
+			_aggro = false
+		if _aggro and p:
+			var to_p := p.global_position - global_position
+			to_p.y = 0.0
+			var pd := to_p.length()
+			var reach_p: float = d.range + radius + 0.45
+			if pd <= reach_p:
+				dir = Vector3.ZERO
+				aim = atan2(-to_p.x, -to_p.z)
+				stuck_t = 0.0
+				if atk_cd <= 0.0:
+					atk_cd = d.rate
+					_attack(p, p.global_position)
+				return
+			var want_p := to_p / maxf(pd, 0.001)
+			for o in td.elist:
+				if o != self and is_instance_valid(o):
+					var v: Vector3 = global_position - o.global_position
+					var m: float = radius + o.radius + 0.35
+					var l2 := v.x * v.x + v.z * v.z
+					if l2 < m * m and l2 > 0.0001:
+						var l := sqrt(l2)
+						want_p += Vector3(v.x, 0, v.z) * ((m - l) / m / l * 1.4)
+			dir = want_p.normalized()
+			return
+		# Sakin devriye: kamp noktası etrafında kısa yürüyüşler
+		_patrol_t -= TICK
+		if _patrol_t <= 0.0:
+			_patrol_t = randf_range(2.2, 4.5)
+			var ang := randf() * TAU
+			var rad := randf_range(1.2, 5.0)
+			_patrol_pt = home_pos + Vector3(cos(ang) * rad, 0.0, sin(ang) * rad)
+		var to_h := _patrol_pt - global_position
+		to_h.y = 0.0
+		if to_h.length() > 0.8:
+			dir = to_h.normalized() * 0.42
+		else:
+			dir = Vector3.ZERO
+		return
 	# Hedef: yolu kesen yapı > (avcıysa) en yakın canlı oyuncu > kule.
 	var tgt: Node3D = null
 	var goal := Vector3.ZERO
@@ -412,16 +474,37 @@ func attack_fx(pos: Vector3) -> void:
 			return s)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.position = global_position + Vector3.UP * height * 0.75
-		td.get_parent().add_child(mi)
+		var trail := Fx.parts(Fx.quad("glow", 0.22), 14, 0.25, 0.0, 0.4,
+			[Color(0.65, 1.0, 0.25, 0.75), Color(0.25, 0.8, 0.1, 0.0)], 0.9, 0.2, false)
+		trail.local_coords = false
+		mi.add_child(trail)
+		trail.emitting = true
+		var world_ref := td.get_parent()
+		world_ref.add_child(mi)
+		var land_p := pos + Vector3.UP * 0.9
 		var tw := mi.create_tween()
-		tw.tween_property(mi, "position", pos + Vector3.UP * 0.9, SPIT_T)
-		tw.tween_callback(mi.queue_free)
+		tw.tween_property(mi, "position", land_p, SPIT_T)
+		tw.tween_callback(func() -> void:
+			if is_instance_valid(world_ref):
+				var spl := Fx.parts(Fx.quad("glow", 0.28), 10, 0.35, 1.5, 4.2,
+					[Color(0.75, 1.0, 0.25, 0.9), Color(0.25, 0.7, 0.08, 0.0)], 1.0, 0.2)
+				spl.position = land_p
+				spl.gravity = Vector3(0, -10, 0)
+				spl.finished.connect(spl.queue_free)
+				world_ref.add_child(spl)
+				spl.emitting = true
+			mi.queue_free())
 
 
 ## td._hit çağırır: yeni can, gösterilecek hasar (0 = sessiz, -1 = kendini patlattı), kritik mi.
 func apply_hit(v: int, n: int, crit: bool) -> void:
 	if hp <= 0:
 		return
+	if aggro_r > 0.0 and not _aggro:
+		_aggro = true
+		for o in td.elist:
+			if is_instance_valid(o) and o.get("camp_id") == camp_id:
+				o._aggro = true
 	hp = v
 	var world := td.get_parent()
 	if n > 0:
@@ -471,15 +554,27 @@ func apply_hit(v: int, n: int, crit: bool) -> void:
 	var rag := Ragdoll.start(model, global_basis.z * 0.8) # son vuruşların yönünde savrulur
 	if rag == null: # Düşük kalite: eski ölüm animasyonu
 		anim.play("Death", 0.1)
-	var p := Fx.parts(spark_mesh(), 10, 0.7, 2.0, 5.0, [Color(1.0, 0.85, 0.2), Color(1.0, 0.7, 0.1, 0.0)], 1.0, 0.3)
+	var p := Fx.parts(spark_mesh(), 18 if (elite or type == "boss") else 10, 0.75, 2.2, 5.8,
+		[Color(1.0, 0.85, 0.2), Color(1.0, 0.6, 0.1, 0.0)], 1.1, 0.25)
 	p.position = c
 	p.direction = Vector3.UP
-	p.spread = 60.0
+	p.spread = 65.0
 	p.gravity = Vector3(0, -9, 0)
 	world.add_child(p)
 	p.emitting = true
 	p.create_tween().tween_callback(p.queue_free).set_delay(1.0)
-	float_text(world, c + Vector3.UP * 0.4, "+%d" % money, Color(1.0, 0.8, 0.2), 0.007)
+	if elite or type == "boss": # elit / boss ölünce şok halkası
+		var rc := Color(0.88, 0.45, 1.0, 0.85) if type == "boss" else Color(1.0, 0.78, 0.25, 0.80)
+		var rsz := 6.5 if type == "boss" else 3.2
+		var ring := Fx.ground(rsz, rc, Vector4(0.15, 0.16, 0.1, 2.0))
+		ring.position = global_position + Vector3.UP * 0.08
+		world.add_child(ring)
+		var rtw := ring.create_tween().set_parallel()
+		Fx.anim(rtw, ring, "shape", Vector4(0.15, 0.16, 0.1, 2.0), Vector4(0.96, 0.03, 0.1, 2.0), 0.45).set_ease(Tween.EASE_OUT)
+		Fx.anim(rtw, ring, "col", rc, Color(rc, 0.0), 0.45).set_ease(Tween.EASE_IN)
+		rtw.chain().tween_callback(ring.queue_free)
+	if money > 0:
+		float_text(world, c + Vector3.UP * 0.4, "+%d" % money, Color(1.0, 0.8, 0.2), 0.007)
 	Sfx.play3d(Sfx.kill, c, -6.0)
 	var tw := create_tween()
 	tw.tween_interval(1.8 if rag else 1.1)
