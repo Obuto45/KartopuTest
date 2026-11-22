@@ -175,11 +175,21 @@ func _ready() -> void:
 	model.rotation.y = PI # modellerin önü +Z'ye bakıyor
 	add_child(model)
 	var tint: Color = Color(1.8, 1.5, 0.6) if elite else d.tint # elit: parlak
-	var over := shared(tint_key, func() -> Resource: # çarpma karışımı: doku ve ışık korunur, renk kayar
+	var over := shared(tint_key, func() -> Resource: # çarpma karışımı + kenar ışığı + stilize dış çizgi
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.blend_mode = BaseMaterial3D.BLEND_MODE_MUL
 		m.albedo_color = tint
+		var rim := ShaderMaterial.new()
+		rim.shader = preload("res://shaders/char_rim.gdshader")
+		rim.set_shader_parameter("rim_color", Color(1.0, 0.78, 0.25, 0.65) if elite else Color(1.0, 0.45, 0.32, 0.26))
+		rim.set_shader_parameter("rim_power", 2.4 if elite else 3.4)
+		var outline := ShaderMaterial.new()
+		outline.shader = preload("res://shaders/outline.gdshader")
+		outline.set_shader_parameter("width", 0.022 if elite else 0.015)
+		outline.set_shader_parameter("color", Color(0.22, 0.12, 0.02, 1.0) if elite else Color(0.10, 0.05, 0.07, 1.0))
+		rim.next_pass = outline
+		m.next_pass = rim
 		return m)
 	meshes = model.find_children("*", "MeshInstance3D", true, false)
 	for mi in meshes:

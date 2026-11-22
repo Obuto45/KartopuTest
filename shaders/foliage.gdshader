@@ -1,12 +1,15 @@
 shader_type spatial;
 render_mode world_vertex_coords;
-// Yaprak kümeleri (taç, çam katı, çalı): küre normalli, yumuşak boyalı ışık, rüzgârda salınım.
+// Yaprak kümeleri (taç, çam katı, çalı): küre normalli, yumuşak boyalı ışık, rüzgârda salınım;
+// benekli yaprak dokusu ve derin iç gölge.
 // UV.y = ağ içindeki yükseklik (0 alt, 1 üst), UV.x = ağ merkezinin model y'si; renk örnekten (COLOR) gelir.
 #include "wind.gdshaderinc"
+uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
 uniform float sway = 1.0;
 uniform float sphere_normal : hint_range(0.0, 1.0) = 0.92; // 1: tamamen küre normali (pürüzsüz taç)
 varying float h;
 varying float down; // alta bakan yüz (yumuşak geçişli) (çam eteğinin altı)
+varying vec3 wp;
 
 void vertex() {
 	h = UV.y;
@@ -21,14 +24,30 @@ void vertex() {
 	d.xz += w;
 	d += vec3(sin(TIME * 2.7 + VERTEX.y * 1.9 + VERTEX.z), sin(TIME * 2.2 + VERTEX.x * 1.7), cos(TIME * 2.4 + VERTEX.x)) * 0.035; // yaprak hışırtısı
 	VERTEX += d * sway * clamp(o.y * 0.4, 0.0, 1.0); // yere yakın çalılar az oynar
+	wp = VERTEX;
 }
 
 void fragment() {
-	vec3 c = COLOR.rgb * mix(0.62, 1.2, smoothstep(0.05, 0.95, h));
-	c = mix(c, vec3(0.2, 0.15, 0.08), down * 0.7); // etek altı: dal rengi, kapkara kalmasın
+	// Dünya uzayında çok ölçekli benekli yaprak dokusu: düz üçgen hissini kırar, boyalı yaprak öbeği verir
+	float n1 = texture(noise_tex, wp.xz * 0.42 + wp.y * 0.27).r;
+	float n2 = texture(noise_tex, wp.xy * 1.35 + wp.z * 0.85).r;
+	float leaf_mottle = mix(0.76, 1.24, smoothstep(0.22, 0.82, n1 * 0.6 + n2 * 0.4));
+
+	// Alt derin serin gölge -> üst sıcak güneşli altın-yeşil tepe
+	vec3 shadow_tint = COLOR.rgb * vec3(0.42, 0.56, 0.58);
+	vec3 sunlit_tint = COLOR.rgb * vec3(1.26, 1.22, 0.96) + vec3(0.025, 0.03, 0.0);
+	vec3 c = mix(shadow_tint, sunlit_tint, smoothstep(0.04, 0.92, h)) * leaf_mottle;
+
+	// Çam eteği altı: dal kahvesi dokunuşu, kapkara kalmasın
+	c = mix(c, vec3(0.18, 0.13, 0.07), down * 0.55);
+
+	// Hafif Fresnel kenar parıltısı (silüet yumuşak ve canlı)
+	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
+	c += sunlit_tint * fres * 0.14 * h;
+
 	ALBEDO = c;
-	ROUGHNESS = 0.95;
-	SPECULAR = 0.1;
+	ROUGHNESS = mix(0.95, 0.8, n2);
+	SPECULAR = 0.12;
 }
 
 // Yarım Lambert + 3 kademeli yumuşak ton rampası (boyalı görünüm) + kenarda arkadan ışık geçirme.

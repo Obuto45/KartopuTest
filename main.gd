@@ -36,8 +36,8 @@ var mode := "arena" # "arena" | "td": host seçer, set_mode ile istemcilere gide
 var ui: Control
 var ui_layer: CanvasLayer
 var td_ui: Control # yalnız TD maçında var (td_ui.gd)
-var hotbar: HBoxContainer # arena envanter çubuğu: TD'de gizlenir
-var help_lbl: Label
+var hotbar: Control # arena envanter çubuğu: TD'de gizlenir
+var help_lbl: Control
 var lobby_title: Label
 var lobby_sub: Label
 var weapon_btn: Button
@@ -60,15 +60,17 @@ var _pf_names := {} # Profile'ın var olan statik fonksiyonları (iskelet/gerçe
 var info: Label
 var members: Label
 var start_btn: Button
-var crosshair: Label
+var crosshair: Control
 var letterbox: Array[ColorRect] = [] # sinematik şeritler: yalnız giriş ekranında
 var friends_box: VBoxContainer
 var invite_box: VBoxContainer
 var dmg_rect: ColorRect
 var hud: Control
 var char_lbl: Label
-var hp_fill: ColorRect
-var hp_trail: ColorRect # hasar sonrası yavaşça kısalan beyaz iz
+var hp_fill: Panel
+var hp_fill_sb: StyleBoxFlat
+var hp_trail: Panel # hasar sonrası yavaşça kısalan beyaz iz
+var hp_accent: ColorRect # sol dikey karakter rengi şeridi
 var hp_ticks: Control # her 20 canda bir çizgi
 var hp_txt: Label
 var trail_f := 1.0
@@ -190,11 +192,20 @@ func _sb(c: Color, radius := 8, margin := 10) -> StyleBoxFlat:
 func _make_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font_size = 17
-	t.set_stylebox("normal", "Button", _sb(Color(0.15, 0.17, 0.26)))
-	t.set_stylebox("hover", "Button", _sb(Color(0.85, 0.42, 0.12)))
-	t.set_stylebox("pressed", "Button", _sb(Color(0.6, 0.28, 0.08)))
-	t.set_stylebox("disabled", "Button", _sb(Color(0.12, 0.12, 0.16, 0.6)))
-	var focus := _sb(Color(0, 0, 0, 0), 8, 10) # klavye / gamepad odağı görünsün (fare odağı çizilmez)
+	var bn := _sb(Color(0.13, 0.15, 0.23, 0.94), 9, 10)
+	bn.set_border_width_all(1)
+	bn.border_color = Color(1.0, 1.0, 1.0, 0.14)
+	var bh := _sb(Color(0.88, 0.44, 0.12, 0.98), 9, 10)
+	bh.set_border_width_all(1)
+	bh.border_color = Color(1.0, 0.85, 0.45, 0.65)
+	var bp := _sb(Color(0.62, 0.29, 0.08, 0.98), 9, 10)
+	bp.set_border_width_all(1)
+	bp.border_color = Color(1.0, 0.72, 0.3, 0.45)
+	t.set_stylebox("normal", "Button", bn)
+	t.set_stylebox("hover", "Button", bh)
+	t.set_stylebox("pressed", "Button", bp)
+	t.set_stylebox("disabled", "Button", _sb(Color(0.10, 0.11, 0.15, 0.6), 9, 10))
+	var focus := _sb(Color(0, 0, 0, 0), 9, 10) # klavye / gamepad odağı görünsün (fare odağı çizilmez)
 	focus.draw_center = false
 	focus.set_border_width_all(3)
 	focus.border_color = Color(1.0, 0.62, 0.18)
@@ -204,9 +215,11 @@ func _make_theme() -> Theme:
 	t.set_color("font_disabled_color", "Button", Color(0.65, 0.65, 0.7))
 	for k in ["normal", "hover", "pressed"]:
 		t.set_stylebox(k, "OptionButton", t.get_stylebox(k, "Button"))
-	var p := _sb(Color(0.06, 0.07, 0.11, 0.93), 14, 26)
-	p.set_border_width_all(2)
-	p.border_color = Color(0.95, 0.5, 0.15, 0.45)
+	var p := _sb(Color(0.05, 0.06, 0.10, 0.94), 14, 26)
+	p.set_border_width_all(1)
+	p.border_color = Color(1.0, 0.62, 0.22, 0.42)
+	p.shadow_color = Color(0, 0, 0, 0.5)
+	p.shadow_size = 16
 	t.set_stylebox("panel", "PanelContainer", p)
 	# Ana menü düğmeleri: büyük, sola yaslı, üstüne gelince turuncu şerit ve içeri kayma.
 	t.set_type_variation("BigButton", "Button")
@@ -251,6 +264,21 @@ func _txt(parent: Node, text: String, size: int, alpha := 0.85) -> Label:
 	return l
 
 
+## Taktik nişangâh: 4 ince kol + merkez nokta, dış hatlı (her arka planda net seçilir).
+class CrosshairView extends Control:
+	func _draw() -> void:
+		var c := size * 0.5
+		var gap := 5.0
+		var arm := 9.0
+		var dirs := [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]
+		for d in dirs:
+			draw_line(c + d * (gap - 1.0), c + d * (gap + arm + 1.0), Color(0, 0, 0, 0.78), 4.0)
+		draw_circle(c, 2.6, Color(0, 0, 0, 0.78))
+		for d in dirs:
+			draw_line(c + d * gap, c + d * (gap + arm), Color(1, 1, 1, 0.95), 2.0)
+		draw_circle(c, 1.5, Color(1.0, 0.92, 0.55, 0.95))
+
+
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -273,106 +301,272 @@ func _build_ui() -> void:
 	blind_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	blind_rect.color = Color(1, 1, 0.95, 0)
 	hud.add_child(blind_rect)
-	crosshair = _full_label(28, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
-	crosshair.text = "+"
+	crosshair = CrosshairView.new()
+	crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
+	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(crosshair)
 	_build_hp_bar()
-	score_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_RIGHT, VERTICAL_ALIGNMENT_TOP)
+
+	# Sağ üst oyuncu / skor kartı (yarı saydam koyu cam panel)
+	var score_card := PanelContainer.new()
+	score_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	score_card.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	score_card.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	score_card.offset_top = 16; score_card.offset_right = -20
+	var sc_sb := _sb(Color(0.05, 0.06, 0.10, 0.76), 10, 0)
+	sc_sb.content_margin_left = 14; sc_sb.content_margin_right = 14
+	sc_sb.content_margin_top = 8; sc_sb.content_margin_bottom = 8
+	sc_sb.set_border_width_all(1)
+	sc_sb.border_color = Color(1.0, 1.0, 1.0, 0.14)
+	sc_sb.shadow_color = Color(0, 0, 0, 0.35)
+	sc_sb.shadow_size = 8
+	score_card.add_theme_stylebox_override("panel", sc_sb)
+	hud.add_child(score_card)
+	score_lbl = _lbl(score_card, "", 16)
+	score_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	score_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	score_lbl.add_theme_color_override("font_color", Color(0.95, 0.96, 1.0))
+	score_lbl.add_theme_constant_override("outline_size", 3)
+	score_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+
 	center_lbl = _full_label(52, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_CENTER)
 	spec_lbl = _full_label(22, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_TOP)
 	spec_lbl.offset_top = 60
-	help_lbl = _full_label(14, HORIZONTAL_ALIGNMENT_LEFT, VERTICAL_ALIGNMENT_BOTTOM)
-	help_lbl.text = \
-		"WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD atıl | 1-4 eşya | Q karakter yeteneği | Sol tık kullan | ESC menü/ayarlar | F10 çık"
-	# Alt envanter çubuğu (hotbar)
+
+	# En altta ince, çakışmasız kontrol şeridi
+	var help_pill := PanelContainer.new()
+	help_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	help_pill.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	help_pill.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	help_pill.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	help_pill.offset_bottom = -8
+	var hp_pill_sb := _sb(Color(0.04, 0.05, 0.09, 0.62), 10, 0)
+	hp_pill_sb.content_margin_left = 16; hp_pill_sb.content_margin_right = 16
+	hp_pill_sb.content_margin_top = 4; hp_pill_sb.content_margin_bottom = 4
+	hp_pill_sb.set_border_width_all(1)
+	hp_pill_sb.border_color = Color(1, 1, 1, 0.10)
+	help_pill.add_theme_stylebox_override("panel", hp_pill_sb)
+	hud.add_child(help_pill)
+	var hl := _lbl(help_pill,
+		"WASD Yürü  •  Boşluk Zıpla (2x)  •  Shift Atıl  •  1-4 Eşya  •  Q Yetenek  •  Sol Tık Kullan  •  ESC Menü", 12)
+	hl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hl.add_theme_color_override("font_color", Color(0.88, 0.91, 0.96, 0.9))
+	help_lbl = help_pill
+
+	# Alt envanter çubuğu (hotbar): koyu cam dock, tuş rozetleri, taşmayan hizalı simge ve durum metinleri
+	var dock := PanelContainer.new()
+	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	dock.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	dock.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	dock.offset_bottom = -42
+	var dock_sb := _sb(Color(0.04, 0.05, 0.09, 0.74), 14, 0)
+	dock_sb.content_margin_left = 10; dock_sb.content_margin_right = 10
+	dock_sb.content_margin_top = 8; dock_sb.content_margin_bottom = 8
+	dock_sb.set_border_width_all(1)
+	dock_sb.border_color = Color(1.0, 0.86, 0.55, 0.22)
+	dock_sb.shadow_color = Color(0, 0, 0, 0.45)
+	dock_sb.shadow_size = 12
+	dock.add_theme_stylebox_override("panel", dock_sb)
+	hud.add_child(dock)
 	var bar := HBoxContainer.new()
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bar.offset_left = -245; bar.offset_right = 245
-	bar.offset_top = -140; bar.offset_bottom = -50
-	bar.add_theme_constant_override("separation", 10)
-	hud.add_child(bar)
-	hotbar = bar
+	bar.add_theme_constant_override("separation", 8)
+	dock.add_child(bar)
+	hotbar = dock
+
+	var keys_txt := ["1", "2", "3", "4", "Q"]
 	for i in 5: # 1-4 eşyalar + Q karakter yeteneği
+		if i == 4: # Eşyalar ile Q yeteneği arasında ince dikey ayırıcı
+			var sep := ColorRect.new()
+			sep.custom_minimum_size = Vector2(2, 66)
+			sep.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			sep.color = Color(1, 1, 1, 0.16)
+			sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			bar.add_child(sep)
 		var cell := PanelContainer.new()
-		cell.custom_minimum_size = Vector2(90, 84)
+		cell.custom_minimum_size = Vector2(138 if i == 4 else 94, 88)
+		cell.clip_contents = true
 		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0, 0, 0, 0.45)
-		sb.set_border_width_all(3)
-		sb.set_corner_radius_all(6)
+		var sb := _sb(Color(0.09, 0.11, 0.17, 0.86), 10, 0)
+		sb.set_border_width_all(2)
+		sb.border_color = Color(0.55, 0.60, 0.70, 0.35)
 		cell.add_theme_stylebox_override("panel", sb)
-		var icon := TextureRect.new() # bazuka ve kılıçta simge; ilk HUD karesinde doldurulur
+
+		var inner := Control.new()
+		inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(inner)
+
+		# Sol üst tuş rozeti (keycap)
+		var key_box := PanelContainer.new()
+		key_box.position = Vector2(6, 5)
+		key_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var key_sb := _sb(Color(0.03, 0.04, 0.07, 0.88), 5, 0)
+		key_sb.content_margin_left = 6; key_sb.content_margin_right = 6
+		key_sb.content_margin_top = 1; key_sb.content_margin_bottom = 1
+		key_sb.set_border_width_all(1)
+		key_sb.border_color = Color(1, 1, 1, 0.22)
+		key_box.add_theme_stylebox_override("panel", key_sb)
+		var key_lbl := _lbl(key_box, keys_txt[i], 11)
+		key_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		key_lbl.add_theme_color_override("font_color", Color(1.0, 0.90, 0.65) if i == 4 else Color(0.88, 0.92, 1.0))
+		inner.add_child(key_box)
+
+		# Orta simge alanı (Bazuka / Kılıç için taşmayan boşluklu yerleşim)
+		var icon := TextureRect.new()
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon.offset_left = 10; icon.offset_right = -10
+		icon.offset_top = 16; icon.offset_bottom = -26
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cell.add_child(icon)
-		var l := Label.new()
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		l.add_theme_font_size_override("font_size", 15)
-		cell.add_child(l)
-		var cdb := ProgressBar.new() # bekleme süresi: dolu = yeni kullanıldı, boşalınca hazır
+		inner.add_child(icon)
+
+		# Başlık etiketi (altta veya ortada temiz hizalı)
+		var name_lbl := Label.new()
+		name_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+		name_lbl.offset_left = 5; name_lbl.offset_right = -5
+		name_lbl.offset_top = 24 if (i != 0 and i != 3) else 58
+		name_lbl.offset_bottom = -26 if (i != 0 and i != 3) else -8
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		name_lbl.add_theme_font_size_override("font_size", 12 if i == 4 else 13)
+		name_lbl.add_theme_color_override("font_color", Color(0.95, 0.96, 1.0))
+		name_lbl.add_theme_constant_override("outline_size", 3)
+		name_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+		inner.add_child(name_lbl)
+
+		# Alt durum etiketi (HAZIR / AKTİF / süre)
+		var sub_lbl := Label.new()
+		sub_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		sub_lbl.offset_left = 5; sub_lbl.offset_right = -5
+		sub_lbl.offset_top = -24; sub_lbl.offset_bottom = -7
+		sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sub_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		sub_lbl.add_theme_font_size_override("font_size", 11)
+		sub_lbl.add_theme_constant_override("outline_size", 3)
+		sub_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+		inner.add_child(sub_lbl)
+
+		# Bekleme süresi ince alt barı
+		var cdb := ProgressBar.new()
+		cdb.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		cdb.offset_left = 4; cdb.offset_right = -4
+		cdb.offset_top = -5; cdb.offset_bottom = -1
 		cdb.show_percentage = false
 		cdb.max_value = 1.0
-		cdb.custom_minimum_size.y = 5
-		cdb.size_flags_vertical = Control.SIZE_SHRINK_END
 		cdb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cdb.add_theme_stylebox_override("background", StyleBoxEmpty.new())
-		cdb.add_theme_stylebox_override("fill", _sb(Color(1, 1, 1, 0.85), 2, 0))
-		cell.add_child(cdb)
+		cdb.add_theme_stylebox_override("fill", _sb(Color(1.0, 0.82, 0.32, 0.92), 2, 0))
+		inner.add_child(cdb)
+
 		bar.add_child(cell)
-		slots.append([sb, l, icon, cdb, 0.0])
-	status_lbl = _full_label(20, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_BOTTOM)
-	status_lbl.offset_bottom = -150
+		slots.append([sb, name_lbl, icon, cdb, 0.0, sub_lbl, key_sb])
+
+	status_lbl = _full_label(18, HORIZONTAL_ALIGNMENT_CENTER, VERTICAL_ALIGNMENT_BOTTOM)
+	status_lbl.offset_bottom = -152
 	hud.hide()
 	_build_settings(layer, theme)
 	_build_chars(layer, theme)
 	_build_weapons(layer, theme)
 
 
-## Sol üst: karakter adı + 20'lik dilimli can barı, hasarda beyaz iz, sayı.
+## Sol üst: modern cam kart içinde karakter adı, renk şeridi ve yuvarlatılmış 20'lik dilimli can barı.
 func _build_hp_bar() -> void:
+	var card := PanelContainer.new()
+	card.position = Vector2(18, 14)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var card_sb := _sb(Color(0.05, 0.06, 0.10, 0.78), 12, 0)
+	card_sb.set_border_width_all(1)
+	card_sb.border_color = Color(1.0, 1.0, 1.0, 0.15)
+	card_sb.shadow_color = Color(0, 0, 0, 0.40)
+	card_sb.shadow_size = 10
+	card.add_theme_stylebox_override("panel", card_sb)
+	hud.add_child(card)
+
 	var box := Control.new()
-	box.position = Vector2(20, 14)
+	box.custom_minimum_size = Vector2(HP_W + 32, 68)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.add_child(box)
-	char_lbl = _lbl(box, "", 18)
+	card.add_child(box)
+
+	hp_accent = ColorRect.new()
+	hp_accent.position = Vector2(6, 10)
+	hp_accent.size = Vector2(4, 48)
+	hp_accent.color = Color(1.0, 0.72, 0.22)
+	hp_accent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(hp_accent)
+
+	char_lbl = _lbl(box, "", 16)
+	char_lbl.position = Vector2(18, 7)
 	char_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-	char_lbl.add_theme_constant_override("outline_size", 6)
-	char_lbl.add_theme_color_override("font_outline_color", Color.BLACK)
-	var back := ColorRect.new()
-	back.position = Vector2(0, 28)
-	back.size = Vector2(HP_W + 4, 30)
-	back.color = Color(0, 0, 0, 0.65)
+	char_lbl.add_theme_constant_override("outline_size", 4)
+	char_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+
+	var back := Panel.new()
+	back.position = Vector2(18, 34)
+	back.size = Vector2(HP_W + 4, 24)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var back_sb := _sb(Color(0.02, 0.03, 0.05, 0.90), 7, 0)
+	back_sb.set_border_width_all(1)
+	back_sb.border_color = Color(1, 1, 1, 0.12)
+	back.add_theme_stylebox_override("panel", back_sb)
 	box.add_child(back)
-	hp_trail = ColorRect.new()
-	hp_fill = ColorRect.new()
+
+	hp_trail = Panel.new()
+	hp_trail.position = Vector2(20, 36)
+	hp_trail.size = Vector2(HP_W, 20)
+	hp_trail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_trail.add_theme_stylebox_override("panel", _sb(Color(1, 1, 1, 0.85), 5, 0))
+	box.add_child(hp_trail)
+
+	hp_fill = Panel.new()
+	hp_fill.position = Vector2(20, 36)
+	hp_fill.size = Vector2(HP_W, 20)
+	hp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_fill_sb = _sb(Color(0.28, 0.88, 0.36), 5, 0)
+	hp_fill.add_theme_stylebox_override("panel", hp_fill_sb)
+	box.add_child(hp_fill)
+
+	# Üst ince cam parıltı şeridi
+	var gloss := ColorRect.new()
+	gloss.position = Vector2(21, 37)
+	gloss.size = Vector2(HP_W - 2, 7)
+	gloss.color = Color(1, 1, 1, 0.18)
+	gloss.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(gloss)
+
 	hp_ticks = Control.new()
-	for r in [hp_trail, hp_fill, hp_ticks]:
-		r.position = Vector2(2, 30)
-		r.size = Vector2(HP_W, 26)
-		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(r)
-	hp_trail.color = Color(1, 1, 1, 0.85)
-	hp_txt = _lbl(box, "", 17)
-	hp_txt.position = Vector2(2, 30)
-	hp_txt.size = Vector2(HP_W, 26)
+	hp_ticks.position = Vector2(20, 36)
+	hp_ticks.size = Vector2(HP_W, 20)
+	hp_ticks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(hp_ticks)
+
+	hp_txt = _lbl(box, "", 14)
+	hp_txt.position = Vector2(20, 35)
+	hp_txt.size = Vector2(HP_W, 22)
 	hp_txt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hp_txt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hp_txt.add_theme_constant_override("outline_size", 5)
-	hp_txt.add_theme_color_override("font_outline_color", Color.BLACK)
+	hp_txt.add_theme_color_override("font_color", Color.WHITE)
+	hp_txt.add_theme_constant_override("outline_size", 4)
+	hp_txt.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 
 
 func _update_hp_bar(me: Node, dt: float) -> void:
 	var f := clampf(float(me.hp) / me.max_hp, 0.0, 1.0)
 	trail_f = f if f >= trail_f else move_toward(trail_f, f, dt * 0.5)
-	hp_fill.size.x = HP_W * f
-	hp_trail.size.x = HP_W * trail_f
-	var c := Color(0.95, 0.85, 0.2).lerp(Color(0.3, 0.9, 0.35), (f - 0.5) * 2.0) if f > 0.5 \
-		else Color(0.9, 0.15, 0.1).lerp(Color(0.95, 0.85, 0.2), f * 2.0)
+	hp_fill.size.x = maxf(HP_W * f, 0.0)
+	hp_fill.visible = f > 0.001
+	hp_trail.size.x = maxf(HP_W * trail_f, 0.0)
+	hp_trail.visible = trail_f > 0.001
+	var c := Color(0.96, 0.82, 0.18).lerp(Color(0.24, 0.88, 0.42), (f - 0.5) * 2.0) if f > 0.5 \
+		else Color(0.92, 0.16, 0.14).lerp(Color(0.96, 0.82, 0.18), f * 2.0)
 	if f <= 0.3 and f > 0.0: # kritik: yanıp söner
 		c = c.lerp(Color.WHITE, 0.35 * absf(sin(Time.get_ticks_msec() * 0.008)))
-	hp_fill.color = c
+	hp_fill_sb.bg_color = c
 	hp_txt.text = "%d / %d" % [me.hp, me.max_hp]
 	var n: int = me.max_hp / 20 - 1
 	if hp_ticks.get_child_count() != n: # dilim çizgileri (can üst sınırı değişince yeniden)
@@ -380,12 +574,13 @@ func _update_hp_bar(me: Node, dt: float) -> void:
 			t.queue_free()
 		for k in n:
 			var line := ColorRect.new()
-			line.color = Color(0, 0, 0, 0.55)
-			line.size = Vector2(2, 26)
+			line.color = Color(0, 0, 0, 0.38)
+			line.size = Vector2(2, 20)
 			line.position.x = HP_W * (k + 1) * 20.0 / me.max_hp - 1.0
 			hp_ticks.add_child(line)
 	char_lbl.text = "%s  •  %s" % [tr(me.ch.name), tr(me.ch.role)]
-	char_lbl.modulate = me.ch.color.lightened(0.3)
+	char_lbl.modulate = me.ch.color.lightened(0.35)
+	hp_accent.color = me.ch.color.lightened(0.15)
 
 
 # ---------- Menü ----------
@@ -859,9 +1054,21 @@ func _build_chars(layer: CanvasLayer, theme: Theme) -> void:
 	env.environment.ambient_light_color = Color.WHITE
 	env.environment.ambient_light_energy = 0.7
 	vp.add_child(env)
-	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(-0.7, 0.6, 0)
+	var sun := DirectionalLight3D.new() # 3 noktalı stüdyo aydınlatması
+	sun.rotation = Vector3(-0.6, 0.55, 0)
+	sun.light_color = Color(1.0, 0.92, 0.80)
+	sun.light_energy = 1.25
 	vp.add_child(sun)
+	var fill := DirectionalLight3D.new()
+	fill.rotation = Vector3(-0.3, -1.9, 0)
+	fill.light_color = Color(0.62, 0.78, 1.0)
+	fill.light_energy = 0.5
+	vp.add_child(fill)
+	var rim_l := DirectionalLight3D.new()
+	rim_l.rotation = Vector3(0.2, 2.75, 0)
+	rim_l.light_color = Color(1.0, 0.82, 0.52)
+	rim_l.light_energy = 0.7
+	vp.add_child(rim_l)
 	var pcam := Camera3D.new()
 	pcam.fov = 32
 	pcam.position = Vector3(0, 1.35, 6.6)
@@ -896,6 +1103,13 @@ func _show_char(i: int) -> void:
 		n.queue_free()
 	var m: Node3D = load("res://models/chars/%s.glb" % c.model).instantiate()
 	m.rotation.y = 0.35
+	var rim := ShaderMaterial.new()
+	rim.shader = preload("res://shaders/char_rim.gdshader")
+	var outline := ShaderMaterial.new()
+	outline.shader = preload("res://shaders/outline.gdshader")
+	rim.next_pass = outline
+	for mi: MeshInstance3D in m.find_children("*", "MeshInstance3D", true, false):
+		mi.material_overlay = rim
 	char_view.add_child(m)
 	var ap: AnimationPlayer = m.find_children("*", "AnimationPlayer", true, false)[0]
 	ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
@@ -995,6 +1209,7 @@ func weapon_icon(id: String) -> Texture2D:
 	vp.size = Vector2i(256, 160)
 	vp.transparent_bg = true
 	vp.own_world_3d = true
+	vp.msaa_3d = Viewport.MSAA_4X
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	add_child(vp)
 	vp.add_child(model)
@@ -1003,9 +1218,15 @@ func weapon_icon(id: String) -> Texture2D:
 		var b: AABB = mi.global_transform * mi.get_aabb()
 		box = b if box.size == Vector3.ZERO else box.merge(b)
 	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(-0.7, 0.9, 0)
-	sun.light_energy = 2.2 # koyu silahlar koyu kartta kaybolmasın
+	sun.rotation = Vector3(-0.65, 0.85, 0)
+	sun.light_color = Color(1.0, 0.94, 0.84)
+	sun.light_energy = 2.3 # koyu silahlar koyu kartta kaybolmasın
 	vp.add_child(sun)
+	var rim := DirectionalLight3D.new()
+	rim.rotation = Vector3(0.3, -2.4, 0)
+	rim.light_color = Color(0.68, 0.84, 1.0)
+	rim.light_energy = 1.15
+	vp.add_child(rim)
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_CLEAR_COLOR
@@ -1527,24 +1748,41 @@ func _process(dt: float) -> void:
 		crosshair.visible = me.hp > 0
 		blind_rect.color.a = clampf(me.bt("blind") * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
 		var sh := tr("AKTİF") if me.shield_on else _cd_text(me.shield_cd)
-		var texts := ["1\n" + tr("BAZUKA"), "2\n%s\n%s" % [tr("KALKAN"), sh], "3\n%s\n%s" % [tr("DUVAR"), _cd_text(me.wall_cd)], "4\n" + tr("KILIÇ"),
-			"Q\n%s\n%s" % [tr(me.ch.skill_name), _cd_text(me.skill_cd)]]
+		var names := [tr("BAZUKA"), tr("KALKAN"), tr("DUVAR"), tr("KILIÇ"), tr(me.ch.skill_name)]
+		var subs := ["", sh, _cd_text(me.wall_cd), "", _cd_text(me.skill_cd)]
 		var left := [me.cd, me.shield_cd, me.wall_cd, me.sword_cd, me.skill_cd]
 		for i in 5:
 			var s: Array = slots[i]
-			s[0].border_color = Color(1, 0.85, 0.2) if me.slot == i + 1 else Color(0.5, 0.5, 0.5, 0.6)
-			if i == 0 or i == 3: # simgeli slot: yalnız tuş numarası, ad simgenin altında
-				if s[2].texture == null:
-					s[2].texture = weapon_icon("bazooka" if i == 0 else "sword")
-				s[1].text = "%d
-
-%s" % [i + 1, tr("BAZUKA") if i == 0 else tr("KILIÇ")]
-				s[1].vertical_alignment = VERTICAL_ALIGNMENT_TOP
+			var sb: StyleBoxFlat = s[0]
+			var name_lbl: Label = s[1]
+			var icon: TextureRect = s[2]
+			var cdb: ProgressBar = s[3]
+			var sub_lbl: Label = s[5]
+			var key_sb: StyleBoxFlat = s[6]
+			var active: bool = (me.slot == i + 1)
+			if i == 4:
+				var ready_q: bool = me.skill_cd <= 0.0
+				sb.border_color = me.ch.color.lightened(0.15) if ready_q else Color(0.45, 0.48, 0.56, 0.35)
+				sb.bg_color = me.ch.color.darkened(0.72) if ready_q else Color(0.08, 0.09, 0.14, 0.78)
+				sb.bg_color.a = 0.88 if ready_q else 0.76
+				key_sb.border_color = me.ch.color.lightened(0.25) if ready_q else Color(1, 1, 1, 0.16)
 			else:
-				s[1].text = texts[i]
+				sb.border_color = Color(1.0, 0.82, 0.25) if active else Color(0.55, 0.60, 0.70, 0.32)
+				sb.bg_color = Color(0.22, 0.17, 0.06, 0.90) if active else Color(0.09, 0.11, 0.17, 0.84)
+				key_sb.border_color = Color(1.0, 0.82, 0.25) if active else Color(1, 1, 1, 0.20)
+			if i == 0 or i == 3:
+				if icon.texture == null:
+					icon.texture = weapon_icon("bazooka" if i == 0 else "sword")
+			name_lbl.text = names[i]
+			sub_lbl.text = subs[i]
+			if i == 1 and me.shield_on:
+				sub_lbl.add_theme_color_override("font_color", Color(0.35, 0.92, 1.0))
+			elif left[i] > 0.0:
+				sub_lbl.add_theme_color_override("font_color", Color(1.0, 0.72, 0.32))
+			else:
+				sub_lbl.add_theme_color_override("font_color", Color(0.38, 0.95, 0.52))
 			s[4] = maxf(s[4], left[i]) if left[i] > 0.0 else 0.0
-			s[3].value = left[i] / s[4] if s[4] > 0.0 else 0.0
-		slots[4][0].border_color = me.ch.color if me.skill_cd <= 0.0 else Color(0.5, 0.5, 0.5, 0.6) # Q hazırsa karakter renginde
+			cdb.value = left[i] / s[4] if s[4] > 0.0 else 0.0
 		var st := PackedStringArray()
 		for k in me.buffs:
 			if STATUS.has(k) and me.hp > 0:

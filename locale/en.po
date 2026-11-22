@@ -153,6 +153,9 @@ msgstr "▶  Start Defense (host)"
 msgid "WASD yürü | Boşluk zıpla (havada 2. zıplama) | Shift+WASD atıl | 1-4 eşya | Q karakter yeteneği | Sol tık kullan | ESC menü/ayarlar | F10 çık"
 msgstr "WASD move | Space jump (again for double jump) | Shift+WASD dash | 1-4 items | Q character skill | Left click use | ESC menu/settings | F10 quit"
 
+msgid "WASD Yürü  •  Boşluk Zıpla (2x)  •  Shift Atıl  •  1-4 Eşya  •  Q Yetenek  •  Sol Tık Kullan  •  ESC Menü"
+msgstr "WASD Move  •  Space Jump (2x)  •  Shift Dash  •  1-4 Items  •  Q Skill  •  Left Click Use  •  ESC Menu"
+
 #: main.gd:429
 msgid "BAZUKA SAVAŞI"
 msgstr "BAZOOKA BUDDIES"

@@ -21,10 +21,13 @@ void vertex() {
 }
 void fragment() {
 	float tw = sin(UV.y * 260.0 + sin(UV.x * 6.2832) * 2.2); // örgü kıvrımı
-	vec3 gold = mix(vec3(0.62, 0.36, 0.04), vec3(0.95, 0.66, 0.12), 0.5 + 0.5 * tw);
-	ALBEDO = (UV.y > 0.955 && UV.y < 0.972) ? vec3(0.55, 0.2, 0.7) : gold; // uçta mor kurdele
-	ROUGHNESS = 0.45;
-	EMISSION = gold * 0.08; // gölgede de altın kalsın
+	vec3 gold = mix(vec3(0.64, 0.38, 0.04), vec3(0.98, 0.72, 0.16), 0.5 + 0.5 * tw);
+	float ribbon = (UV.y > 0.955 && UV.y < 0.972) ? 1.0 : 0.0;
+	ALBEDO = mix(gold, vec3(0.58, 0.22, 0.76), ribbon); // uçta mor kurdele
+	ROUGHNESS = mix(0.34, 0.55, ribbon);
+	SPECULAR = mix(0.68, 0.3, ribbon);
+	BACKLIGHT = gold * 0.28 * (1.0 - ribbon);
+	EMISSION = gold * 0.10 * (1.0 - ribbon); // gölgede de ipeksi altın parıltı
 }"
 
 var vis: Node3D # tüm görüntü: eğilme ve yıkılış bunu oynatır
@@ -98,9 +101,11 @@ func _ready() -> void:
 	stone.set_shader_parameter("tint", STONE)
 	stone.set_shader_parameter("blocks", 1.0)
 	stone.set_shader_parameter("moss", 0.55)
-	var wood := _std(Color(0.36, 0.24, 0.14))
-	var tile := _std(Color(0.34, 0.17, 0.5), 0.7) # mor kiremit
-	var gold := _std(Color(1.0, 0.78, 0.25), 0.35, 0.3)
+	var wood := _std(Color(0.36, 0.23, 0.13), 0.86)
+	var tile := _std(Color(0.36, 0.18, 0.54), 0.58) # parlak mor kiremit
+	tile.metallic = 0.12
+	var gold := _std(Color(1.0, 0.80, 0.26), 0.24, 0.35)
+	gold.metallic = 0.85
 
 	_part(_cyl(2.2, 2.4, 0.9, 18), stone, Vector3(0, 0.45, 0)) # kaide
 	_part(_cyl(1.65, 2.05, BODY_H, 18, 8), stone, Vector3(0, BODY_H * 0.5, 0)) # gövde: yukarı daralır
