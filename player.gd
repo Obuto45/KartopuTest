@@ -172,6 +172,7 @@ var held_id := "" # çıkarılmış silah; _held() değişince _switched
 var busy := "" # ateşi kilitleyen animasyon: draw, reload, drink, prime, charge ("" = serbest)
 var reloading := false
 var reload_t := 0.0 # doldurmanın kalan süresi (HUD çubuğu)
+var cam_roll := 0.0 # yana yürürken / atılırken hafif kamera yatışı (FPS hissi)
 var anim_gen := 0 # vm'siz oyuncuda zamanlanmış klip olaylarını geçersiz kılar
 var flame_t := 0.0 # alev pilotu büyük kalsın
 var fuse_left := 0.0 # pimi çekilmiş bombanın kalan sigortası
@@ -460,8 +461,22 @@ func _unhandled_input(e: InputEvent) -> void:
 				_spec_cycle(-1)
 		return
 	if e is InputEventMouseMotion:
-		rotation.y -= e.relative.x * 0.0025
-		look.rotation.x = clamp(look.rotation.x - e.relative.y * 0.0025, -1.45, 1.45)
+		var ms := 0.0025 * Settings.mouse_sens
+		rotation.y -= e.relative.x * ms
+		look.rotation.x = clamp(look.rotation.x - e.relative.y * ms, -1.45, 1.45)
+	elif e is InputEventMouseButton and e.pressed and (e.button_index == MOUSE_BUTTON_WHEEL_UP or e.button_index == MOUSE_BUTTON_WHEEL_DOWN):
+		if td and not cards.is_empty() and td.state == "break":
+			return
+		var step := -1 if e.button_index == MOUSE_BUTTON_WHEEL_UP else 1
+		var count := 5 if td else 4
+		if td:
+			for k in count:
+				var next := posmod(slot - 1 + step * (k + 1), count) + 1
+				if not inv[next - 1].is_empty():
+					slot = next
+					return
+		else:
+			_set_slot(posmod(slot - 1 + step, count) + 1)
 
 
 ## Yaşayan diğer oyuncular arasında sıradakine geç (step: 1 ileri, -1 geri).
@@ -556,12 +571,14 @@ func _local(dt: float) -> void:
 				jump_buf = 0.0
 				air_jumps -= 1
 				velocity.y = AIR_JUMP * ch.get("jump", 1.0) * st("jump")
+				_air_jump_fx()
 		if Input.is_action_just_pressed("dash") and dash_cd <= 0.0: # yerde ve havada
 			var d := dir if dir != Vector3.ZERO else -transform.basis.z
 			velocity = d * DASH_SPEED
 			dash_t = DASH_TIME
 			dash_cd = DASH_CD
 			Sfx.play2d(Sfx.whoosh, -2.0)
+			_dash_fx(d)
 		for s in [1, 2, 3, 4, 5] if td else [1, 2, 3, 4]:
 			if td:
 				# kart açıkken 1/2/3 kartı seçer, slotu değiştirmez
@@ -978,18 +995,79 @@ func _fx_color(def: Color) -> Color:
 
 
 ## İki nokta arasında kısa süre görünen ışın (kurşun, kement, iğne).
+## Mermi izi: parlak beyaz-altın çekirdek + renkli toplamalı hale; namludan hedefe keskin parlar.
 func _beam_fx(from: Vector3, to: Vector3, c: Color) -> void:
 	var d := to - from
-	if d.length() < 0.1:
+	var length := d.length()
+	if length < 0.1:
 		return
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.035; cyl.bottom_radius = 0.008; cyl.height = d.length() # namlu ucunda ince: kameraya yakın kalın görünmesin
-	var mi := _mesh(_world(), cyl, (from + to) * 0.5, c)
-	_bar_mat(mi)
-	mi.basis = Basis(Quaternion(Vector3.UP, d.normalized()))
-	var tw := mi.create_tween()
-	tw.tween_property(mi.material_override, "albedo_color:a", 0.0, 0.3)
-	tw.tween_callback(mi.queue_free)
+	var root := Node3D.new()
+	root.position = (from + to) * 0.5
+	root.basis = Basis(Quaternion(Vector3.UP, d / length))
+	_world().add_child(root)
+	var outer := CylinderMesh.new()
+	outer.top_radius = 0.042; outer.bottom_radius = 0.010; outer.height = length; outer.radial_segments = 6
+	var om := StandardMaterial3D.new()
+	om.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	om.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	om.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	om.albedo_color = Color(c.r * 1.5, c.g * 1.5, c.b * 1.5, 0.72)
+	var omi := MeshInstance3D.new()
+	omi.mesh = outer
+	omi.material_override = om
+	omi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(omi)
+	var core := CylinderMesh.new()
+	core.top_radius = 0.016; core.bottom_radius = 0.004; core.height = length; core.radial_segments = 5
+	var cm := StandardMaterial3D.new()
+	cm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	cm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	cm.albedo_color = Color(2.2, 2.1, 1.85, 0.95)
+	var cmi := MeshInstance3D.new()
+	cmi.mesh = core
+	cmi.material_override = cm
+	cmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(cmi)
+	var tw := root.create_tween().set_parallel()
+	tw.tween_property(om, "albedo_color:a", 0.0, 0.16).set_ease(Tween.EASE_OUT)
+	tw.tween_property(cm, "albedo_color:a", 0.0, 0.11).set_ease(Tween.EASE_OUT)
+	tw.tween_property(root, "scale", Vector3(0.2, 1.0, 0.2), 0.16).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(root.queue_free)
+
+
+## Çift zıplama efekti: ayak altında genişleyen rüzgâr halkası ve yukarı süzülen kıvılcımlar.
+func _air_jump_fx() -> void:
+	var at := global_position + Vector3.UP * 0.08
+	var c := Color(0.85, 0.96, 1.0, 0.72)
+	var ring := ExplosionScript.ground(1.35, c, Vector4(0.18, 0.14, 0.08, 1.5))
+	ring.position = at
+	_world().add_child(ring)
+	var tw := ring.create_tween().set_parallel()
+	ExplosionScript.anim(tw, ring, "shape", Vector4(0.18, 0.14, 0.08, 1.5), Vector4(0.95, 0.03, 0.08, 1.5), 0.28).set_ease(Tween.EASE_OUT)
+	ExplosionScript.anim(tw, ring, "col", c, Color(c, 0.0), 0.28).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(ring.queue_free)
+
+
+## Atılma (dash) efekti: rüzgâr patlaması ve hız izi kıvılcımları.
+func _dash_fx(d: Vector3) -> void:
+	var at := global_position + Vector3.UP * 0.85
+	var p := ExplosionScript.parts(ExplosionScript.quad("glow", 0.26), 12, 0.28, 2.0, 6.0,
+		[Color(0.85, 0.95, 1.0, 0.75), Color(0.55, 0.85, 1.0, 0.0)], 0.9, 0.2)
+	p.direction = -d
+	p.spread = 38.0
+	p.position = at
+	p.finished.connect(p.queue_free)
+	_world().add_child(p)
+	p.emitting = true
+	var c := Color(0.75, 0.92, 1.0, 0.55)
+	var ring := ExplosionScript.ground(1.5, c, Vector4(0.2, 0.14, 0.1, 1.4))
+	ring.position = global_position + Vector3.UP * 0.08
+	_world().add_child(ring)
+	var tw := ring.create_tween().set_parallel()
+	ExplosionScript.anim(tw, ring, "shape", Vector4(0.2, 0.14, 0.1, 1.4), Vector4(0.96, 0.03, 0.1, 1.4), 0.24).set_ease(Tween.EASE_OUT)
+	ExplosionScript.anim(tw, ring, "col", c, Color(c, 0.0), 0.24).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(ring.queue_free)
 
 
 func boom_fx(pos: Vector3, k: float) -> void:
@@ -1013,6 +1091,27 @@ func set_shield(on: bool) -> void:
 	shield_on = on
 	var pos := global_position + Vector3.UP
 	Sfx.play3d(Sfx.shield_up if on else Sfx.shield_break, pos, 0.0)
+	if on: # kalkan açılış halkası
+		var c := Color(0.35, 0.88, 1.0, 0.78)
+		var ring := ExplosionScript.ground(1.9, c, Vector4(0.15, 0.14, 0.06, 1.8))
+		ring.position = global_position + Vector3.UP * 0.1
+		_world().add_child(ring)
+		var tw := ring.create_tween().set_parallel()
+		ExplosionScript.anim(tw, ring, "shape", Vector4(0.15, 0.14, 0.06, 1.8), Vector4(0.95, 0.03, 0.06, 1.8), 0.3).set_ease(Tween.EASE_OUT)
+		ExplosionScript.anim(tw, ring, "col", c, Color(c, 0.0), 0.3).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(ring.queue_free)
+	else: # kalkan kırılma parçaları + kısa mavi flaş
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.14, 0.14, 0.03)
+		bm.material = ExplosionScript.mat("spark")
+		var sh := ExplosionScript.parts(bm, 18, 0.55, 3.5, 8.5,
+			[Color(0.65, 0.95, 1.0, 1.0), Color(0.25, 0.7, 1.0, 0.8), Color(0.1, 0.4, 1.0, 0.0)], 1.0, 0.25)
+		sh.gravity = Vector3(0, -12, 0)
+		sh.position = pos
+		sh.finished.connect(sh.queue_free)
+		_world().add_child(sh)
+		sh.emitting = true
+		shake(pos, 0.35)
 
 
 func _remote(dt: float) -> void:
@@ -1179,12 +1278,15 @@ func _feel(dt: float, mine: bool, spd: float, air: bool, hidden: bool) -> void:
 		var t := Time.get_ticks_msec() * 0.001
 		off += Vector3(sway.x * 0.3 + cos(bob_t) * 0.01 * bob_k, -sway.y * 0.3 - absf(sin(bob_t)) * 0.012 * bob_k + sin(t * 1.8) * 0.003 + sq * 0.2, 0)
 		tilt += Vector3(-sway.y + sq * 0.3, -sway.x, -sway.x * 0.5)
-		# Kamera: sarsıntı ~0,4 sn'de söner, inişte hafif çöker, hızda görüş açısı genişler.
+		# Kamera: sarsıntı ~0,4 sn'de söner, yana yürürken hafif yatar (banking), inişte çöker, hızda FOV genişler.
 		shake_k *= maxf(1.0 - dt * 7.0, 0.0)
+		var target_roll := clampf(-lv.x / maxf(SPEED, 1.0) * 0.038, -0.055, 0.055) if hp > 0 and not scoped else 0.0
+		cam_roll = lerpf(cam_roll, target_roll, minf(1.0, dt * 11.0))
 		var n := Vector3(sin(t * 53.0 + 1.0), sin(t * 71.0), sin(t * 61.0 + 2.0)) * shake_k * minf(shake_k, 1.0) * Settings.shake # karesel: küçük sarsıntı hafif, büyüğü sert
-		cam.rotation = n * SHAKE_ANG
+		cam.rotation = n * SHAKE_ANG + Vector3(0.0, 0.0, cam_roll)
 		cam.v_offset = minf(sq, 0.0) * 0.5
-		var fov := SCOPE_FOV if scoped else FOV + clampf((spd - SPEED * 1.3) / (DASH_SPEED - SPEED * 1.3), 0.0, 1.0) * FOV_DASH
+		var base_fov: float = Settings.fov
+		var fov := SCOPE_FOV if scoped else base_fov + clampf((spd - SPEED * 1.3) / (DASH_SPEED - SPEED * 1.3), 0.0, 1.0) * FOV_DASH
 		cam.fov = lerpf(cam.fov, fov, minf(1.0, dt * (20.0 if scoped else 8.0)))
 		if spec_cam: # yay kolu kameranın yerini kendi yönetir: yalnızca kaydır
 			spec_cam.h_offset = n.y * 0.08
@@ -1252,6 +1354,7 @@ func explode(rocket_name, pos: Vector3) -> void:
 @rpc("authority", "call_local", "reliable")
 func swing(from: Vector3, fwd: Vector3) -> void:
 	swing_t = SWING_T
+	_slash_fx(from + Vector3.UP * 1.4, fwd, 1.0)
 	shake(from, 0.15)
 	Sfx.play3d(Sfx.whoosh, from + Vector3.UP * 1.5, 0.0)
 	var me := _local_player()
@@ -1341,8 +1444,9 @@ func respawn() -> void:
 func _td_init() -> void:
 	if stats.is_empty():
 		stats = Weapons.base_stats(ch)
-		var wid: String = Weapons.get_weapon(Net.weapons.get(get_multiplayer_authority(), 0)).id
-		inv[0] = {"kind": "weapon", "id": wid, "count": 1, "lvl": 1, "ammo": Weapons.full_ammo(wid)}
+		if not td.get("is_story"): # Hikaye modunda silahsız başlanır; silahlar görevlerle kazanılır
+			var wid: String = Weapons.get_weapon(Net.weapons.get(get_multiplayer_authority(), 0)).id
+			inv[0] = {"kind": "weapon", "id": wid, "count": 1, "lvl": 1, "ammo": Weapons.full_ammo(wid)}
 	slot = 1
 	hand = Node3D.new()
 	look.add_child(hand)
@@ -1874,21 +1978,24 @@ func td_fire(id: String, origin: Vector3, dirs: PackedVector3Array, n: int, fuse
 					_td_arc(w, origin, d)
 
 
-## Kılıç izi: oyuncunun önünde ince, parlak bir yay; uçlara doğru incelir, hızla söner. k > 1: serinin son vuruşu.
+## Kılıç izi: dinamik süpüren parlak hilal dalgası + kıvılcımlar. k > 1: serinin altın bitirici vuruşu.
 func _slash_fx(at: Vector3, d: Vector3, k: float) -> void:
+	var finisher := k > 1.15
 	var m := ImmediateMesh.new()
 	m.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	var n := 16
+	var n := 20
+	var arc := 1.45 if finisher else 1.15
+	var base_c := Color(1.0, 0.80, 0.28) if finisher else Color(0.95, 0.97, 1.0)
 	for i in n + 1:
 		var f := float(i) / n
-		var a := lerpf(-1.1, 1.1, f)
-		var w := sin(f * PI) * 0.12 * k
-		var c := Color(1.0, 0.95, 0.8, sin(f * PI) * 0.8)
+		var a := lerpf(-arc, arc, f)
+		var w := sin(f * PI) * (0.24 if finisher else 0.16) * k
+		var alpha := sin(f * PI) * (0.95 if finisher else 0.85)
 		var dir := Vector3(sin(a), 0, -cos(a))
-		m.surface_set_color(c)
-		m.surface_add_vertex(dir * (1.3 - w))
-		m.surface_set_color(c)
-		m.surface_add_vertex(dir * (1.3 + w))
+		m.surface_set_color(Color(base_c.r * 1.6, base_c.g * 1.6, base_c.b * 1.6, alpha))
+		m.surface_add_vertex(dir * (1.35 - w))
+		m.surface_set_color(Color(base_c.r * 0.7, base_c.g * 0.7, base_c.b * 0.8, alpha * 0.25))
+		m.surface_add_vertex(dir * (1.35 + w * 1.35))
 	m.surface_end()
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -1902,13 +2009,25 @@ func _slash_fx(at: Vector3, d: Vector3, k: float) -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_world().add_child(mi)
 	var flat := Vector3(d.x, 0, d.z)
-	mi.global_position = at + Vector3.DOWN * 0.3
+	mi.global_position = at + Vector3.DOWN * 0.25
 	if flat.length_squared() > 0.001:
 		mi.look_at(mi.global_position + flat)
-	mi.rotate_object_local(Vector3.FORWARD, 0.35) # hafif çapraz savuruş
-	var tw := mi.create_tween()
-	tw.tween_property(mat, "albedo_color:a", 0.0, 0.18)
-	tw.tween_callback(mi.queue_free)
+	var roll := 0.0 if finisher else (0.42 if combo % 2 == 0 else -0.42)
+	mi.rotate_object_local(Vector3.FORWARD, roll)
+	mi.scale = Vector3(0.65, 1.0, 0.65)
+	var tw := mi.create_tween().set_parallel()
+	tw.tween_property(mi, "scale", Vector3.ONE * (1.35 if finisher else 1.15), 0.16).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.20).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(mi.queue_free)
+	# Savuruş kıvılcımları
+	var sp := ExplosionScript.parts(ExplosionScript.quad("glow", 0.10), 10 if finisher else 6, 0.24, 2.5, 6.5,
+		[Color(base_c, 0.95), Color(1.0, 0.65, 0.2, 0.0)], 1.0, 0.2)
+	sp.direction = flat.normalized() if flat.length_squared() > 0.001 else Vector3.FORWARD
+	sp.spread = 55.0
+	sp.position = mi.global_position + sp.direction * 1.1
+	sp.finished.connect(sp.queue_free)
+	_world().add_child(sp)
+	sp.emitting = true
 
 
 ## Namlu ateşi: parlak alev çiçeği + kısa ışık; mermili silahta sağa sekip düşen pirinç kovan.

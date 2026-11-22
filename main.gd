@@ -7,6 +7,8 @@ const WorldScript := preload("res://world.gd")
 const ExplosionScript := preload("res://explosion.gd")
 const Chars := preload("res://characters.gd")
 const TdUi := preload("res://td_ui.gd")
+const StoryScript := preload("res://story.gd")
+const StoryUi := preload("res://story_ui.gd")
 const Profile := preload("res://profile.gd")
 const Balance := preload("res://balance.gd")
 const COSM_SLOTS := {"tint": "Karakter Rengi", "title": "Unvan", "fx": "Kurşun ve Namlu Ateşi Rengi"}
@@ -94,6 +96,9 @@ var close_btn: Button
 var ver_lbl: Label
 var chars_title: Label
 var shake_slider: HSlider
+var sens_slider: HSlider
+var fov_slider: HSlider
+var dmg_mat: ShaderMaterial
 var intro_logo: Label
 var ingame_box: VBoxContainer
 var world: Node3D
@@ -130,6 +135,11 @@ func _ready() -> void:
 		_on_start()
 		await get_tree().create_timer(3.0).timeout
 		get_viewport().get_texture().get_image().save_png(OS.get_user_data_dir() + "/selftest.png")
+		get_tree().quit()
+	elif "--storytest" in OS.get_cmdline_user_args(): # açık dünya hikaye modunu açıp bir kare kaydeder
+		_start_story()
+		await get_tree().create_timer(2.2).timeout
+		get_viewport().get_texture().get_image().save_png(OS.get_user_data_dir() + "/storytest.png")
 		get_tree().quit()
 
 
@@ -264,11 +274,17 @@ func _txt(parent: Node, text: String, size: int, alpha := 0.85) -> Label:
 	return l
 
 
-## Taktik nişangâh: 4 ince kol + merkez nokta, dış hatlı (her arka planda net seçilir).
+## Dinamik taktik nişangâh: tepme / koşuda genişler; isabet ve öldürmede çapraz nişan yanar; yay germe halkası çizer.
 class CrosshairView extends Control:
+	var spread := 0.0
+	var hit_alpha := 0.0
+	var hit_kill := false
+	var draw_k := 0.0
+	var charging := false
+
 	func _draw() -> void:
 		var c := size * 0.5
-		var gap := 5.0
+		var gap := 5.0 + spread
 		var arm := 9.0
 		var dirs := [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]
 		for d in dirs:
@@ -277,6 +293,15 @@ class CrosshairView extends Control:
 		for d in dirs:
 			draw_line(c + d * gap, c + d * (gap + arm), Color(1, 1, 1, 0.95), 2.0)
 		draw_circle(c, 1.5, Color(1.0, 0.92, 0.55, 0.95))
+		if hit_alpha > 0.01:
+			var hc := Color(1.0, 0.22, 0.18, hit_alpha) if hit_kill else Color(1.0, 1.0, 1.0, hit_alpha)
+			var r0 := 9.0 if hit_kill else 7.0
+			var r1 := r0 + (9.0 if hit_kill else 6.0) * (0.6 + 0.4 * hit_alpha)
+			for d in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+				draw_line(c + d.normalized() * r0, c + d.normalized() * r1, hc, 2.6 if hit_kill else 2.0, true)
+		if charging:
+			var rc := Color.WHITE if draw_k >= 1.0 else Color(1, 1, 1, 0.6)
+			draw_arc(c, 24.0, -PI / 2, -PI / 2 + TAU * draw_k, 40, rc, 3.0 if draw_k >= 1.0 else 2.0, true)
 
 
 func _build_ui() -> void:
@@ -291,10 +316,21 @@ func _build_ui() -> void:
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(hud)
-	dmg_rect = ColorRect.new() # hasar alınca kırmızı ekran
+	dmg_rect = ColorRect.new() # hasar alınca ve düşük canda kenar kızıllığı (radyal vinyet)
 	dmg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dmg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	dmg_rect.color = Color(1, 0, 0, 0)
+	var dmg_sh := Shader.new()
+	dmg_sh.code = """shader_type canvas_item;
+uniform float strength = 0.0;
+void fragment() {
+	float d = distance(UV, vec2(0.5)) * 1.4142;
+	float vig = smoothstep(0.35, 1.08, d);
+	COLOR = vec4(0.88, 0.06, 0.05, clamp(vig * strength, 0.0, 0.82));
+}"""
+	dmg_mat = ShaderMaterial.new()
+	dmg_mat.shader = dmg_sh
+	dmg_rect.material = dmg_mat
+	dmg_rect.color = Color.WHITE
 	hud.add_child(dmg_rect)
 	blind_rect = ColorRect.new()
 	blind_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -646,18 +682,21 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	var steam := _txt(mv, ("●  Steam: " + Net.my_name()) if Net.steam_ok else "●  Steam bağlı değil (Steam açık mı?)", 15, 0.7)
 	steam.add_theme_color_override("font_color", Color(0.5, 1.0, 0.55) if Net.steam_ok else Color(1.0, 0.6, 0.5))
 
-	# Mod seçimi: iki büyük kart
+	# Mod seçimi: üç büyük kart (Arena, Tower Defense, Açık Dünya Hikaye)
 	var modes := _page("modes")
 	var mc := VBoxContainer.new()
 	mc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mc.alignment = BoxContainer.ALIGNMENT_CENTER
-	mc.add_theme_constant_override("separation", 26)
+	mc.add_theme_constant_override("separation", 22)
 	modes.add_child(mc)
-	_logo(mc, "OYUN MODU SEÇ", 58, Color.WHITE).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_logo(mc, "OYUN MODU SEÇ", 54, Color.WHITE).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var cards := HBoxContainer.new()
 	cards.alignment = BoxContainer.ALIGNMENT_CENTER
-	cards.add_theme_constant_override("separation", 30)
+	cards.add_theme_constant_override("separation", 22)
 	mc.add_child(cards)
+	_mode_card(cards, "HİKAYE", "Açık Dünya  •  Tek Kişilik", Color(0.35, 0.88, 0.52),
+		"Geniş açık ormanda silahsız uyan, köydeki NPC'lerle konuş, görevleri yap, kılıçtan bazukaya silahlarını kazan ve Orman Lordu'nu yen.",
+		"▶  HİKAYEYE BAŞLA", _start_story)
 	_mode_card(cards, "ARENA", "PvP  •  2–4 oyuncu", Color(1.0, 0.55, 0.15),
 		"Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır.",
 		"▶  ARENAYA GİR", _pick_mode.bind("arena"))
@@ -839,12 +878,12 @@ func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String
 	card.add_theme_stylebox_override("panel", sb)
 	parent.add_child(card)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
+	v.add_theme_constant_override("separation", 10)
 	card.add_child(v)
-	_logo(v, title, 46, c)
-	var t := _txt(v, tag, 18, 0.8)
+	_logo(v, title, 40, c)
+	var t := _txt(v, tag, 17, 0.8)
 	t.add_theme_color_override("font_color", c.lightened(0.4))
-	var dl := _txt(v, desc, 17, 0.9)
+	var dl := _txt(v, desc, 16, 0.9)
 	dl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dl.custom_minimum_size.x = 310 # sıfır genişlikte sarma, kutuyu dev yüksekliğe şişirmesin
 	var b := _btn(v, btn, cb if cb.is_valid() else func(): pass)
@@ -1534,6 +1573,10 @@ func _retranslate() -> void:
 	_update_char_btn()
 	_on_volume(Settings.volume)
 	shake_slider.value_changed.emit(shake_slider.value)
+	if sens_slider:
+		sens_slider.value_changed.emit(sens_slider.value)
+	if fov_slider:
+		fov_slider.value_changed.emit(fov_slider.value)
 	set_mode(mode) # lobi yazıları, zorluk listesi, silah düğmesi, üyeler
 	if page == "growth":
 		_open_growth()
@@ -1623,6 +1666,24 @@ func _build_settings(layer: CanvasLayer, theme: Theme) -> void:
 	shake_slider.value = Settings.shake
 	shake_slider.value_changed.emit(shake_slider.value)
 	v.add_child(shake_slider)
+	var sens_lbl := _lbl(v, "", 17)
+	sens_slider = HSlider.new()
+	sens_slider.min_value = 0.3; sens_slider.max_value = 2.5; sens_slider.step = 0.1
+	sens_slider.value_changed.connect(func(x: float) -> void:
+		Settings.mouse_sens = x
+		sens_lbl.text = tr("Fare hassasiyeti: %.1fx") % x)
+	sens_slider.value = Settings.mouse_sens
+	sens_slider.value_changed.emit(sens_slider.value)
+	v.add_child(sens_slider)
+	var fov_lbl := _lbl(v, "", 17)
+	fov_slider = HSlider.new()
+	fov_slider.min_value = 65.0; fov_slider.max_value = 105.0; fov_slider.step = 1.0
+	fov_slider.value_changed.connect(func(x: float) -> void:
+		Settings.fov = x
+		fov_lbl.text = tr("Görüş açısı (FOV): %d°") % roundi(x))
+	fov_slider.value = Settings.fov
+	fov_slider.value_changed.emit(fov_slider.value)
+	v.add_child(fov_slider)
 	_lbl(v, "Dil / Language", 17)
 	var lang := OptionButton.new()
 	for n in LANG_NAMES:
@@ -1744,8 +1805,27 @@ func _process(dt: float) -> void:
 	var me = players.get_node_or_null(str(multiplayer.get_unique_id()))
 	if me:
 		_update_hp_bar(me, dt)
-		dmg_rect.color.a = me.flash * 1.2
+		var low_hp := 0.0
+		if me.hp > 0 and me.max_hp > 0 and float(me.hp) / me.max_hp <= 0.30:
+			low_hp = 0.22 + 0.16 * absf(sin(Time.get_ticks_msec() * 0.0055))
+		dmg_mat.set_shader_parameter("strength", maxf(me.flash * 2.1, low_hp))
 		crosshair.visible = me.hp > 0
+		if crosshair is CrosshairView:
+			var cv := crosshair as CrosshairView
+			var spd := Vector2(me.velocity.x, me.velocity.z).length()
+			var target_sp := clampf(me.kick * 10.0 + maxf(spd - 2.0, 0.0) * 0.65, 0.0, 14.0)
+			cv.spread = lerpf(cv.spread, target_sp, minf(1.0, dt * 16.0))
+			var own_ring := td_ui == null or not td_ui.has_method("_update_aim") # TD'de td_ui kendi halkasını çizer
+			if own_ring:
+				var age := (Time.get_ticks_msec() - int(me.hit_ms)) / 1000.0
+				cv.hit_alpha = clampf(1.0 - age / 0.18, 0.0, 1.0) if age < 0.18 else 0.0
+				cv.hit_kill = me.hit_kill
+				cv.charging = me.busy == "charge"
+				cv.draw_k = me.draw_k
+			else:
+				cv.hit_alpha = 0.0
+				cv.charging = false
+			cv.queue_redraw()
 		blind_rect.color.a = clampf(me.bt("blind") * 2.0, 0.0, 1.0) # son 0,5 sn'de açılır
 		var sh := tr("AKTİF") if me.shield_on else _cd_text(me.shield_cd)
 		var names := [tr("BAZUKA"), tr("KALKAN"), tr("DUVAR"), tr("KILIÇ"), tr(me.ch.skill_name)]
@@ -1890,6 +1970,27 @@ func start_world(ids: Array) -> void:
 		p.set_multiplayer_authority(ids[i])
 		p.spawn_pos = sp[i % sp.size()]
 		players.add_child(p)
+## Açık Dünya Hikaye Modu: 150x150 m orman, silahsız başlangıç, NPC görevleri, mantıklı silah ilerlemesi ve boss.
+func _start_story() -> void:
+	if not Net.online():
+		Net.solo()
+	_clear_world()
+	_set_menu_bg(false)
+	_build_world(StoryScript.LANDMARKS, true)
+	var st: Node = StoryScript.new()
+	st.name = "Story"
+	world.add_child(st)
+	var p: CharacterBody3D = PlayerScript.new()
+	p.name = "1"
+	p.set_multiplayer_authority(1)
+	p.spawn_pos = StoryScript.PLAYER_START
+	players.add_child(p)
+	td_ui = StoryUi.new()
+	td_ui.main = self
+	ui_layer.add_child(td_ui)
+	ui_layer.move_child(td_ui, hud.get_index() + 1)
+	for n in [hotbar, help_lbl, spec_lbl]:
+		n.hide()
 	round_over = false
 	center_lbl.text = ""
 	ui.hide()
@@ -2011,12 +2112,13 @@ func _back_to_menu() -> void:
 
 # ---------- Harita ----------
 
-func _build_world(clear: Array = SPAWNS) -> void:
+func _build_world(clear: Array = SPAWNS, open_world := false) -> void:
 	world = Node3D.new()
 	world.name = "World"
 	add_child(world)
 	var forest: Node3D = ForestScript.new()
 	forest.spawns = clear
+	forest.open_world = open_world
 	world.add_child(forest)
 
 	players = Node3D.new()

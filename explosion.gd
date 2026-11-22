@@ -127,58 +127,82 @@ func _ready() -> void:
 	light.omni_range = 9.0 * k # ışık menzili düğüm ölçeğinden etkilenmez
 	add_child(light)
 
-	# Parlama: birkaç iri, çok kısa ömürlü toplamalı bulut.
-	var flash := parts(quad("glow", 3.4), 4, 0.16, 0.0, 1.0, [Color(1, 0.95, 0.75, 0.9), Color(1, 0.6, 0.2, 0.0)], 0.45, 1.0)
-	var flame := parts(quad("glow", 1.7), 10, 0.5, 2.0, 5.5, [Color(1, 0.85, 0.4, 0.9), Color(1, 0.4, 0.08, 0.7), Color(0.5, 0.08, 0.0, 0.0)], 0.5, 1.0)
+	# Parlama: yoğun beyaz-altın çekirdek + alev dili.
+	var flash := parts(quad("glow", 3.8), 5, 0.14, 0.0, 1.2, [Color(1.0, 0.98, 0.85, 0.95), Color(1.0, 0.65, 0.2, 0.0)], 0.5, 1.15)
+	var flame := parts(quad("glow", 1.9), 12, 0.52, 2.2, 6.0, [Color(1.0, 0.9, 0.45, 0.92), Color(1.0, 0.42, 0.08, 0.72), Color(0.5, 0.08, 0.0, 0.0)], 0.55, 1.05)
 	flame.damping_min = 5.0; flame.damping_max = 8.0
-	flame.gravity = Vector3(0, 2.5, 0)
-	# Kıvılcım: uçuş yönünde uzamış ince parça -> iz bırakıyormuş gibi görünür.
+	flame.gravity = Vector3(0, 2.8, 0)
+	# Kıvılcım: uçuş yönünde uzamış sıcak izler.
 	var sp := SphereMesh.new()
-	sp.radius = 0.022; sp.height = 0.55
+	sp.radius = 0.024; sp.height = 0.62
 	sp.radial_segments = 4; sp.rings = 1
 	sp.material = mat("spark")
-	var sparks := parts(sp, 26, 0.6, 7.0, 17.0, [Color(1, 1, 0.8), Color(1, 0.55, 0.1), Color(0.8, 0.15, 0.0, 0.0)], 1.0, 0.2)
+	var sparks := parts(sp, 32, 0.65, 7.5, 19.0, [Color(1.0, 1.0, 0.85), Color(1.0, 0.58, 0.12), Color(0.85, 0.16, 0.0, 0.0)], 1.0, 0.18)
 	sparks.particle_flag_align_y = true
-	sparks.gravity = Vector3(0, -9, 0)
-	sparks.damping_min = 2.0; sparks.damping_max = 5.0
+	sparks.gravity = Vector3(0, -10.5, 0)
+	sparks.damping_min = 2.0; sparks.damping_max = 4.5
+	# Yükselen kor közleri: dumanla birlikte süzülür (patlama sonrası canlılık).
+	var emb_m := SphereMesh.new()
+	emb_m.radius = 0.032; emb_m.height = 0.064
+	emb_m.radial_segments = 5; emb_m.rings = 2
+	emb_m.material = mat("spark")
+	var embers := parts(emb_m, 16, 1.8, 0.8, 3.2, [Color(1.0, 0.85, 0.35), Color(1.0, 0.4, 0.05), Color(0.6, 0.1, 0.0, 0.0)], 0.9, 0.15)
+	embers.direction = Vector3.UP
+	embers.spread = 65.0
+	embers.gravity = Vector3(0, 1.8, 0)
+	embers.damping_min = 1.4; embers.damping_max = 2.6
 	# Toprak / taş parçaları: yukarı fırlar, yerçekimiyle düşer.
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.13, 0.09, 0.11)
+	bm.size = Vector3(0.14, 0.09, 0.12)
 	bm.material = mat("chunk")
-	var dirt := parts(bm, 12, 1.1, 5.0, 11.0, [Color(0.22, 0.16, 0.1), Color(0.14, 0.11, 0.08)], 1.0, 0.3)
+	var dirt := parts(bm, 14, 1.15, 5.5, 12.0, [Color(0.24, 0.17, 0.11), Color(0.14, 0.11, 0.08)], 1.0, 0.25)
 	dirt.direction = Vector3.UP
-	dirt.spread = 55.0
+	dirt.spread = 58.0
 	dirt.particle_flag_align_y = true
-	dirt.gravity = Vector3(0, -20, 0)
-	# Duman: alev sönerken belirir (ilk renk saydam), yükselip dağılır.
-	var smoke := parts(quad("puff", 2.6), 14, 2.3, 0.8, 2.6, [Color(0.3, 0.14, 0.05, 0.0), Color(0.1, 0.09, 0.08, 0.95), Color(0.17, 0.16, 0.15, 0.7), Color(0.25, 0.24, 0.23, 0.0)], 0.45, 1.0)
+	dirt.gravity = Vector3(0, -21, 0)
+	# Duman: alev sönerken belirir, yükselip dağılır.
+	var smoke := parts(quad("puff", 2.8), 16, 2.4, 0.8, 2.8, [Color(0.32, 0.15, 0.06, 0.0), Color(0.11, 0.10, 0.09, 0.94), Color(0.18, 0.17, 0.16, 0.68), Color(0.26, 0.25, 0.24, 0.0)], 0.45, 1.08)
 	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	smoke.emission_sphere_radius = 0.5
-	smoke.gravity = Vector3(0, 1.3, 0)
+	smoke.emission_sphere_radius = 0.55
+	smoke.gravity = Vector3(0, 1.4, 0)
 	smoke.damping_min = 1.0; smoke.damping_max = 2.0
-	for p in [smoke, dirt, flame, sparks, flash]:
+	for p in [smoke, dirt, embers, flame, sparks, flash]:
 		add_child(p)
 		p.emitting = true
 
-	var wc := Color(1.0, 0.9, 0.7, 0.75)
-	var wave := ground(3.6, wc, Vector4(0.1, 0.16, 0.12, 1.5))
+	# Çift katmanlı şok dalgası: hızlı parlak iç basınç halkası + geniş toz halkası.
+	var wc := Color(1.0, 0.92, 0.74, 0.82)
+	var wave := ground(3.9, wc, Vector4(0.08, 0.14, 0.10, 1.8))
 	wave.position.y = gy
 	add_child(wave)
+	var wc2 := Color(0.95, 0.72, 0.42, 0.52)
+	var wave2 := ground(4.8, wc2, Vector4(0.12, 0.18, 0.22, 1.2))
+	wave2.position.y = gy - 0.005 / k
+	add_child(wave2)
 
 	var tw := create_tween().set_parallel()
-	tw.tween_property(ball, "scale", Vector3.ONE * 1.75, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	anim(tw, ball, "progress", 0.0, 1.0, 0.6)
-	tw.tween_property(light, "light_energy", 0.0, 0.32).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT) # ilk karede parlak, hızla söner
-	anim(tw, wave, "shape", Vector4(0.1, 0.16, 0.12, 1.5), Vector4(0.96, 0.03, 0.12, 1.5), 0.32).set_ease(Tween.EASE_OUT)
-	anim(tw, wave, "col", wc, Color(wc, 0.0), 0.32).set_ease(Tween.EASE_IN)
+	tw.tween_property(ball, "scale", Vector3.ONE * 1.82, 0.44).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	anim(tw, ball, "progress", 0.0, 1.0, 0.58)
+	tw.tween_property(light, "light_energy", 0.0, 0.34).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	anim(tw, wave, "shape", Vector4(0.08, 0.14, 0.10, 1.8), Vector4(0.96, 0.025, 0.10, 1.8), 0.28).set_ease(Tween.EASE_OUT)
+	anim(tw, wave, "col", wc, Color(wc, 0.0), 0.28).set_ease(Tween.EASE_IN)
+	anim(tw, wave2, "shape", Vector4(0.12, 0.18, 0.22, 1.2), Vector4(0.98, 0.04, 0.22, 1.2), 0.42).set_ease(Tween.EASE_OUT)
+	anim(tw, wave2, "col", wc2, Color(wc2, 0.0), 0.42).set_ease(Tween.EASE_IN)
 	if low:
-		var bc := Color(0.03, 0.02, 0.015, 0.8)
-		var burn := ground(1.6, bc, Vector4(0.0, 0.95, 0.5, 1.0))
+		var bc := Color(0.03, 0.02, 0.015, 0.82)
+		var burn := ground(1.75, bc, Vector4(0.0, 0.95, 0.5, 1.0))
 		burn.position.y = gy - 0.015 / k # halkanın altında kalsın
 		add_child(burn)
 		anim(tw, burn, "col", bc, Color(bc, 0.0), 2.5).set_delay(1.5)
+		# Soğuyan kor merkezi: patlamadan hemen sonra kızıl parlar, 1.1 sn'de kömüre söner.
+		var hc := Color(1.0, 0.38, 0.06, 0.72)
+		var hot := ground(0.95, hc, Vector4(0.0, 0.85, 0.45, 2.2))
+		hot.position.y = gy - 0.010 / k
+		add_child(hot)
+		anim(tw, hot, "col", hc, Color(hc, 0.0), 1.1).set_ease(Tween.EASE_IN)
 	# Bitenler hemen gitsin: ışık ve saydam yüzeyler 4 oyunculu kavgada birikmesin.
 	create_tween().tween_callback(func() -> void:
-		for n in [ball, light, wave, flash, flame]:
-			n.queue_free()).set_delay(0.7)
+		for n in [ball, light, wave, wave2, flash, flame]:
+			if is_instance_valid(n):
+				n.queue_free()).set_delay(0.7)
 	get_tree().create_timer(LIFE).timeout.connect(queue_free)

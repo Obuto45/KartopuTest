@@ -11,6 +11,8 @@ var resolution := 0 # RESOLUTIONS indeksi
 const QUALITIES := ["Düşük", "Orta", "Yüksek"]
 var quality := 2 # QUALITIES indeksi: Düşük = SSAO / hacimsel sis kapalı, 2 bölmeli gölge, FXAA
 var shake := 1.0 # kamera sarsıntısı çarpanı 0..1 (mide bulantısı yapanlar için)
+var mouse_sens := 1.0 # fare hassasiyeti çarpanı 0.3..2.5
+var fov := 75.0 # görüş açısı 65..105 derece
 const LANGUAGES := ["auto", "tr", "en"]
 var language := "auto" # auto: sistem dili Türkçe ise tr, değilse en
 
@@ -25,6 +27,8 @@ func _ready() -> void:
 		resolution = clampi(int(c.get_value("display", "resolution", resolution)), 0, RESOLUTIONS.size() - 1)
 		quality = clampi(int(c.get_value("graphics", "quality", quality)), 0, QUALITIES.size() - 1)
 		shake = clampf(float(c.get_value("graphics", "shake", shake)), 0.0, 1.0)
+		mouse_sens = clampf(float(c.get_value("controls", "mouse_sens", mouse_sens)), 0.3, 2.5)
+		fov = clampf(float(c.get_value("graphics", "fov", fov)), 65.0, 105.0)
 		language = str(c.get_value("general", "language", language))
 		if not language in LANGUAGES:
 			language = "auto"
@@ -82,5 +86,7 @@ func save() -> void:
 	c.set_value("display", "resolution", resolution)
 	c.set_value("graphics", "quality", quality)
 	c.set_value("graphics", "shake", shake)
+	c.set_value("graphics", "fov", fov)
+	c.set_value("controls", "mouse_sens", mouse_sens)
 	c.set_value("general", "language", language)
 	c.save(PATH)

@@ -21,6 +21,8 @@ var struck := [] # vurulan yaratıklar: aynısına iki kez değmez
 var pierce := 0
 var bounces := 0
 var vel := Vector3.ZERO # sigortalı bomba: seken hız
+var fuse_blink: MeshInstance3D # el bombası: patlama yaklaştıkça hızlanan kırmızı uyarı ışığı
+var arrow_trail: CPUParticles3D
 
 const Fx := preload("res://explosion.gd")
 const Weapons := preload("res://weapons.gd")
@@ -49,18 +51,40 @@ func _ready() -> void:
 	_face()
 	var lk: String = w.get("look", "ball" if big else "rocket")
 
-	if lk == "arrow": # ok: ince gövde + uç; alev, duman, ışık yok
+	if lk == "arrow": # ok: gövde + çelik uç + kuyruk tüyleri + zarif rüzgâr izi
 		var shaft := CylinderMesh.new()
-		shaft.top_radius = 0.012; shaft.bottom_radius = 0.012; shaft.height = 0.7
-		_piece(shaft, Color(0.8, 0.75, 0.6), 0.0, 0.0)
+		shaft.top_radius = 0.013; shaft.bottom_radius = 0.013; shaft.height = 0.72
+		_piece(shaft, Color(0.76, 0.62, 0.42), 0.0, 0.0)
 		var tip := CylinderMesh.new()
-		tip.top_radius = 0.0; tip.bottom_radius = 0.03; tip.height = 0.1
-		_piece(tip, Color(0.6, 0.6, 0.65), 0.4)
+		tip.top_radius = 0.0; tip.bottom_radius = 0.032; tip.height = 0.12
+		_piece(tip, Color(0.72, 0.76, 0.82), 0.42, 0.85)
+		var fletch := BoxMesh.new()
+		fletch.size = Vector3(0.075, 0.13, 0.008)
+		for i in 2:
+			var fl := _piece(fletch, Color(0.95, 0.32, 0.24), -0.3, 0.0)
+			fl.rotate_z(i * PI * 0.5)
+		arrow_trail = Fx.parts(Fx.quad("glow", 0.14), 22, 0.22, 0.0, 0.15,
+			[Color(1.0, 0.96, 0.82, 0.55), Color(1.0, 0.92, 0.7, 0.0)], 0.8, 0.15, false)
+		arrow_trail.local_coords = false
+		arrow_trail.position.z = 0.35
+		add_child(arrow_trail)
+		arrow_trail.emitting = true
 		return
-	if lk == "ball": # top gülle
+	if lk == "ball": # top gülle / el bombası
 		var ball := SphereMesh.new()
 		ball.radius = 0.22; ball.height = 0.44
-		_piece(ball, Color(0.2, 0.2, 0.22), 0.0)
+		_piece(ball, Color(0.2, 0.22, 0.24), 0.0)
+		if w.get("fuse", 0.0) > 0.0: # sigortalı el bombası: yanıp sönen kırmızı uyarı ışığı
+			var bm := SphereMesh.new()
+			bm.radius = 0.07; bm.height = 0.14
+			fuse_blink = MeshInstance3D.new()
+			fuse_blink.mesh = bm
+			var fm := StandardMaterial3D.new()
+			fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			fm.albedo_color = Color(2.4, 0.25, 0.15)
+			fuse_blink.material_override = fm
+			fuse_blink.position = Vector3(0, 0.24, 0)
+			add_child(fuse_blink)
 	else: # roket: gövde + sivri burun + beyaz şerit + lüle + dört kanat
 		var tube := CylinderMesh.new()
 		tube.top_radius = 0.06; tube.bottom_radius = 0.06; tube.height = 0.3
@@ -225,6 +249,14 @@ func _fused(dt: float) -> void:
 		smoke.emitting = false
 		light.visible = false
 	w.fuse -= dt
+	if fuse_blink:
+		var freq := 28.0 if w.fuse < 0.8 else 12.0
+		var on := sin(w.fuse * freq) > 0.0
+		fuse_blink.visible = on
+		if light:
+			light.visible = on
+			light.light_color = Color(1.0, 0.2, 0.1)
+			light.light_energy = 3.2 if w.fuse < 0.8 else 1.6
 	var mine := is_instance_valid(shooter) and shooter.is_multiplayer_authority()
 	if w.fuse <= 0.0:
 		done = true
@@ -242,6 +274,14 @@ func _fused(dt: float) -> void:
 	var e := Weapons.ray(get_tree(), from, to, 0.15)
 	if r:
 		global_position = r.position + r.normal * 0.05
+		if vel.length() > 2.2:
+			var sp := Fx.parts(Fx.quad("glow", 0.08), 5, 0.2, 1.5, 4.0, [Color(1.0, 0.8, 0.3), Color(1.0, 0.3, 0.0, 0.0)], 1.0, 0.2)
+			sp.direction = r.normal
+			sp.spread = 50.0
+			sp.position = r.position + r.normal * 0.05
+			sp.finished.connect(sp.queue_free)
+			get_parent().add_child(sp)
+			sp.emitting = true
 		vel = vel.bounce(r.normal) * 0.4
 		if r.normal.y > 0.7 and vel.length() < 1.0:
 			vel = Vector3.ZERO # durdu

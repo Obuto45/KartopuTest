@@ -2,11 +2,11 @@ shader_type sky;
 // Altın saat göğü: atmosferik saçılım, çok katmanlı boyalı bulutlar (güneş kenar parıltısı + alt gölge) ve güneş diski.
 // TIME kullanılmaz: TIME gök radyansını her kare yeniden hesaplatır (pahalı); bulutlar bu yüzden sabit.
 uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
-uniform vec3 top_col : source_color = vec3(0.11, 0.29, 0.66);
-uniform vec3 mid_col : source_color = vec3(0.32, 0.56, 0.86);
-uniform vec3 horizon_col : source_color = vec3(0.99, 0.76, 0.50);
-uniform vec3 sun_col : source_color = vec3(1.0, 0.76, 0.44);
-uniform vec3 ground_col : source_color = vec3(0.28, 0.30, 0.20);
+uniform vec3 top_col : source_color = vec3(0.09, 0.24, 0.56);
+uniform vec3 mid_col : source_color = vec3(0.26, 0.48, 0.76);
+uniform vec3 horizon_col : source_color = vec3(0.88, 0.70, 0.50);
+uniform vec3 sun_col : source_color = vec3(0.98, 0.74, 0.44);
+uniform vec3 ground_col : source_color = vec3(0.20, 0.23, 0.16);
 
 float cloud_fbm(vec2 uv) {
 	float a = texture(noise_tex, uv).r;
@@ -23,11 +23,11 @@ void sky() {
 	vec3 col = mix(horizon_col, mid_col, smoothstep(0.0, 0.34, pow(hy, 0.72)));
 	col = mix(col, top_col, smoothstep(0.25, 0.92, pow(hy, 0.58)));
 
-	// Atmosferik ufuk sıcaklığı ve güneş yönünde Mie saçılımı
+	// Atmosferik ufuk sıcaklığı ve güneş yönünde dengeli Mie saçılımı
 	float sd = max(dot(EYEDIR, LIGHT0_DIRECTION), 0.0);
-	float horizon_band = exp(-abs(y) * 9.5);
-	col += sun_col * horizon_band * (0.14 + 0.34 * pow(sd, 2.2));
-	col += sun_col * (pow(sd, 6.0) * 0.28 + pow(sd, 48.0) * 0.48);
+	float horizon_band = exp(-abs(y) * 10.0);
+	col += sun_col * horizon_band * (0.08 + 0.20 * pow(sd, 2.4));
+	col += sun_col * (pow(sd, 6.0) * 0.16 + pow(sd, 48.0) * 0.28);
 
 	if (y > 0.0) {
 		// Yüksek ince sirüs bulutları

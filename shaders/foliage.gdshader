@@ -33,17 +33,17 @@ void fragment() {
 	float n2 = texture(noise_tex, wp.xy * 1.35 + wp.z * 0.85).r;
 	float leaf_mottle = mix(0.76, 1.24, smoothstep(0.22, 0.82, n1 * 0.6 + n2 * 0.4));
 
-	// Alt derin serin gölge -> üst sıcak güneşli altın-yeşil tepe
-	vec3 shadow_tint = COLOR.rgb * vec3(0.42, 0.56, 0.58);
-	vec3 sunlit_tint = COLOR.rgb * vec3(1.26, 1.22, 0.96) + vec3(0.025, 0.03, 0.0);
+	// Alt derin serin gölge -> üst dengeli güneşli orman yeşili
+	vec3 shadow_tint = COLOR.rgb * vec3(0.40, 0.52, 0.54);
+	vec3 sunlit_tint = COLOR.rgb * vec3(1.06, 1.06, 0.90) + vec3(0.008, 0.012, 0.0);
 	vec3 c = mix(shadow_tint, sunlit_tint, smoothstep(0.04, 0.92, h)) * leaf_mottle;
 
 	// Çam eteği altı: dal kahvesi dokunuşu, kapkara kalmasın
-	c = mix(c, vec3(0.18, 0.13, 0.07), down * 0.55);
+	c = mix(c, vec3(0.16, 0.12, 0.07), down * 0.55);
 
-	// Hafif Fresnel kenar parıltısı (silüet yumuşak ve canlı)
-	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
-	c += sunlit_tint * fres * 0.14 * h;
+	// Yumuşak Fresnel kenar parıltısı
+	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.4);
+	c += sunlit_tint * fres * 0.06 * h;
 
 	ALBEDO = c;
 	ROUGHNESS = mix(0.95, 0.8, n2);
