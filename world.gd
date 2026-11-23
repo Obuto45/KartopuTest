@@ -40,6 +40,7 @@ const FAUNA := [["deer", "rabbit"], ["frog", "frog"], ["crow", "lizard"], ["chic
 const FAR_N := 20 # uzak zemin ızgarası: FAR_N x FAR_N kare, kenarı CHUNK
 
 var players: Node # main.gd verir; boşsa kamera ya da merkez izlenir
+var clear_pts: Array = [] # Vector3: Açık Dünya evleri/kampları; 13 m içine ağaç ve kaya konmaz
 var chunks := {} # Vector2i -> Node3D
 var build_ms := 0.0 # son kurulum adımının süresi (test/profil)
 var stage_ms := {} # adım -> en uzun süre (ms): far, decor, flora, build
@@ -120,6 +121,13 @@ func path_dist(x: float, z: float) -> float:
 
 
 ## Zemindeki toprak oranı (0..1): yolun ortasında 1, 1.3-2.8 m arasında söner.
+func _near_clear(x: float, z: float) -> bool:
+	for c: Vector3 in clear_pts:
+		if Vector2(c.x - x, c.z - z).length() < 13.0:
+			return true
+	return false
+
+
 func path_at(x: float, z: float) -> float:
 	return 1.0 - smoothstep(1.4, 2.3, path_dist(x, z))
 
@@ -361,7 +369,7 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 		var lp := Vector3(rng.randf() * CHUNK, 0, rng.randf() * CHUNK)
 		var wx := node.position.x + lp.x
 		var wz := node.position.z + lp.z
-		if Vector2(wx, wz).length() < 14.0 or path_dist(wx, wz) < 4.0: # doğma alanı ve yollar boş
+		if Vector2(wx, wz).length() < 14.0 or path_dist(wx, wz) < 4.0 or _near_clear(wx, wz): # doğma alanı, yollar ve Açık Dünya yapıları boş
 			continue
 		var b := biome_at(wx, wz)
 		lp.y = height(wx, wz)

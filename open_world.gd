@@ -12,10 +12,9 @@ const Weapons := preload("res://weapons.gd")
 const Chars := preload("res://characters.gd")
 const Fx := preload("res://explosion.gd")
 
-const PLAYER_START := Vector3(0, 1, 0)
 const DAY_LEN := 180.0 # tam gece-gündüz döngüsü (sn)
 
-## 8 girilebilir ev (konum, ön kapı yönü yaw, duvar/çatı rengi).
+## 8 girilebilir ev şablonu (ad, renk). Konum ve yön make_layout() ile karanlık dünyada üretilir.
 const HOUSES := [
 	{"id": "h0", "name": "Orman Kulübesi", "pos": Vector3(0, 0, -24), "yaw": 0.0, "wall": Color(0.55, 0.40, 0.25), "roof": Color(0.45, 0.17, 0.12)},
 	{"id": "h1", "name": "Avcı Evi", "pos": Vector3(-38, 0, -28), "yaw": 0.45, "wall": Color(0.49, 0.36, 0.23), "roof": Color(0.22, 0.34, 0.20)},
@@ -27,7 +26,7 @@ const HOUSES := [
 	{"id": "h7", "name": "Kuzey Kalesi", "pos": Vector3(0, 0, -68), "yaw": 0.0, "wall": Color(0.45, 0.43, 0.47), "roof": Color(0.28, 0.16, 0.36)},
 ]
 
-## 5 yaratık kampı (orman açıklıkları).
+## 5 yaratık kampı, kolaydan zora (c4 boss). Konum make_layout() ile üretilir.
 const CAMPS := [
 	{"id": "c0", "pos": Vector3(-26, 0, 14), "types": ["grunt", "grunt", "runner", "runner", "spitter", "knight"]},
 	{"id": "c1", "pos": Vector3(28, 0, 12), "types": ["grunt", "runner", "spitter", "bomber", "brute", "grunt"]},
@@ -36,27 +35,22 @@ const CAMPS := [
 	{"id": "c4", "pos": Vector3(0, 0, 68), "types": ["grunt", "runner", "knight", "brute", "ogre", "boss"]},
 ]
 
-## 4 ek karakter devriye noktası (ev dışı 16 karakter muhafızı -> toplam 48 eşsiz karakter).
-const OUTPOSTS := [
-	{"id": "o0", "pos": Vector3(-24, 0, -54)},
-	{"id": "o1", "pos": Vector3(26, 0, -54)},
-	{"id": "o2", "pos": Vector3(-56, 0, 48)},
-	{"id": "o3", "pos": Vector3(56, 0, 48)},
+## Biyom -> o bölgenin muhafız karakterlerinin adında geçen sözcükler (eşleşen yoksa herhangi biri).
+const BIOME_CHARS := [
+	["Ninja", "Elf", "Goblin", "Sakura", "Çay"],
+	["Cadı", "Büyücü", "Zombi"],
+	["Valkür", "Sakal", "Boynuzlu", "Şövalye", "Dev"],
+	["Kaptan", "Tayfa", "Topçu", "Piyade", "Rodeo", "Silahşor", "Şerif"],
 ]
-
-## Forest.spawns için ağaçsız bırakılacak tüm noktalar.
-const LANDMARKS := [
-	Vector3(0, 0, 0),
-	Vector3(0, 0, -24), Vector3(-38, 0, -28), Vector3(42, 0, -34), Vector3(-56, 0, 14),
-	Vector3(54, 0, 18), Vector3(-28, 0, 52), Vector3(34, 0, 56), Vector3(0, 0, -68),
-	Vector3(-26, 0, 14), Vector3(28, 0, 12), Vector3(-54, 0, -56), Vector3(56, 0, -58), Vector3(0, 0, 68),
-	Vector3(-24, 0, -54), Vector3(26, 0, -54), Vector3(-56, 0, 48), Vector3(56, 0, 48),
-]
+const LAYOUT_SEED := 7031
+const MIN_GAP := 60.0
 
 ## Silah/eşya kutu ganimet havuzu (sıra dışı çeşitlilik için kademeli).
 const EARLY_WEAPONS := ["pistol", "shotgun", "smg", "bow"]
 const LATE_WEAPONS := ["sniper", "boomerang", "flame", "bazooka", "grenade"]
 
+var world: Node3D # world.gd: zemin yüksekliği, biyom ve yüklü chunk'lar
+var layout := {} # make_layout(world) çıktısı; main.gd verir
 var is_open_world := true # player.gd bunu okuyup yalnız Kılıç ile başlatır
 var state := "fight"
 var wave := 1
@@ -185,6 +179,7 @@ func _vis_box(parent: Node3D, pos: Vector3, sz: Vector3, mat: Material, rot := V
 func _build_spawn_camp() -> void:
 	var root := Node3D.new()
 	root.name = "SpawnCamp"
+	root.position.y = _gy(0.0, 0.0)
 	get_parent().add_child(root)
 	var stone := _mat(Color(0.45, 0.44, 0.42), 0.92)
 	var wood := _mat(Color(0.38, 0.24, 0.14), 0.9)
@@ -206,15 +201,15 @@ func _build_spawn_camp() -> void:
 	_camp_light.shadow_enabled = false
 	root.add_child(_camp_light)
 	# Başlangıçta 1 adet yakın ikmal kutusu (oyuncu hemen ilk silahını alabilsin!)
-	_spawn_crate(Vector3(4.2, 0.0, -6.2), 0, "Başlangıç Kampı")
+	_spawn_crate(Vector3(4.2, _gy(4.2, -6.2), -6.2), 0, "Başlangıç Kampı")
 
 
 func _build_houses_and_crates() -> void:
 	var root := Node3D.new()
 	root.name = "Houses"
 	get_parent().add_child(root)
-	for i in HOUSES.size():
-		var h: Dictionary = HOUSES[i]
+	for i in layout.houses.size():
+		var h: Dictionary = layout.houses[i]
 		houses_data.append({"id": h.id, "name": h.name, "pos": h.pos, "yaw": h.yaw})
 		_build_house(root, h, i)
 	crates_total = crates.size()
@@ -243,6 +238,7 @@ func _build_house(root: Node3D, h: Dictionary, idx: int) -> void:
 	var win_m := _mat(Color(0.95, 0.82, 0.50), 0.25, 0.0, Color(1.0, 0.76, 0.32), 0.45)
 	_win_mats.append(win_m)
 
+	_solid_box(node, Vector3(0, -1.2, 0), Vector3(w + 1.2, 2.4, d + 1.2), stone_m) # yamaçta boşluk kalmasın: taş temel
 	# Ahşap zemin + ön basamak (alçak eşik -> oyuncu takılmadan yürüyüp girer)
 	_solid_box(node, Vector3(0, 0.07, 0), Vector3(w + 0.3, 0.14, d + 0.3), floor_m)
 	_solid_box(node, Vector3(0, 0.04, d * 0.5 + 0.55), Vector3(door_w + 0.8, 0.08, 0.9), stone_m)
@@ -368,9 +364,9 @@ func _spawn_rivals() -> void:
 		var j := _loot_rng.randi_range(0, i)
 		var tmp := pool[i]; pool[i] = pool[j]; pool[j] = tmp
 
-	var cursor := 0
+	var start_n := pool.size()
 	# 8 ev x 4 karakter muhafızı = 32 ev muhafızı (her evin 1 lideri elit!)
-	for h in HOUSES:
+	for h in layout.houses:
 		var xf := Transform3D(Basis(Vector3.UP, h.yaw), h.pos)
 		var offsets := [
 			Vector3(0.0, 0, 6.2),   # ön kapı lideri (elit)
@@ -379,22 +375,20 @@ func _spawn_rivals() -> void:
 			Vector3(0.0, 0, -6.2),  # arka bahçe
 		]
 		for k in offsets.size():
-			if cursor >= pool.size():
+			if pool.is_empty():
 				break
 			var wp: Vector3 = xf * offsets[k]
-			_add_rival(pool[cursor], wp, h.id, k == 0, 14.5 if h.id == "h0" else 16.0)
-			cursor += 1
+			_add_rival(_take_char(pool, h.biome), wp, h.id, k == 0, 16.0)
 
 	# 4 orman devriye noktası x 4 karakter muhafızı = 16 devriye muhafızı -> TOPLAM 48 karakter!
-	for op in OUTPOSTS:
+	for op in layout.outposts:
 		for k in 4:
-			if cursor >= pool.size():
+			if pool.is_empty():
 				break
 			var ang := k * TAU / 4.0 + 0.35
 			var wp: Vector3 = op.pos + Vector3(cos(ang), 0, sin(ang)) * 5.2
-			_add_rival(pool[cursor], wp, op.id, k == 0, 16.5)
-			cursor += 1
-	rivals_total = cursor
+			_add_rival(_take_char(pool, op.biome), wp, op.id, k == 0, 16.5)
+	rivals_total = start_n - pool.size()
 
 
 func _add_rival(cidx: int, pos: Vector3, camp: String, is_elite: bool, aggro_dist: float) -> void:
@@ -406,7 +400,7 @@ func _add_rival(cidx: int, pos: Vector3, camp: String, is_elite: bool, aggro_dis
 	r.elite = is_elite
 	r.td = self
 	r.home_pos = Vector3(pos.x, 0.0, pos.z)
-	r.position = Vector3(pos.x, 0.1, pos.z)
+	r.position = Vector3(pos.x, _gy(pos.x, pos.z) + 0.3, pos.z)
 	r.aggro_r = aggro_dist
 	r.leash_r = 40.0
 	r.camp_id = camp
@@ -417,7 +411,7 @@ func _add_rival(cidx: int, pos: Vector3, camp: String, is_elite: bool, aggro_dis
 
 func _spawn_monsters() -> void:
 	var count := 0
-	for camp in CAMPS:
+	for camp in layout.camps:
 		var types: Array = camp.types
 		for k in types.size():
 			var ang := k * TAU / maxf(types.size(), 1)
@@ -435,11 +429,12 @@ func _add_monster(kind: String, pos: Vector3, camp: String) -> void:
 	e.name = "E%d" % _eid
 	e.eid = _eid
 	e.type = kind
-	e.hp = roundi(float(ed.hp) * (2.6 if kind == "boss" else 1.15))
-	e.dmg = roundi(float(ed.dmg) * (1.3 if kind == "boss" else 1.0))
+	var far := 1.0 + Vector2(pos.x, pos.z).length() / 450.0 # merkezden uzaklaştıkça güçlenir
+	e.hp = roundi(float(ed.hp) * (2.6 if kind == "boss" else 1.15) * far)
+	e.dmg = roundi(float(ed.dmg) * (1.3 if kind == "boss" else 1.0) * far)
 	e.td = self
 	e.home_pos = Vector3(pos.x, 0.0, pos.z)
-	e.position = Vector3(pos.x, 0.1, pos.z)
+	e.position = Vector3(pos.x, _gy(pos.x, pos.z) + 0.3, pos.z)
 	e.aggro_r = 22.0 if kind == "boss" else 16.5
 	e.leash_r = 48.0 if kind == "boss" else 42.0
 	e.camp_id = camp
@@ -457,6 +452,7 @@ func _process(dt: float) -> void:
 	_update_crates(dt)
 	_update_orbs(dt)
 	_update_respawn(dt)
+	_update_sleep(dt)
 
 
 func _sync_lists() -> void:
@@ -495,13 +491,15 @@ func _update_day_night(dt: float) -> void:
 		var dusk_col := Color(1.0, 0.56, 0.28)
 		var moon_col := Color(0.55, 0.68, 0.98)
 		var c := moon_col.lerp(day_col, day_k).lerp(dusk_col, dusk_k * 0.65)
-		_sun.light_color = c
+		if world == null: # karanlık dünyada renkleri biyom verir (world.gd)
+			_sun.light_color = c
 		_sun.light_energy = lerpf(0.38, float(_base_env["sun_e"]), day_k)
 
 	if _env and _base_env.has("amb_e"):
 		_env.ambient_light_energy = lerpf(0.24, float(_base_env["amb_e"]), day_k)
-		_env.ambient_light_color = Color(0.16, 0.22, 0.38).lerp(_base_env["amb_c"], day_k)
-		_env.fog_light_color = Color(0.10, 0.14, 0.26).lerp(_base_env["fog_c"], day_k).lerp(Color(0.85, 0.45, 0.25), dusk_k * 0.4)
+		if world == null:
+			_env.ambient_light_color = Color(0.16, 0.22, 0.38).lerp(_base_env["amb_c"], day_k)
+			_env.fog_light_color = Color(0.10, 0.14, 0.26).lerp(_base_env["fog_c"], day_k).lerp(Color(0.85, 0.45, 0.25), dusk_k * 0.4)
 		_env.fog_light_energy = lerpf(0.45, float(_base_env["fog_e"]), day_k)
 		_env.volumetric_fog_albedo = Color(0.22, 0.30, 0.52).lerp(_base_env["vfog_c"], day_k)
 		_env.volumetric_fog_density = lerpf(0.0085, float(_base_env["vfog_d"]), day_k)
@@ -789,3 +787,93 @@ func hurt_build(_tgt: Node, _dmg: int) -> void:
 
 func can_place(_id: String, _pos: Vector3) -> bool:
 	return false
+
+
+# ---------- Karanlık dünya: yerleşim, zemin yüksekliği, uyku ----------
+
+func _gy(x: float, z: float) -> float:
+	return world.height(x, z) if world else 0.0
+
+
+## Biyomuna uyan karakteri havuzdan çeker; yoksa havuzun başındakini.
+func _take_char(pool: Array[int], biome: int) -> int:
+	for i in pool.size():
+		var nm: String = Chars.LIST[pool[i]].name
+		for kw: String in BIOME_CHARS[biome]:
+			if kw in nm:
+				return pool.pop_at(i)
+	return pool.pop_front()
+
+
+var _sleep_t := 0.0
+
+## Yüklenmemiş chunk'taki düşman uyur: altında çarpışan zemin yok, düşmesin ve boşuna düşünmesin.
+func _update_sleep(dt: float) -> void:
+	_sleep_t -= dt
+	if world == null or _sleep_t > 0.0:
+		return
+	_sleep_t = 0.5
+	for e: Node3D in elist:
+		if not is_instance_valid(e):
+			continue
+		var k := Vector2i(floori(e.position.x / world.CHUNK), floori(e.position.z / world.CHUNK))
+		var awake: bool = world.chunks.has(k)
+		e.process_mode = Node.PROCESS_MODE_INHERIT if awake else Node.PROCESS_MODE_DISABLED
+		e.visible = awake
+
+
+## Tohumlu yerleşim: her biyomda 2 ev + 1 karakol, 5 kamp; birbirine en az MIN_GAP, kuru ve düz zeminde.
+## "clear" noktaları world.clear_pts'e world ağaca eklenmeden önce verilmeli (ilk chunk'lar _ready'de kurulur).
+static func make_layout(w: Node3D) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = LAYOUT_SEED
+	var used: Array = [Vector3.ZERO]
+	# [biyom, en az r, en çok r]: biyom 0 orman, 1 bataklık, 2 kül dağları, 3 harabeler
+	var house_req := [[0, 90, 230], [0, 230, 420], [1, 90, 260], [1, 260, 440], [3, 90, 260], [3, 260, 440], [2, 150, 320], [2, 320, 470]]
+	var camp_req := [[0, 70, 200], [1, 120, 300], [3, 150, 340], [2, 200, 380], [2, 360, 480]]
+	var houses := []
+	for i in house_req.size():
+		var q: Array = house_req[i]
+		var pos := _site(w, rng, used, q[0], q[1], q[2])
+		var h: Dictionary = HOUSES[i].duplicate()
+		h.pos = pos
+		h.yaw = atan2(-pos.x, -pos.z) + rng.randf_range(-0.4, 0.4) # kapı kabaca merkeze bakar
+		h.biome = w.biome_at(pos.x, pos.z)
+		houses.append(h)
+	# yakın ev önce: _build_house kutu kademesini sıradan verir (yakın kolay, uzak değerli)
+	houses.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return Vector2(a.pos.x, a.pos.z).length() < Vector2(b.pos.x, b.pos.z).length())
+	var camps := []
+	for i in camp_req.size():
+		var q: Array = camp_req[i]
+		camps.append({"id": CAMPS[i].id, "types": CAMPS[i].types, "pos": _site(w, rng, used, q[0], q[1], q[2])})
+	var outposts := []
+	for b in 4:
+		var pos := _site(w, rng, used, b, 120, 400)
+		outposts.append({"id": "o%d" % b, "pos": pos, "biome": w.biome_at(pos.x, pos.z)})
+	return {"houses": houses, "camps": camps, "outposts": outposts, "clear": used.slice(1)}
+
+
+static func _site(w: Node3D, rng: RandomNumberGenerator, used: Array, biome: int, r0: float, r1: float) -> Vector3:
+	for pass_i in 3: # son turda biyom şartı düşer, eğim gevşer: yer bulunamasa da dünya kurulur
+		for n in 1500:
+			var a := rng.randf() * TAU
+			var r := rng.randf_range(r0, r1)
+			var x := cos(a) * r
+			var z := sin(a) * r
+			if pass_i < 2 and w.biome_at(x, z) != biome:
+				continue
+			var y: float = w.height(x, z)
+			var slope := absf(w.height(x + 5.0, z) - y) + absf(w.height(x, z + 5.0) - y) + absf(w.height(x - 5.0, z) - y) + absf(w.height(x, z - 5.0) - y)
+			if y < 0.4 or (pass_i == 0 and slope > 2.0) or slope > 6.0 or w.path_dist(x, z) < 6.0:
+				continue
+			var ok := true
+			for u: Vector3 in used:
+				if Vector2(u.x - x, u.z - z).length() < MIN_GAP:
+					ok = false
+					break
+			if ok:
+				var p := Vector3(x, y, z)
+				used.append(p)
+				return p
+	push_warning("open_world: yer bulunamadı (biyom %d)" % biome)
+	return Vector3(r0, w.height(r0, 0.0), 0.0)

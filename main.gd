@@ -764,17 +764,13 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 		["52 Karakter", "Hızlı Turlar", "PvP"],
 		"▶  ARENA LOBİSİ", _pick_mode.bind("arena"))
 	_mode_card(cards, "AÇIK DÜNYA", "Keşif  •  Tek Kişilik  •  Steam Gerekmez", Color(0.26, 0.88, 0.54),
-		"Geniş açık ormanda kılıcınla başla, 8 evin içindeki kutulardan silah topla, 48 karakter muhafızı ve yaratıklarla savaş.",
-		["8 Ev & 21 Kutu", "48 Karakter", "Gece / Gündüz"],
+		"1 km'lik karanlık dünyada kılıcınla başla: lanetli orman, bataklık, harabeler ve kül dağlarındaki evlerden silah topla, muhafızlarla savaş.",
+		["1 km Harita", "48 Karakter", "Gece / Gündüz"],
 		"▶  AÇIK DÜNYAYA GİR", _start_open_world, "", Callable(), true)
 	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 Oyuncu", Color(0.32, 0.74, 1.0),
 		"Rapunzel'in kulesini 10 dalga boyunca savun. Seviye kartları seç, duvar, tuzak ve taretlerle hattı tut.",
 		["10 Dalga & Boss", "Kart & Evrim", "Taret & Tuzak"],
 		"⚡  TEK BAŞINA OYNA", _solo_td, "👥  CO-OP LOBİ (1–4)", _pick_mode.bind("td"))
-	_mode_card(cards, "KARANLIK DÜNYA", "Co-op  •  1–4 Oyuncu", Color(0.7, 0.45, 1.0),
-		"Lanetli orman, sis bataklığı, kül dağları ve yıkık krallık: 1 km'lik karanlık dünyayı keşfet.",
-		["1 km Harita", "4 Biyom", "Co-op"],
-		"▶  DÜNYAYA ÇIK", _pick_mode.bind("world"))
 	var bottom := HBoxContainer.new()
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	bottom.add_theme_constant_override("separation", 16)
@@ -2103,21 +2099,34 @@ func start_world(ids: Array) -> void:
 		p.set_multiplayer_authority(ids[i])
 		p.spawn_pos = sp[i % sp.size()]
 		players.add_child(p)
-## Açık Dünya Modu: 180x180 m orman, 8 girilebilir ev ve içlerinde kutular, 48 karakter muhafızı, 30 yaratık,
-## dinamik gece/gündüz, XP/seviye kartları ve tam envanter.
+## Açık Dünya Modu: world.gd'nin 1 km'lik karanlık haritası; evler, kutular, 48 karakter muhafızı ve
+## yaratık kampları biyomlara yayılır (open_world.gd layout), gece/gündüz, XP kartları ve envanter.
 func _start_open_world() -> void:
 	if not Net.online():
 		Net.solo()
 	_clear_world()
 	_set_menu_bg(false)
-	_build_world(OpenWorldScript.LANDMARKS, true)
+	world = Node3D.new()
+	world.name = "World"
+	add_child(world)
+	var w: Node3D = WorldScript.new()
+	w.name = "DarkWorld"
+	var lay: Dictionary = OpenWorldScript.make_layout(w)
+	w.clear_pts = lay.clear # ilk chunk'lar w._ready'de kurulur: ağaca eklemeden önce
+	world.add_child(w)
+	players = Node3D.new()
+	players.name = "Players"
+	world.add_child(players)
+	w.players = players
 	var ow: Node = OpenWorldScript.new()
 	ow.name = "OpenWorld"
+	ow.world = w
+	ow.layout = lay
 	world.add_child(ow)
 	var p: CharacterBody3D = PlayerScript.new()
 	p.name = "1"
 	p.set_multiplayer_authority(1)
-	p.spawn_pos = OpenWorldScript.PLAYER_START
+	p.spawn_pos = w.spawns()[0]
 	players.add_child(p)
 	td_ui = OpenWorldUi.new()
 	td_ui.main = self

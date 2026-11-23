@@ -3046,3 +3046,6 @@ msgstr "4 Biomes"
 
 msgid "▶  DÜNYAYA ÇIK"
 msgstr "▶  ENTER THE WORLD"
+
+msgid "1 km'lik karanlık dünyada kılıcınla başla: lanetli orman, bataklık, harabeler ve kül dağlarındaki evlerden silah topla, muhafızlarla savaş."
+msgstr "Start with your sword in a 1 km dark world: loot weapons from houses in the cursed forest, swamp, ruins and ash mountains, and fight the guards."
