@@ -7,8 +7,8 @@ const WorldScript := preload("res://world.gd")
 const ExplosionScript := preload("res://explosion.gd")
 const Chars := preload("res://characters.gd")
 const TdUi := preload("res://td_ui.gd")
-const StoryScript := preload("res://story.gd")
-const StoryUi := preload("res://story_ui.gd")
+const OpenWorldScript := preload("res://open_world.gd")
+const OpenWorldUi := preload("res://open_world_ui.gd")
 const Profile := preload("res://profile.gd")
 const Balance := preload("res://balance.gd")
 const COSM_SLOTS := {"tint": "Karakter Rengi", "title": "Unvan", "fx": "Kurşun ve Namlu Ateşi Rengi"}
@@ -106,6 +106,8 @@ var players: Node3D
 var round_over := false
 var pages := {} # menü sayfaları: intro, main, modes, lobby
 var page := ""
+var page_tw: Tween
+var _page_base_x := {}
 var shade: TextureRect # soldan kararma: menü yazıları okunsun
 var prompt: Label # giriş ekranında yanıp sönen yazı
 var menu_bg: Node3D # menüde arkadaki canlı orman sahnesi
@@ -136,10 +138,10 @@ func _ready() -> void:
 		await get_tree().create_timer(3.0).timeout
 		get_viewport().get_texture().get_image().save_png(OS.get_user_data_dir() + "/selftest.png")
 		get_tree().quit()
-	elif "--storytest" in OS.get_cmdline_user_args(): # açık dünya hikaye modunu açıp bir kare kaydeder
-		_start_story()
-		await get_tree().create_timer(2.2).timeout
-		get_viewport().get_texture().get_image().save_png(OS.get_user_data_dir() + "/storytest.png")
+	elif "--owtest" in OS.get_cmdline_user_args(): # açık dünya modunu açıp bir kare kaydeder
+		_start_open_world()
+		await get_tree().create_timer(2.4).timeout
+		get_viewport().get_texture().get_image().save_png(OS.get_user_data_dir() + "/owtest.png")
 		get_tree().quit()
 
 
@@ -225,6 +227,42 @@ func _make_theme() -> Theme:
 	t.set_color("font_disabled_color", "Button", Color(0.65, 0.65, 0.7))
 	for k in ["normal", "hover", "pressed"]:
 		t.set_stylebox(k, "OptionButton", t.get_stylebox(k, "Button"))
+	# CheckBox: koyu düğme arka planında kaybolmasın, seçili/üzerinde net okunsun
+	var cb_n := _sb(Color(0.08, 0.10, 0.16, 0.82), 8, 8)
+	cb_n.set_border_width_all(1)
+	cb_n.border_color = Color(1.0, 1.0, 1.0, 0.22)
+	var cb_h := _sb(Color(0.22, 0.16, 0.10, 0.92), 8, 8)
+	cb_h.set_border_width_all(1)
+	cb_h.border_color = Color(1.0, 0.72, 0.30, 0.75)
+	var cb_p := _sb(Color(0.28, 0.18, 0.08, 0.96), 8, 8)
+	cb_p.set_border_width_all(2)
+	cb_p.border_color = Color(1.0, 0.75, 0.28, 0.95)
+	t.set_stylebox("normal", "CheckBox", cb_n)
+	t.set_stylebox("hover", "CheckBox", cb_h)
+	t.set_stylebox("pressed", "CheckBox", cb_p)
+	t.set_stylebox("hover_pressed", "CheckBox", cb_p)
+	t.set_stylebox("disabled", "CheckBox", _sb(Color(0.08, 0.09, 0.13, 0.55), 8, 8))
+	t.set_stylebox("focus", "CheckBox", focus)
+	t.set_color("font_color", "CheckBox", Color(0.92, 0.94, 1.0))
+	t.set_color("font_hover_color", "CheckBox", Color.WHITE)
+	t.set_color("font_pressed_color", "CheckBox", Color(1.0, 0.86, 0.42))
+	t.set_color("font_hover_pressed_color", "CheckBox", Color(1.0, 0.92, 0.58))
+	t.set_color("font_disabled_color", "CheckBox", Color(0.55, 0.58, 0.65))
+	t.set_icon("unchecked", "CheckBox", _cb_icon(false, false))
+	t.set_icon("checked", "CheckBox", _cb_icon(true, false))
+	t.set_icon("unchecked_disabled", "CheckBox", _cb_icon(false, true))
+	t.set_icon("checked_disabled", "CheckBox", _cb_icon(true, true))
+	t.set_constant("h_separation", "CheckBox", 10)
+	# PopupMenu (OptionButton açılır listeleri): koyu cam panel ve turuncu vurgu
+	var pm_bg := _sb(Color(0.06, 0.08, 0.13, 0.98), 10, 8)
+	pm_bg.set_border_width_all(1)
+	pm_bg.border_color = Color(1.0, 0.62, 0.22, 0.55)
+	var pm_hov := _sb(Color(0.88, 0.44, 0.12, 0.96), 6, 6)
+	t.set_stylebox("panel", "PopupMenu", pm_bg)
+	t.set_stylebox("hover", "PopupMenu", pm_hov)
+	t.set_color("font_color", "PopupMenu", Color(0.93, 0.95, 1.0))
+	t.set_color("font_hover_color", "PopupMenu", Color.WHITE)
+	t.set_color("font_disabled_color", "PopupMenu", Color(0.50, 0.53, 0.60))
 	var p := _sb(Color(0.05, 0.06, 0.10, 0.94), 14, 26)
 	p.set_border_width_all(1)
 	p.border_color = Color(1.0, 0.62, 0.22, 0.42)
@@ -246,6 +284,27 @@ func _make_theme() -> Theme:
 	t.set_constant("outline_size", "BigButton", 6)
 	t.set_color("font_outline_color", "BigButton", Color(0, 0, 0, 0.7))
 	return t
+
+
+## CheckBox için yüksek kontrastlı özel kutu / tik simgesi (koyu temada net okunur).
+func _cb_icon(checked: bool, dis: bool) -> ImageTexture:
+	var n := 20
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var border := Color(0.45, 0.48, 0.56, 0.7) if dis else (Color(1.0, 0.78, 0.30, 1.0) if checked else Color(0.82, 0.86, 0.95, 0.92))
+	var fill := Color(0.14, 0.16, 0.22, 0.55) if dis else (Color(0.92, 0.48, 0.12, 1.0) if checked else Color(0.06, 0.08, 0.13, 0.95))
+	for y in n:
+		for x in n:
+			if (x == 0 or x == n - 1) and (y == 0 or y == n - 1):
+				continue
+			var edge := x <= 1 or x >= n - 2 or y <= 1 or y >= n - 2
+			img.set_pixel(x, y, border if edge else fill)
+	if checked:
+		var ck := Color(0.75, 0.75, 0.8, 0.8) if dis else Color.WHITE
+		for p in [[4, 10], [5, 11], [6, 12], [7, 13], [8, 14], [9, 13], [10, 12], [11, 11], [12, 10], [13, 9], [14, 8], [15, 7]]:
+			for dy in [0, 1]:
+				for dx in [0, 1]:
+					img.set_pixel(clampi(p[0] + dx, 2, n - 3), clampi(p[1] + dy, 2, n - 3), ck)
+	return ImageTexture.create_from_image(img)
 
 
 ## Oyunun logosu: kalın sistem yazı tipi, koyu dış hat ve gölge.
@@ -682,7 +741,7 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	var steam := _txt(mv, ("●  Steam: " + Net.my_name()) if Net.steam_ok else "●  Steam bağlı değil (Steam açık mı?)", 15, 0.7)
 	steam.add_theme_color_override("font_color", Color(0.5, 1.0, 0.55) if Net.steam_ok else Color(1.0, 0.6, 0.5))
 
-	# Mod seçimi: üç büyük kart (Arena, Tower Defense, Açık Dünya Hikaye)
+	# Mod seçimi: üç büyük kart (Açık Dünya, Arena, Tower Defense)
 	var modes := _page("modes")
 	var mc := VBoxContainer.new()
 	mc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -694,9 +753,9 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	cards.alignment = BoxContainer.ALIGNMENT_CENTER
 	cards.add_theme_constant_override("separation", 22)
 	mc.add_child(cards)
-	_mode_card(cards, "HİKAYE", "Açık Dünya  •  Tek Kişilik", Color(0.35, 0.88, 0.52),
-		"Geniş açık ormanda silahsız uyan, köydeki NPC'lerle konuş, görevleri yap, kılıçtan bazukaya silahlarını kazan ve Orman Lordu'nu yen.",
-		"▶  HİKAYEYE BAŞLA", _start_story)
+	_mode_card(cards, "AÇIK DÜNYA", "Keşif  •  Tek Kişilik", Color(0.35, 0.88, 0.52),
+		"Geniş açık ormanda kılıcınla başla, 8 evin içindeki ganimet kutularından silah topla, 48 karakter muhafızı ve yaratıklarla savaş.",
+		"▶  AÇIK DÜNYAYA GİR", _start_open_world)
 	_mode_card(cards, "ARENA", "PvP  •  2–4 oyuncu", Color(1.0, 0.55, 0.15),
 		"Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır.",
 		"▶  ARENAYA GİR", _pick_mode.bind("arena"))
@@ -930,20 +989,26 @@ func _show_page(n: String) -> void:
 	if n == "intro": # İngilizce ad ("BAZOOKA BUDDIES") daha uzun: 720p'de ekrana sığsın
 		var w := intro_logo.get_theme_font("font").get_string_size(intro_logo.atr(intro_logo.text), HORIZONTAL_ALIGNMENT_LEFT, -1, 124).x
 		intro_logo.add_theme_font_size_override("font_size", mini(124, int(124.0 * (get_viewport().get_visible_rect().size.x - 80.0) / maxf(w, 1.0))))
+	if page_tw and page_tw.is_valid():
+		page_tw.kill()
 	for k in pages:
 		pages[k].visible = k == n
 	var p: Control = pages[n]
 	p.modulate.a = 0.0
-	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(p, "modulate:a", 1.0, 0.35)
+	page_tw = create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	page_tw.tween_property(p, "modulate:a", 1.0, 0.28)
 	for b in letterbox:
-		tw.tween_property(b, "modulate:a", 1.0 if n == "intro" else 0.0, 0.4)
-	tw.tween_property(shade, "modulate:a", 0.25 if n == "intro" else (0.75 if n == "modes" else 1.0), 0.6)
-	tw.tween_property(self, "cam_k", 0.0 if n == "intro" else 1.0, 1.4)
-	var first := p.get_child(0) as Control # içerik soldan kayarak gelsin
+		page_tw.tween_property(b, "modulate:a", 1.0 if n == "intro" else 0.0, 0.35)
+	page_tw.tween_property(shade, "modulate:a", 0.25 if n == "intro" else (0.75 if n == "modes" else 1.0), 0.45)
+	page_tw.tween_property(self, "cam_k", 0.0 if n == "intro" else 1.0, 1.1)
+	var first := p.get_child(0) as Control # içerik soldan kayarak gelsin; taban x sabit tutulur (hızlı geçişte kayma olmaz)
 	if n == "modes": # sarmalı etiketler kutuyu şişirip ekran dışına itebiliyor: tam ekrana geri çek
-		first.set_anchors_and_offsets_preset.call_deferred(Control.PRESET_FULL_RECT)
-	tw.tween_property(first, "position:x", first.position.x, 0.4).from(first.position.x - 50)
+		first.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_page_base_x[n] = 0.0
+	elif not _page_base_x.has(n):
+		_page_base_x[n] = first.position.x
+	var base_x: float = _page_base_x[n]
+	page_tw.tween_property(first, "position:x", base_x, 0.32).from(base_x - 36.0)
 	for b: Button in p.find_children("*", "Button", true, false): # klavye / gamepad ile gezilebilsin
 		if b.visible and not b.disabled and b.focus_mode != Control.FOCUS_NONE:
 			b.grab_focus.call_deferred()
@@ -1793,7 +1858,7 @@ func _refresh() -> void:
 		set_opts.rpc(diff_id, endless)
 		Net.set_meta_data(mode, diff_id)
 	_update_diff_ui()
-	if Net.online() and world == null and page in ["intro", "main", "modes"]:
+	if Net.online() and world == null and page in ["intro", "main"]:
 		_show_page("lobby")
 
 
@@ -1886,8 +1951,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			_show_page("main")
 			get_viewport().set_input_as_handled()
 			return
-		if e.is_action_pressed("ui_cancel") and page in ["modes", "lobby", "solo"]:
-			_show_page("main" if page == "modes" else "modes")
+		if e.is_action_pressed("ui_cancel") and page in ["modes", "lobby", "solo", "find", "growth"]:
+			_show_page("main" if page in ["modes", "growth"] else "modes")
 			return
 	if e.is_action_pressed("ui_cancel"):
 		if char_wrap.visible:
@@ -1970,26 +2035,27 @@ func start_world(ids: Array) -> void:
 		p.set_multiplayer_authority(ids[i])
 		p.spawn_pos = sp[i % sp.size()]
 		players.add_child(p)
-## Açık Dünya Hikaye Modu: 150x150 m orman, silahsız başlangıç, NPC görevleri, mantıklı silah ilerlemesi ve boss.
-func _start_story() -> void:
+## Açık Dünya Modu: 180x180 m orman, 8 girilebilir ev ve içlerinde kutular, 48 karakter muhafızı, 30 yaratık,
+## dinamik gece/gündüz, XP/seviye kartları ve tam envanter.
+func _start_open_world() -> void:
 	if not Net.online():
 		Net.solo()
 	_clear_world()
 	_set_menu_bg(false)
-	_build_world(StoryScript.LANDMARKS, true)
-	var st: Node = StoryScript.new()
-	st.name = "Story"
-	world.add_child(st)
+	_build_world(OpenWorldScript.LANDMARKS, true)
+	var ow: Node = OpenWorldScript.new()
+	ow.name = "OpenWorld"
+	world.add_child(ow)
 	var p: CharacterBody3D = PlayerScript.new()
 	p.name = "1"
 	p.set_multiplayer_authority(1)
-	p.spawn_pos = StoryScript.PLAYER_START
+	p.spawn_pos = OpenWorldScript.PLAYER_START
 	players.add_child(p)
-	td_ui = StoryUi.new()
+	td_ui = OpenWorldUi.new()
 	td_ui.main = self
 	ui_layer.add_child(td_ui)
 	ui_layer.move_child(td_ui, hud.get_index() + 1)
-	for n in [hotbar, help_lbl, spec_lbl]:
+	for n in [hotbar, help_lbl, spec_lbl, score_lbl.get_parent()]:
 		n.hide()
 	round_over = false
 	center_lbl.text = ""
@@ -2091,7 +2157,7 @@ func _clear_world() -> void:
 		ui_layer.remove_child(td_ui)
 		td_ui.queue_free()
 		td_ui = null
-		for n in [hotbar, help_lbl, spec_lbl]:
+		for n in [hotbar, help_lbl, spec_lbl, score_lbl.get_parent()]:
 			n.show()
 
 

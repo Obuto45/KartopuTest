@@ -2973,3 +2973,13 @@ msgstr "— AUDIO —"
 
 msgid "— GÖRÜNTÜ —"
 msgstr "— DISPLAY —"
+
+msgid "Keşif  •  Tek Kişilik"
+msgstr "Exploration  •  Singleplayer"
+
+msgid "Geniş açık ormanda kılıcınla başla, 8 evin içindeki ganimet kutularından silah topla, 48 karakter muhafızı ve yaratıklarla savaş."
+msgstr "Start with your sword in a vast forest, loot weapons from crates inside 8 houses, and battle 48 character guards and monsters."
+
+msgid "▶  AÇIK DÜNYAYA GİR"
+msgstr "▶  ENTER OPEN WORLD"
+
