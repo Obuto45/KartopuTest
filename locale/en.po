@@ -168,12 +168,6 @@ msgstr "Wake up unarmed in a vast open forest, talk to village NPCs, complete qu
 msgid "▶  HİKAYEYE BAŞLA"
 msgstr "▶  START STORY"
 
-msgid "Fare hassasiyeti: %.1fx"
-msgstr "Mouse sensitivity: %.1fx"
-
-msgid "Görüş açısı (FOV): %d°"
-msgstr "Field of view (FOV): %d°"
-
 #: main.gd:429
 msgid "BAZUKA SAVAŞI"
 msgstr "BAZOOKA BUDDIES"
@@ -2965,9 +2959,6 @@ msgstr "▶  Start World (host)"
 msgid "Lanetli orman, sis bataklığı, kül dağları ve yıkık krallık: 1 km'lik karanlık dünyayı keşfet."
 msgstr "Cursed forest, misty swamp, ash mountains and a ruined kingdom: explore a dark 1 km world."
 
-msgid "▶  DÜNYAYA ÇIK"
-msgstr "▶  ENTER THE WORLD"
-
 msgid "— SES —"
 msgstr "— AUDIO —"
 
@@ -2983,3 +2974,75 @@ msgstr "Start with your sword in a vast forest, loot weapons from crates inside 
 msgid "▶  AÇIK DÜNYAYA GİR"
 msgstr "▶  ENTER OPEN WORLD"
 
+msgid "Fare hassasiyeti: %.1fx"
+msgstr "Mouse sensitivity: %.1fx"
+
+msgid "Görüş açısı (FOV): %d°"
+msgstr "Field of view (FOV): %d°"
+
+msgid "Tek başına açık dünyayı keşfet, kuleyi savun ya da arenada kapış."
+msgstr "Explore the open world solo, defend the tower, or battle in the arena."
+
+msgid "PvP  •  2–4 Oyuncu"
+msgstr "PvP  •  2–4 Players"
+
+msgid "52 Karakter"
+msgstr "52 Characters"
+
+msgid "Hızlı Turlar"
+msgstr "Fast Rounds"
+
+msgid "▶  ARENA LOBİSİ"
+msgstr "▶  ARENA LOBBY"
+
+msgid "Keşif  •  Tek Kişilik  •  Steam Gerekmez"
+msgstr "Exploration  •  Singleplayer  •  No Steam Needed"
+
+msgid "Geniş açık ormanda kılıcınla başla, 8 evin içindeki kutulardan silah topla, 48 karakter muhafızı ve yaratıklarla savaş."
+msgstr "Start with your sword in a vast forest, loot weapons from crates inside 8 houses, and battle 48 character guards and monsters."
+
+msgid "8 Ev & 21 Kutu"
+msgstr "8 Houses & 21 Crates"
+
+msgid "48 Karakter"
+msgstr "48 Characters"
+
+msgid "Gece / Gündüz"
+msgstr "Day / Night"
+
+msgid "★ ÖNE ÇIKAN"
+msgstr "★ FEATURED"
+
+msgid "Co-op  •  1–4 Oyuncu"
+msgstr "Co-op  •  1–4 Players"
+
+msgid "Rapunzel'in kulesini 10 dalga boyunca savun. Seviye kartları seç, duvar, tuzak ve taretlerle hattı tut."
+msgstr "Defend Rapunzel's tower through 10 waves. Pick upgrade cards and hold the line with walls, traps, and turrets."
+
+msgid "10 Dalga & Boss"
+msgstr "10 Waves & Boss"
+
+msgid "Kart & Evrim"
+msgstr "Cards & Evolutions"
+
+msgid "Taret & Tuzak"
+msgstr "Turrets & Traps"
+
+msgid "⚡  TEK BAŞINA OYNA"
+msgstr "⚡  PLAY SOLO"
+
+msgid "👥  CO-OP LOBİ (1–4)"
+msgstr "👥  CO-OP LOBBY (1–4)"
+
+msgid "KARANLIK DÜNYA"
+msgstr "DARK WORLD"
+
+msgid "1 km Harita"
+msgstr "1 km Map"
+
+msgid "4 Biyom"
+msgstr "4 Biomes"
+
+
+msgid "▶  DÜNYAYA ÇIK"
+msgstr "▶  ENTER THE WORLD"

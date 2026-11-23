@@ -741,42 +741,48 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 	var steam := _txt(mv, ("●  Steam: " + Net.my_name()) if Net.steam_ok else "●  Steam bağlı değil (Steam açık mı?)", 15, 0.7)
 	steam.add_theme_color_override("font_color", Color(0.5, 1.0, 0.55) if Net.steam_ok else Color(1.0, 0.6, 0.5))
 
-	# Mod seçimi: üç büyük kart (Açık Dünya, Arena, Tower Defense)
+	# Mod seçimi: 3 kart (Arena, öne çıkan Açık Dünya, Tower Defense) + sade alt çubuk
 	var modes := _page("modes")
 	var mc := VBoxContainer.new()
 	mc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mc.alignment = BoxContainer.ALIGNMENT_CENTER
-	mc.add_theme_constant_override("separation", 22)
+	mc.add_theme_constant_override("separation", 18)
 	modes.add_child(mc)
-	_logo(mc, "OYUN MODU SEÇ", 54, Color.WHITE).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var head := VBoxContainer.new()
+	head.alignment = BoxContainer.ALIGNMENT_CENTER
+	head.add_theme_constant_override("separation", 2)
+	mc.add_child(head)
+	_logo(head, "OYUN MODU SEÇ", 52, Color.WHITE).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub := _txt(head, "Tek başına açık dünyayı keşfet, kuleyi savun ya da arenada kapış.", 17, 0.78)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var cards := HBoxContainer.new()
 	cards.alignment = BoxContainer.ALIGNMENT_CENTER
-	cards.add_theme_constant_override("separation", 22)
+	cards.add_theme_constant_override("separation", 20)
 	mc.add_child(cards)
-	_mode_card(cards, "AÇIK DÜNYA", "Keşif  •  Tek Kişilik", Color(0.35, 0.88, 0.52),
-		"Geniş açık ormanda kılıcınla başla, 8 evin içindeki ganimet kutularından silah topla, 48 karakter muhafızı ve yaratıklarla savaş.",
-		"▶  AÇIK DÜNYAYA GİR", _start_open_world)
-	_mode_card(cards, "ARENA", "PvP  •  2–4 oyuncu", Color(1.0, 0.55, 0.15),
+	_mode_card(cards, "ARENA", "PvP  •  2–4 Oyuncu", Color(1.0, 0.56, 0.16),
 		"Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır.",
-		"▶  ARENAYA GİR", _pick_mode.bind("arena"))
-	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 oyuncu", Color(0.4, 0.75, 1.0),
-		"Rapunzel'in kulesini savun. 10 dalga yaratık, seviye atladıkça kart seç, molada mağazadan duvar, tuzak ve taret al.",
-		"▶  KULEYİ SAVUN", _pick_mode.bind("td"))
-	_mode_card(cards, "AÇIK DÜNYA", "Co-op  •  1–4 oyuncu", Color(0.7, 0.45, 1.0),
+		["52 Karakter", "Hızlı Turlar", "PvP"],
+		"▶  ARENA LOBİSİ", _pick_mode.bind("arena"))
+	_mode_card(cards, "AÇIK DÜNYA", "Keşif  •  Tek Kişilik  •  Steam Gerekmez", Color(0.26, 0.88, 0.54),
+		"Geniş açık ormanda kılıcınla başla, 8 evin içindeki kutulardan silah topla, 48 karakter muhafızı ve yaratıklarla savaş.",
+		["8 Ev & 21 Kutu", "48 Karakter", "Gece / Gündüz"],
+		"▶  AÇIK DÜNYAYA GİR", _start_open_world, "", Callable(), true)
+	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 Oyuncu", Color(0.32, 0.74, 1.0),
+		"Rapunzel'in kulesini 10 dalga boyunca savun. Seviye kartları seç, duvar, tuzak ve taretlerle hattı tut.",
+		["10 Dalga & Boss", "Kart & Evrim", "Taret & Tuzak"],
+		"⚡  TEK BAŞINA OYNA", _solo_td, "👥  CO-OP LOBİ (1–4)", _pick_mode.bind("td"))
+	_mode_card(cards, "KARANLIK DÜNYA", "Co-op  •  1–4 Oyuncu", Color(0.7, 0.45, 1.0),
 		"Lanetli orman, sis bataklığı, kül dağları ve yıkık krallık: 1 km'lik karanlık dünyayı keşfet.",
+		["1 km Harita", "4 Biyom", "Co-op"],
 		"▶  DÜNYAYA ÇIK", _pick_mode.bind("world"))
-	var quick := HBoxContainer.new()
-	quick.alignment = BoxContainer.ALIGNMENT_CENTER
-	quick.add_theme_constant_override("separation", 20)
-	mc.add_child(quick)
-	var solo_b := _btn(quick, "⚡  TEK BAŞINA OYNA  (Steam gerekmez)", _solo_td)
-	solo_b.custom_minimum_size = Vector2(520, 60)
-	solo_b.add_theme_font_size_override("font_size", 22)
-	var find_b := _btn(quick, "🔍  Açık Lobi Bul", _open_find)
-	find_b.custom_minimum_size = Vector2(300, 60)
-	var back := _btn(mc, "◀  Geri", _show_page.bind("main"))
-	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	back.custom_minimum_size.x = 220
+	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 16)
+	mc.add_child(bottom)
+	var back := _btn(bottom, "◀  Geri", _show_page.bind("main"))
+	back.custom_minimum_size = Vector2(210, 46)
+	var find_b := _btn(bottom, "🔍  Açık Lobi Bul", _open_find)
+	find_b.custom_minimum_size = Vector2(260, 46)
 
 	# Arena lobisi: Steam lobisi, arkadaşlar, başlat
 	var lv := _column(_page("lobby"))
@@ -927,36 +933,97 @@ func _gap(h: float) -> Control:
 	return c
 
 
-func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String, btn: String, cb: Callable) -> void:
+func _style_cta(b: Button, c: Color) -> void:
+	var n := _sb(c.darkened(0.28), 10, 10)
+	n.set_border_width_all(1)
+	n.border_color = c.lightened(0.32)
+	var h := _sb(c.darkened(0.08), 10, 10)
+	h.set_border_width_all(2)
+	h.border_color = Color(1, 1, 1, 0.85)
+	var p := _sb(c.darkened(0.42), 10, 10)
+	p.set_border_width_all(1)
+	p.border_color = c
+	b.add_theme_stylebox_override("normal", n)
+	b.add_theme_stylebox_override("hover", h)
+	b.add_theme_stylebox_override("pressed", p)
+	b.add_theme_color_override("font_color", Color.WHITE)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
+
+
+func _mode_card(parent: Node, title: String, tag: String, c: Color, desc: String, chips: Array,
+		btn: String, cb: Callable, btn2 := "", cb2 := Callable(), featured := false) -> void:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(370, 380)
-	var sb := _sb(Color(0.05, 0.06, 0.1, 0.88), 16, 28)
+	card.custom_minimum_size = Vector2(382 if featured else 352, 412 if featured else 390)
+	card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var bg := Color(c.r * 0.08 + 0.04, c.g * 0.08 + 0.05, c.b * 0.08 + 0.09, 0.93)
+	var sb := _sb(bg, 16, 22)
 	sb.set_border_width_all(2)
 	sb.border_width_top = 6
-	sb.border_color = c
+	sb.border_color = c if featured else Color(c.r, c.g, c.b, 0.72)
+	sb.shadow_color = Color(c.r, c.g, c.b, 0.28 if featured else 0.14)
+	sb.shadow_size = 18 if featured else 10
 	card.add_theme_stylebox_override("panel", sb)
+	card.mouse_entered.connect(func():
+		sb.border_color = c.lightened(0.22)
+		sb.shadow_color = Color(c.r, c.g, c.b, 0.44)
+		sb.shadow_size = 24)
+	card.mouse_exited.connect(func():
+		sb.border_color = c if featured else Color(c.r, c.g, c.b, 0.72)
+		sb.shadow_color = Color(c.r, c.g, c.b, 0.28 if featured else 0.14)
+		sb.shadow_size = 18 if featured else 10)
 	parent.add_child(card)
+
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	card.add_child(v)
-	_logo(v, title, 40, c)
-	var t := _txt(v, tag, 17, 0.8)
-	t.add_theme_color_override("font_color", c.lightened(0.4))
-	var dl := _txt(v, desc, 16, 0.9)
+
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 8)
+	v.add_child(top_row)
+	var title_lbl := _logo(top_row, title, 38 if featured else 35, c)
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if featured:
+		var pill := PanelContainer.new()
+		pill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var psb := _sb(Color(c.r, c.g, c.b, 0.24), 8, 5)
+		psb.content_margin_left = 9; psb.content_margin_right = 9
+		psb.set_border_width_all(1)
+		psb.border_color = c.lightened(0.25)
+		pill.add_theme_stylebox_override("panel", psb)
+		top_row.add_child(pill)
+		var pl := _txt(pill, "★ ÖNE ÇIKAN", 12, 1.0)
+		pl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		pl.add_theme_color_override("font_color", c.lightened(0.45))
+
+	var t := _txt(v, tag, 15, 0.92)
+	t.add_theme_color_override("font_color", c.lightened(0.38))
+
+	var chip_row := HBoxContainer.new()
+	chip_row.add_theme_constant_override("separation", 6)
+	v.add_child(chip_row)
+	for ch_txt in chips:
+		var cp := PanelContainer.new()
+		var csb := _sb(Color(1.0, 1.0, 1.0, 0.06), 6, 4)
+		csb.content_margin_left = 8; csb.content_margin_right = 8
+		csb.set_border_width_all(1)
+		csb.border_color = Color(c.r, c.g, c.b, 0.32)
+		cp.add_theme_stylebox_override("panel", csb)
+		chip_row.add_child(cp)
+		var cl := _txt(cp, ch_txt, 12, 0.92)
+		cl.autowrap_mode = TextServer.AUTOWRAP_OFF
+
+	var dl := _txt(v, desc, 15, 0.88)
 	dl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dl.custom_minimum_size.x = 310 # sıfır genişlikte sarma, kutuyu dev yüksekliğe şişirmesin
+	dl.custom_minimum_size.x = 300
+
 	var b := _btn(v, btn, cb if cb.is_valid() else func(): pass)
-	b.custom_minimum_size.y = 54
-	b.add_theme_font_size_override("font_size", 20)
-	if not cb.is_valid(): # henüz yok: soluk kart, kapalı düğme, köşede "YAKINDA" bandı
-		b.disabled = true
-		card.modulate = Color(0.8, 0.8, 0.85)
-		var badge := _logo(card, "YAKINDA", 22, Color.WHITE)
-		badge.size_flags_horizontal = Control.SIZE_SHRINK_END
-		badge.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-		var bs := _sb(Color(0.85, 0.2, 0.25), 6, 8)
-		badge.add_theme_stylebox_override("normal", bs)
-		badge.rotation_degrees = 8
+	b.custom_minimum_size.y = 50
+	b.add_theme_font_size_override("font_size", 19)
+	_style_cta(b, c)
+	if btn2 != "" and cb2.is_valid():
+		var b2 := _btn(v, btn2, cb2)
+		b2.custom_minimum_size.y = 42
+		b2.add_theme_font_size_override("font_size", 16)
 
 
 ## Mod kartı: modu host seçer; lobiye bağlı istemci hostun modunda kalır.
@@ -1009,10 +1076,11 @@ func _show_page(n: String) -> void:
 		_page_base_x[n] = first.position.x
 	var base_x: float = _page_base_x[n]
 	page_tw.tween_property(first, "position:x", base_x, 0.32).from(base_x - 36.0)
-	for b: Button in p.find_children("*", "Button", true, false): # klavye / gamepad ile gezilebilsin
-		if b.visible and not b.disabled and b.focus_mode != Control.FOCUS_NONE:
-			b.grab_focus.call_deferred()
-			break
+	if n != "modes": # mod seçiminde ilk kart yapay odak çerçevesiyle seçili gibi görünmesin
+		for b: Button in p.find_children("*", "Button", true, false): # klavye / gamepad ile gezilebilsin
+			if b.visible and not b.disabled and b.focus_mode != Control.FOCUS_NONE:
+				b.grab_focus.call_deferred()
+				break
 
 
 ## Menüdeki canlı sahne: orman, seçili karakter ve ekibi, arkada ara ara patlamalar.
