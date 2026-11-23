@@ -27,6 +27,7 @@ var day_lbl: Label
 var rival_lbl: Label
 var monster_lbl: Label
 var crate_lbl: Label
+var party_lbl: Label
 
 # Minimap
 var minimap: Control
@@ -123,6 +124,17 @@ class MinimapView extends Control:
 				var is_boss := str(e.get("type")) == "boss"
 				draw_circle(pt, 4.5 if is_boss else 2.4, Color(1.0, 0.22, 0.55) if is_boss else Color(1.0, 0.32, 0.28))
 
+		# 3.5. Takım arkadaşları (açık mavi daire + beyaz halka, uzaktaysa kenara yapışır -> kaybolmaz!)
+		for mate in ow_n.plist:
+			if not is_instance_valid(mate) or mate == p:
+				continue
+			var rel := Vector2(mate.global_position.x - ppos.x, mate.global_position.z - ppos.z) * scale_k
+			if rel.length() > rad - 6.0:
+				rel = rel.normalized() * (rad - 6.0)
+			var pt := center + rel
+			draw_circle(pt, 5.2, Color(0.25, 0.82, 1.0, 0.96))
+			draw_arc(pt, 5.2, 0.0, TAU, 16, Color.WHITE, 1.5, true)
+
 		# 4. Oyuncu bakış konisi ve yön oku (merkezde)
 		var yaw := 0.0
 		if p and is_instance_valid(p):
@@ -211,6 +223,8 @@ func _build_top_left() -> void:
 	crate_lbl = _t(stats, "✦ Kutu: 0/22", 14, Color(0.45, 0.94, 1.0))
 	var tip := _t(v, "[E] Kutu Aç / Çanta   •   [Tab] Çanta   •   [Q] Yetenek", 12, Color(0.82, 0.86, 0.94))
 	tip.modulate.a = 0.72
+	party_lbl = _t(v, "", 13, Color(0.65, 0.90, 1.0))
+	party_lbl.hide()
 
 
 func _build_minimap() -> void:
@@ -609,6 +623,17 @@ func _update_top_left() -> void:
 	rival_lbl.text = "⚔ Muhafız: %d/%d" % [ow.rivals_killed, ow.rivals_total]
 	monster_lbl.text = "☠ Yaratık: %d/%d" % [ow.monsters_killed, ow.monsters_total]
 	crate_lbl.text = "✦ Kutu: %d/%d" % [ow.crates_opened, ow.crates_total]
+	if party_lbl:
+		var lines := PackedStringArray()
+		for mate in ow.plist:
+			if is_instance_valid(mate) and mate != player:
+				var dist := roundi(player.global_position.distance_to(mate.global_position))
+				var pid := str(mate.name).to_int()
+				var hp_txt := ("%d HP" % int(mate.hp)) if int(mate.hp) > 0 else tr("DÜŞTÜ")
+				lines.append("● %s  %s  •  %d m" % [Net.display_name(pid), hp_txt, dist])
+		party_lbl.visible = not lines.is_empty()
+		if party_lbl.visible:
+			party_lbl.text = "\n".join(lines)
 
 
 func _update_xp(dt: float) -> void:

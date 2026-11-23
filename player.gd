@@ -2295,6 +2295,12 @@ func td_hit(dmg: int) -> void:
 		take_hit(dmg)
 
 
+@rpc("any_peer", "call_local", "reliable")
+func td_heal(amount: int) -> void:
+	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() <= 1 and hp > 0:
+		gain(amount)
+
+
 @rpc("authority", "call_local", "reliable")
 func td_respawn() -> void:
 	respawn()

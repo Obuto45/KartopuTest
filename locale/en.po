@@ -3034,6 +3034,18 @@ msgstr "⚡  PLAY SOLO"
 msgid "👥  CO-OP LOBİ (1–4)"
 msgstr "👥  CO-OP LOBBY (1–4)"
 
+msgid "Keşif  •  1–4 Oyuncu"
+msgstr "Exploration  •  1–4 Players"
+
+msgid "Geniş karanlık dünyada kılıcınla başla, evlerdeki kutulardan silah topla, 48 karakter muhafızı ve yaratıklarla tek başına ya da arkadaşlarınla savaş."
+msgstr "Start with your sword in a vast dark world, loot weapons from house crates, and fight 48 character guards and monsters solo or with friends."
+
+msgid "▶  TEK BAŞINA GİR"
+msgstr "▶  PLAY SOLO"
+
+msgid "DÜŞTÜ"
+msgstr "DOWN"
+
 msgid "KARANLIK DÜNYA"
 msgstr "DARK WORLD"
 

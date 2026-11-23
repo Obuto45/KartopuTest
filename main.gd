@@ -763,10 +763,10 @@ func _build_menu(layer: CanvasLayer, theme: Theme) -> void:
 		"Herkes birbirine karşı. 52 karakter, bazuka, kalkan, duvar ve kılıç. Son ayakta kalan turu kazanır.",
 		["52 Karakter", "Hızlı Turlar", "PvP"],
 		"▶  ARENA LOBİSİ", _pick_mode.bind("arena"))
-	_mode_card(cards, "AÇIK DÜNYA", "Keşif  •  Tek Kişilik  •  Steam Gerekmez", Color(0.26, 0.88, 0.54),
+	_mode_card(cards, "AÇIK DÜNYA", "Keşif  •  1–4 Oyuncu", Color(0.26, 0.88, 0.54),
 		"1 km'lik karanlık dünyada kılıcınla başla: lanetli orman, bataklık, harabeler ve kül dağlarındaki evlerden silah topla, muhafızlarla savaş.",
 		["1 km Harita", "48 Karakter", "Gece / Gündüz"],
-		"▶  AÇIK DÜNYAYA GİR", _start_open_world, "", Callable(), true)
+		"▶  TEK BAŞINA GİR", _start_open_world, "👥  CO-OP LOBİ (1–4)", _pick_mode.bind("world"), true)
 	_mode_card(cards, "TOWER DEFENSE", "Co-op  •  1–4 Oyuncu", Color(0.32, 0.74, 1.0),
 		"Rapunzel'in kulesini 10 dalga boyunca savun. Seviye kartları seç, duvar, tuzak ve taretlerle hattı tut.",
 		["10 Dalga & Boss", "Kart & Evrim", "Taret & Tuzak"],
@@ -2054,7 +2054,7 @@ func _on_start() -> void:
 		solo_free_diff = false
 		start_td.rpc(ids, {"difficulty": d, "endless": endless and _unlocked("mode:endless")})
 	elif mode == "world":
-		start_world.rpc(ids)
+		start_open_world.rpc(ids, randi())
 	else:
 		start_game.rpc(ids)
 
@@ -2077,33 +2077,10 @@ func start_game(ids: Array) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
-## Açık dünya: harita world.gd'den, oyuncular merkezdeki düzlükte doğar; düşman ve tur yok.
+## Açık Dünya Modu (1–4 oyuncu): world.gd'nin 1 km'lik karanlık haritası; evler, kutular,
+## 48 karakter muhafızı, yaratık kampları, gece/gündüz, XP kartları ve envanter tüm oyuncularla eşzamanlı.
 @rpc("authority", "call_local", "reliable")
-func start_world(ids: Array) -> void:
-	_clear_world()
-	_set_menu_bg(false)
-	world = Node3D.new()
-	world.name = "World"
-	add_child(world)
-	var w: Node3D = WorldScript.new()
-	w.name = "OpenWorld"
-	world.add_child(w)
-	players = Node3D.new()
-	players.name = "Players"
-	world.add_child(players)
-	w.players = players
-	var sp: Array = w.spawns()
-	for i in ids.size():
-		var p: CharacterBody3D = PlayerScript.new()
-		p.name = str(ids[i])
-		p.set_multiplayer_authority(ids[i])
-		p.spawn_pos = sp[i % sp.size()]
-		players.add_child(p)
-## Açık Dünya Modu: world.gd'nin 1 km'lik karanlık haritası; evler, kutular, 48 karakter muhafızı ve
-## yaratık kampları biyomlara yayılır (open_world.gd layout), gece/gündüz, XP kartları ve envanter.
-func _start_open_world() -> void:
-	if not Net.online():
-		Net.solo()
+func start_open_world(ids: Array, match_seed := 0) -> void:
 	_clear_world()
 	_set_menu_bg(false)
 	world = Node3D.new()
@@ -2122,12 +2099,15 @@ func _start_open_world() -> void:
 	ow.name = "OpenWorld"
 	ow.world = w
 	ow.layout = lay
+	ow.match_seed = match_seed
 	world.add_child(ow)
-	var p: CharacterBody3D = PlayerScript.new()
-	p.name = "1"
-	p.set_multiplayer_authority(1)
-	p.spawn_pos = w.spawns()[0]
-	players.add_child(p)
+	var sp: Array = w.spawns()
+	for i in ids.size():
+		var p: CharacterBody3D = PlayerScript.new()
+		p.name = str(ids[i])
+		p.set_multiplayer_authority(ids[i])
+		p.spawn_pos = sp[i % sp.size()]
+		players.add_child(p)
 	td_ui = OpenWorldUi.new()
 	td_ui.main = self
 	ui_layer.add_child(td_ui)
@@ -2139,6 +2119,17 @@ func _start_open_world() -> void:
 	ui.hide()
 	hud.show()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+@rpc("authority", "call_local", "reliable")
+func start_world(ids: Array) -> void:
+	start_open_world(ids, OpenWorldScript.LAYOUT_SEED)
+
+
+func _start_open_world() -> void:
+	if not Net.online():
+		Net.solo()
+	start_open_world([1], randi())
 
 
 ## Tower Defense maçı: ortası açık harita, oyuncular kule dibinde; dalgaları td.gd yürütür.
