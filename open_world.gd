@@ -13,6 +13,8 @@ const Chars := preload("res://characters.gd")
 const Fx := preload("res://explosion.gd")
 
 const DAY_LEN := 180.0 # tam gece-gündüz döngüsü (sn)
+const SYNC_DT := 0.1 # co-op: uyanık düşman konum eşitleme aralığı (sn)
+const STATE_DT := 0.5 # co-op: gün saati, XP ve sayaç eşitleme aralığı (sn)
 
 ## 8 girilebilir ev şablonu (ad, renk). Konum ve yön make_layout() ile karanlık dünyada üretilir.
 const HOUSES := [
@@ -51,6 +53,7 @@ const LATE_WEAPONS := ["sniper", "boomerang", "flame", "bazooka", "grenade"]
 
 var world: Node3D # world.gd: zemin yüksekliği, biyom ve yüklü chunk'lar
 var layout := {} # make_layout(world) çıktısı; main.gd verir
+var match_seed := 0 # co-op: host üretir, tüm makineler aynı muhafız/yaratık sırasıyla doğar
 var is_open_world := true # player.gd bunu okuyup yalnız Kılıç ile başlatır
 var state := "fight"
 var wave := 1
@@ -88,12 +91,18 @@ var _base_env := {}
 var _camp_light: OmniLight3D
 var _respawn_t := 0.0
 var _loot_rng := RandomNumberGenerator.new()
+var _orb_id := 0
+var _sync_t := 0.0
+var _state_t := 0.0
+var _s_ids := PackedInt32Array()
+var _s_pos := PackedVector3Array()
+var _s_yaw := PackedByteArray()
 
 
 func _ready() -> void:
 	add_to_group("td")
 	add_to_group("open_world")
-	_loot_rng.seed = int(Time.get_ticks_msec()) ^ 0x51A7E
+	_loot_rng.seed = (match_seed if match_seed != 0 else LAYOUT_SEED) ^ 0x51A7E
 	_find_lighting()
 	_build_spawn_camp()
 	_build_houses_and_crates()
@@ -103,7 +112,10 @@ func _ready() -> void:
 
 
 func _welcome() -> void:
-	toast.emit("Açık Dünyaya Hoş Geldin! Evlerdeki kutuları [E] ile aç, 48 karakter muhafızı ve yaratıklarla savaş!", Color(0.55, 0.95, 0.65))
+	if multiplayer.get_peers().is_empty():
+		toast.emit("Açık Dünyaya Hoş Geldin! Evlerdeki kutuları [E] ile aç, 48 karakter muhafızı ve yaratıklarla savaş!", Color(0.55, 0.95, 0.65))
+	else:
+		toast.emit("Co-op Açık Dünyaya Hoş Geldin! Arkadaşlarınla evleri yağmala, 48 muhafız ve yaratıklarla savaş!", Color(0.55, 0.95, 0.65))
 
 
 func _find_lighting() -> void:
@@ -357,11 +369,12 @@ func _spawn_crate(pos: Vector3, tier: int, house_name: String) -> void:
 func _spawn_rivals() -> void:
 	var pool: Array[int] = []
 	for i in Chars.LIST.size():
-		if i != Net.my_char:
-			pool.append(i)
-	# Fisher-Yates karıştırma (her maçta farklı 48 rastgele karakter!)
+		pool.append(i)
+	# Deterministik karıştırma: host ve tüm istemciler aynı 48 karakteri aynı E<id> adıyla doğurur
+	var srng := RandomNumberGenerator.new()
+	srng.seed = (match_seed if match_seed != 0 else LAYOUT_SEED) ^ 0x51A7E
 	for i in range(pool.size() - 1, 0, -1):
-		var j := _loot_rng.randi_range(0, i)
+		var j := srng.randi_range(0, i)
 		var tmp := pool[i]; pool[i] = pool[j]; pool[j] = tmp
 
 	var start_n := pool.size()
@@ -410,12 +423,14 @@ func _add_rival(cidx: int, pos: Vector3, camp: String, is_elite: bool, aggro_dis
 
 
 func _spawn_monsters() -> void:
+	var mrng := RandomNumberGenerator.new()
+	mrng.seed = (match_seed if match_seed != 0 else LAYOUT_SEED) ^ 0x9E377
 	var count := 0
 	for camp in layout.camps:
 		var types: Array = camp.types
 		for k in types.size():
 			var ang := k * TAU / maxf(types.size(), 1)
-			var dist := 0.0 if types[k] == "boss" else randf_range(3.5, 8.5)
+			var dist := 0.0 if types[k] == "boss" else mrng.randf_range(3.5, 8.5)
 			var pos: Vector3 = camp.pos + Vector3(cos(ang), 0, sin(ang)) * dist
 			_add_monster(str(types[k]), pos, camp.id)
 			count += 1
@@ -453,6 +468,15 @@ func _process(dt: float) -> void:
 	_update_orbs(dt)
 	_update_respawn(dt)
 	_update_sleep(dt)
+	if multiplayer.is_server() and not multiplayer.get_peers().is_empty():
+		_sync_t -= dt
+		if _sync_t <= 0.0:
+			_sync_t = SYNC_DT
+			_send_sync()
+		_state_t -= dt
+		if _state_t <= 0.0:
+			_state_t = STATE_DT
+			_sync_state.rpc([day_t, xp, xp_next, level, kills, rivals_killed, monsters_killed, crates_opened])
 
 
 func _sync_lists() -> void:
@@ -461,11 +485,86 @@ func _sync_lists() -> void:
 	elist = elist.filter(func(e): return is_instance_valid(e) and e.hp > 0)
 
 
+func _local_player() -> Node3D:
+	var my_id := str(multiplayer.get_unique_id())
+	for p in plist:
+		if is_instance_valid(p) and str(p.name) == my_id:
+			return p as Node3D
+	return _player()
+
+
 func _player() -> Node3D:
 	for p in plist:
 		if is_instance_valid(p):
 			return p as Node3D
 	return null
+
+
+func _player_by_peer(peer_id: int) -> Node3D:
+	var key := str(peer_id)
+	for p in plist:
+		if is_instance_valid(p) and str(p.name) == key:
+			return p as Node3D
+	return _player()
+
+
+func _to_owner(p: Node, method: String, args: Array) -> void:
+	if not is_instance_valid(p) or not p.has_method(method):
+		return
+	if p.is_multiplayer_authority():
+		p.callv(method, args)
+	else:
+		p.callv("rpc_id", [p.get_multiplayer_authority(), method] + args)
+
+
+func _send_sync() -> void:
+	var awake: Array = []
+	for e in elist:
+		if is_instance_valid(e) and e.hp > 0 and e.process_mode != Node.PROCESS_MODE_DISABLED:
+			awake.append(e)
+	var n := awake.size()
+	if n == 0:
+		return
+	_s_ids.resize(n)
+	_s_pos.resize(n)
+	_s_yaw.resize(n)
+	for i in n:
+		var e: Node3D = awake[i]
+		_s_ids[i] = int(e.get("eid"))
+		_s_pos[i] = e.global_position
+		_s_yaw[i] = (int(fposmod(e.rotation.y, TAU) / TAU * 128.0) & 127) | (128 if bool(e.get("moving")) else 0)
+	_sync_enemies.rpc(_s_ids, _s_pos, _s_yaw)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _sync_enemies(ids: PackedInt32Array, pos: PackedVector3Array, yaw: PackedByteArray) -> void:
+	for i in ids.size():
+		var e = _by_id.get("E%d" % ids[i])
+		if e and is_instance_valid(e):
+			var prev: Vector3 = e.net_pos
+			e.net_vel = ((pos[i] - prev) / SYNC_DT).limit_length(14.0) if prev != Vector3.ZERO else Vector3.ZERO
+			e.net_pos = pos[i]
+			e.net_yaw = (yaw[i] & 127) / 128.0 * TAU
+			e.moving = yaw[i] >= 128
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _sync_state(a: Array) -> void:
+	if a.size() < 8:
+		return
+	day_t = float(a[0])
+	xp = int(a[1])
+	xp_next = int(a[2])
+	level = int(a[3])
+	kills = int(a[4])
+	rivals_killed = int(a[5])
+	monsters_killed = int(a[6])
+	crates_opened = int(a[7])
+
+
+@rpc("authority", "call_local", "reliable")
+func _toast_all(text: String, col: Color) -> void:
+	toast.emit(text, col)
 
 
 func _update_day_night(dt: float) -> void:
@@ -516,7 +615,7 @@ func _update_day_night(dt: float) -> void:
 
 
 func _update_crates(dt: float) -> void:
-	var p := _player()
+	var p := _local_player()
 	var best := {}
 	var best_d := 3.8
 	for c in crates:
@@ -534,31 +633,41 @@ func _update_crates(dt: float) -> void:
 	nearby_crate = best
 
 
-## Yakındaki ganimet kutusunu açar (open_world_ui.gd E tuşuyla çağırır). Açarsa true döner.
+## Yakındaki ganimet kutusunu açar (open_world_ui.gd E tuşuyla çağırır). Co-op'ta host onaylar.
 func try_open_nearby_crate() -> bool:
 	if nearby_crate.is_empty() or nearby_crate.opened:
 		return false
-	var p := _player()
+	var p := _local_player()
 	if p == null or p.hp <= 0:
 		return false
-	_open_crate(nearby_crate, p)
+	var cid: int = int(nearby_crate.id)
+	if multiplayer.is_server():
+		_req_open_crate(cid)
+	else:
+		_req_open_crate.rpc_id(1, cid)
 	return true
 
 
-func _open_crate(c: Dictionary, p: Node) -> void:
-	c.opened = true
-	crates_opened += 1
-	nearby_crate = {}
-	var pos: Vector3 = c.pos
-	if is_instance_valid(c.node):
-		c.node.queue_free()
-	Sfx.play3d(Sfx.chime, pos, -2.0)
-	var fx: Node3D = Fx.new()
-	fx.position = pos + Vector3.UP * 0.5
-	fx.scale = Vector3.ONE * 0.55
-	get_parent().add_child(fx)
+@rpc("any_peer", "call_local", "reliable")
+func _req_open_crate(cid: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if cid < 0 or cid >= crates.size():
+		return
+	var c: Dictionary = crates[cid]
+	if c.opened:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = 1
+	var p := _player_by_peer(sender)
+	if p == null or p.hp <= 0 or p.global_position.distance_to(c.pos) > 5.5:
+		return
+	_open_crate_host(c, p, sender)
 
-	# Oyuncunun henüz sahip olmadığı silahları belirle (böylece evleri gezdikçe tüm cephanelik açılır!)
+
+func _open_crate_host(c: Dictionary, p: Node, opener_id: int) -> void:
+	c.opened = true
 	var owned := _owned_ids(p)
 	var pool: Array[String] = []
 	var primary_pool: Array = EARLY_WEAPONS if c.tier == 0 else (EARLY_WEAPONS + LATE_WEAPONS if c.tier == 1 else LATE_WEAPONS + EARLY_WEAPONS)
@@ -568,24 +677,44 @@ func _open_crate(c: Dictionary, p: Node) -> void:
 	var msgs := PackedStringArray()
 	if not pool.is_empty():
 		var pick := pool[_loot_rng.randi_range(0, pool.size() - 1)]
-		if p.add_item({"kind": "weapon", "id": pick}):
-			msgs.append(_weapon_label(pick))
+		_to_owner(p, "add_item", [{"kind": "weapon", "id": pick}])
+		msgs.append(_weapon_label(pick))
 	else:
-		# Tüm silahlar varsa: ekipman (kalkan/duvar) veya mevcut bir silahı güçlendir!
 		var eq := "shield" if "shield" not in owned else ("wall" if "wall" not in owned else "")
-		if eq != "" and p.add_item({"kind": "equip", "id": eq}):
+		if eq != "":
+			_to_owner(p, "add_item", [{"kind": "equip", "id": eq}])
 			msgs.append(tr(str(Weapons.EQUIPS[eq].name)))
 		else:
-			if p.add_item({"kind": "item", "id": "bomb", "count": 2}):
-				msgs.append("El Bombası x2")
-	# Her kutu ek olarak 1 adet Can İksiri veya Bomba bırakır
+			_to_owner(p, "add_item", [{"kind": "item", "id": "bomb", "count": 2}])
+			msgs.append("El Bombası x2")
 	var bonus_id := "potion" if _loot_rng.randf() < 0.68 else "bomb"
-	if p.add_item({"kind": "item", "id": bonus_id, "count": 1}):
-		msgs.append(tr(str(Weapons.ITEMS[bonus_id].name)))
+	_to_owner(p, "add_item", [{"kind": "item", "id": bonus_id, "count": 1}])
+	msgs.append(tr(str(Weapons.ITEMS[bonus_id].name)))
 
 	var gained_xp := _grant_xp(30)
 	var loot_txt := " + ".join(msgs) if not msgs.is_empty() else "Çanta Dolu"
-	toast.emit("✦ Kutu Açıldı (%s): %s  (+%d XP)" % [c.house, loot_txt, gained_xp], c.accent)
+	_crate_opened.rpc(int(c.id), opener_id, loot_txt, gained_xp)
+
+
+@rpc("authority", "call_local", "reliable")
+func _crate_opened(cid: int, opener_id: int, loot_txt: String, gained_xp: int) -> void:
+	if cid < 0 or cid >= crates.size():
+		return
+	var c: Dictionary = crates[cid]
+	c.opened = true
+	crates_opened += 1
+	if not nearby_crate.is_empty() and int(nearby_crate.get("id", -1)) == cid:
+		nearby_crate = {}
+	var pos: Vector3 = c.pos
+	if is_instance_valid(c.node):
+		c.node.queue_free()
+	Sfx.play3d(Sfx.chime, pos, -2.0)
+	var fx: Node3D = Fx.new()
+	fx.position = pos + Vector3.UP * 0.5
+	fx.scale = Vector3.ONE * 0.55
+	get_parent().add_child(fx)
+	var who := "" if opener_id == multiplayer.get_unique_id() or plist.size() <= 1 else (Net.display_name(opener_id) + " — ")
+	toast.emit("✦ %sKutu Açıldı (%s): %s  (+%d XP)" % [who, c.house, loot_txt, gained_xp], c.accent)
 
 
 func _owned_ids(p: Node) -> Array[String]:
@@ -607,19 +736,37 @@ func _weapon_label(wid: String) -> String:
 # ---------- Can Küreleri ve Yeniden Doğuş ----------
 
 func _drop_orb(pos: Vector3, heal: int) -> void:
+	_orb_id += 1
+	_spawn_orb.rpc(_orb_id, Vector3(pos.x, _gy(pos.x, pos.z) + 0.55, pos.z), heal)
+
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_orb(oid: int, pos: Vector3, heal: int) -> void:
 	var n := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.28; sm.height = 0.56
 	n.mesh = sm
 	n.material_override = _mat(Color(0.25, 1.0, 0.55), 0.2, 0.0, Color(0.25, 1.0, 0.55), 2.5)
-	n.position = Vector3(pos.x, 0.55, pos.z)
+	n.position = pos
 	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	get_parent().add_child(n)
-	_orbs.append({"node": n, "pos": n.position, "t": 0.0, "heal": heal})
+	_orbs.append({"id": oid, "node": n, "base_y": pos.y, "t": 0.0, "heal": heal})
+
+
+@rpc("authority", "call_local", "reliable")
+func _remove_orb(oid: int, taker_id: int) -> void:
+	for i in range(_orbs.size() - 1, -1, -1):
+		if int(_orbs[i].id) == oid:
+			if is_instance_valid(_orbs[i].node):
+				_orbs[i].node.queue_free()
+			_orbs.remove_at(i)
+			break
+	if taker_id == multiplayer.get_unique_id():
+		Sfx.play2d(Sfx.chime, -10.0)
 
 
 func _update_orbs(dt: float) -> void:
-	var p := _player()
+	var is_srv := multiplayer.is_server()
 	var keep := []
 	for o in _orbs:
 		if not is_instance_valid(o.node):
@@ -629,22 +776,27 @@ func _update_orbs(dt: float) -> void:
 			o.node.queue_free()
 			continue
 		var n: Node3D = o.node
-		n.position.y = 0.55 + sin(o.t * 4.2) * 0.14
-		if p and p.hp > 0:
-			var d := p.global_position.distance_to(n.position)
-			if d < 5.5:
-				n.position = n.position.lerp(p.global_position + Vector3.UP * 0.9, minf(1.0, dt * 8.0))
-			if d < 1.6:
-				p.gain(int(o.heal))
-				Sfx.play2d(Sfx.chime, -10.0)
-				n.queue_free()
+		n.position.y = float(o.base_y) + sin(o.t * 4.2) * 0.14
+		var near_p: Node3D = null
+		var near_d := 5.5
+		for p in plist:
+			if is_instance_valid(p) and p.hp > 0:
+				var d: float = (p as Node3D).global_position.distance_to(n.position)
+				if d < near_d:
+					near_d = d
+					near_p = p as Node3D
+		if near_p:
+			n.position = n.position.lerp(near_p.global_position + Vector3.UP * 0.9, minf(1.0, dt * 8.0))
+			if is_srv and near_d < 1.6:
+				_to_owner(near_p, "td_heal", [int(o.heal)])
+				_remove_orb.rpc(int(o.id), near_p.get_multiplayer_authority())
 				continue
 		keep.append(o)
 	_orbs = keep
 
 
 func _update_respawn(dt: float) -> void:
-	var p := _player()
+	var p := _local_player()
 	if p == null:
 		return
 	if p.hp <= 0:
@@ -653,46 +805,72 @@ func _update_respawn(dt: float) -> void:
 		else:
 			_respawn_t -= dt
 			if _respawn_t <= 0.0:
-				p.respawn()
+				if p.has_method("td_respawn"):
+					p.td_respawn.rpc()
+				else:
+					p.respawn()
 				toast.emit("Başlangıç kampında yeniden doğdun — eşyaların ve seviyen korundu!", Color(0.6, 0.95, 0.7))
 	else:
 		_respawn_t = 0.0
 
 
-# ---------- XP ve Seviye Atlama ----------
+# ---------- XP ve Seviye Atlama (tüm takım paylaşır) ----------
 
 func _grant_xp(base_amount: int) -> int:
 	var amount := roundi(float(base_amount) * (1.5 if is_night else 1.0))
 	xp += amount
-	var p := _player()
 	while xp >= xp_next:
 		xp -= xp_next
 		level += 1
 		xp_next = roundi(55.0 * pow(1.26, level - 1))
-		if p and p.has_method("level_up"):
-			p.level_up()
-		Sfx.play2d(Sfx.chime, -3.0)
-		toast.emit("★ SEVİYE %d! Bir yükseltme kartı seç!" % level, Color(1.0, 0.85, 0.25))
+		for p in plist:
+			_to_owner(p, "level_up", [])
+		_level_fx.rpc(level)
 	return amount
+
+
+@rpc("authority", "call_local", "reliable")
+func _level_fx(new_lvl: int) -> void:
+	level = maxi(level, new_lvl)
+	Sfx.play2d(Sfx.chime, -3.0)
+	toast.emit("★ SEVİYE %d! Bir yükseltme kartı seç!" % new_lvl, Color(1.0, 0.85, 0.25))
 
 
 # ---------- TD / Savaş Sözleşmesi (player.gd, enemy.gd, rival.gd ile tam uyumlu) ----------
 
 @rpc("any_peer", "call_local", "reliable")
 func damage_enemy(enemy_name: String, amount: int, crit := false) -> void:
+	if not multiplayer.is_server():
+		return
 	var e = _by_id.get(enemy_name)
 	if e == null or not is_instance_valid(e) or e.hp <= 0:
 		return
 	var arm: int = int(e.get("armor"))
 	var n := maxi(maxi(amount - arm, ceili(amount * 0.4)), 1)
 	var new_hp := maxi(int(e.hp) - n, 0)
-	e.apply_hit(new_hp, n, crit)
+	var killer := multiplayer.get_remote_sender_id()
+	if killer == 0:
+		killer = 1
+	_apply_enemy_hit.rpc(enemy_name, new_hp, n, crit)
 	if e.hp <= 0:
-		_on_killed(e)
+		_on_killed(e, killer)
+
+
+@rpc("authority", "call_local", "reliable")
+func _apply_enemy_hit(enemy_name: String, new_hp: int, shown: int, crit: bool) -> void:
+	var e = _by_id.get(enemy_name)
+	if e == null or not is_instance_valid(e) or e.hp <= 0:
+		return
+	e.apply_hit(new_hp, shown, crit)
+	if e.hp <= 0:
+		_by_id.erase(enemy_name)
+		elist.erase(e)
 
 
 @rpc("any_peer", "call_local", "reliable")
 func effect_enemy(enemy_name: String, fx: Dictionary) -> void:
+	if not multiplayer.is_server():
+		return
 	var e = _by_id.get(enemy_name)
 	if e == null or not is_instance_valid(e) or e.hp <= 0:
 		return
@@ -700,8 +878,7 @@ func effect_enemy(enemy_name: String, fx: Dictionary) -> void:
 		var t := float(fx.stun)
 		e.slow_k = 0.0
 		e.slow_t = maxf(float(e.slow_t), t)
-		if e.has_method("stun_fx"):
-			e.stun_fx(t)
+		_apply_stun_fx.rpc(enemy_name, t)
 	elif fx.has("slow"):
 		var s: Array = fx.slow
 		e.slow_k = minf(float(e.slow_k), float(s[0])) if float(e.slow_t) > 0.0 else float(s[0])
@@ -711,8 +888,14 @@ func effect_enemy(enemy_name: String, fx: Dictionary) -> void:
 		e.global_position += Vector3(push.x, 0.0, push.z) * 0.14
 
 
-func _on_killed(e: Node) -> void:
-	_by_id.erase(e.name)
+@rpc("authority", "call_local", "reliable")
+func _apply_stun_fx(enemy_name: String, t: float) -> void:
+	var e = _by_id.get(enemy_name)
+	if e and is_instance_valid(e) and e.has_method("stun_fx"):
+		e.stun_fx(t)
+
+
+func _on_killed(e: Node, killer_id := 1) -> void:
 	kills += 1
 	var pos: Vector3 = e.global_position
 	var is_rival := str(e.get("type")) == "rival"
@@ -722,13 +905,12 @@ func _on_killed(e: Node) -> void:
 		var gained := _grant_xp(70 if is_elite else 38)
 		_drop_orb(pos, 40 if is_elite else 28)
 		if is_elite:
-			var p := _player()
-			if p and p.add_item({"kind": "item", "id": "potion"}):
-				toast.emit("♛ Elit Muhafız Yenildi (%s)! +%d XP + Can İksiri" % [tr(str(e.ch.name)), gained], Color(1.0, 0.82, 0.30))
-			else:
-				toast.emit("♛ Elit Muhafız Yenildi (%s)! +%d XP" % [tr(str(e.ch.name)), gained], Color(1.0, 0.82, 0.30))
+			var p := _player_by_peer(killer_id)
+			if p:
+				_to_owner(p, "add_item", [{"kind": "item", "id": "potion"}])
+			_toast_all.rpc("♛ Elit Muhafız Yenildi (%s)! +%d XP + Can İksiri" % [tr(str(e.ch.name)), gained], Color(1.0, 0.82, 0.30))
 		if rivals_killed >= rivals_total and rivals_total > 0:
-			toast.emit("🏆 TÜM 48 KARAKTER MUHAFIZI YENİLDİ! Açık dünyanın hakimi sensin!", Color(1.0, 0.86, 0.25))
+			_toast_all.rpc("🏆 TÜM 48 KARAKTER MUHAFIZI YENİLDİ! Açık dünyanın hakimi sizsiniz!", Color(1.0, 0.86, 0.25))
 	else:
 		monsters_killed += 1
 		var t := str(e.get("type"))
@@ -737,7 +919,7 @@ func _on_killed(e: Node) -> void:
 		if t == "boss" or _loot_rng.randf() < 0.45:
 			_drop_orb(pos, 60 if t == "boss" else 22)
 		if t == "boss":
-			toast.emit("👑 GÜNEY BOSSU YENİLDİ! +%d XP!" % gained, Color(0.88, 0.52, 1.0))
+			_toast_all.rpc("👑 KÜL DAĞLARI BOSSU YENİLDİ! +%d XP!" % gained, Color(0.88, 0.52, 1.0))
 
 
 @rpc("authority", "call_local", "unreliable")
@@ -747,13 +929,31 @@ func enemy_fx(eid: int, goal: Vector3) -> void:
 		e.attack_fx(goal)
 
 
+@rpc("authority", "call_local", "reliable")
+func rival_skill(eid: int, target_peer: int) -> void:
+	var e = _by_id.get("E%d" % eid)
+	var p := _player_by_peer(target_peer)
+	if e and is_instance_valid(e) and p and e.has_method("_cast_skill"):
+		e._cast_skill(p)
+
+
+@rpc("authority", "call_local", "unreliable")
+func rival_attack(eid: int, target_pos: Vector3, ranged: bool) -> void:
+	var e = _by_id.get("E%d" % eid)
+	if e and is_instance_valid(e) and e.has_method("attack_visual"):
+		e.attack_visual(target_pos, ranged)
+
+
 func hit_player(tgt: Node, dmg: int) -> void:
-	if tgt and is_instance_valid(tgt) and tgt.has_method("td_hit"):
-		var mult := 1.15 if is_night else 1.0
-		tgt.td_hit.rpc(maxi(roundi(float(dmg) * mult), 1))
+	if not multiplayer.is_server() or not is_instance_valid(tgt):
+		return
+	var mult := 1.15 if is_night else 1.0
+	_to_owner(tgt, "td_hit", [maxi(roundi(float(dmg) * mult), 1)])
 
 
 func delayed_hit(tgt: Node, goal: Vector3, dmg: int, delay: float) -> void:
+	if not multiplayer.is_server():
+		return
 	var t := get_tree().create_timer(delay)
 	t.timeout.connect(func():
 		if is_instance_valid(tgt) and tgt.hp > 0 and tgt.global_position.distance_to(goal) < 2.2:
@@ -761,20 +961,23 @@ func delayed_hit(tgt: Node, goal: Vector3, dmg: int, delay: float) -> void:
 
 
 func explode(e: Node) -> void:
-	if not is_instance_valid(e) or e.hp <= 0:
+	if not multiplayer.is_server() or not is_instance_valid(e) or e.hp <= 0:
 		return
 	var pos: Vector3 = e.global_position
+	_boom_fx.rpc(pos)
+	for p in plist:
+		if is_instance_valid(p) and p.hp > 0 and p.global_position.distance_to(pos) < 4.5:
+			hit_player(p, int(e.get("dmg")) * 2)
+	_apply_enemy_hit.rpc(e.name, 0, -1, false)
+
+
+@rpc("authority", "call_local", "reliable")
+func _boom_fx(pos: Vector3) -> void:
 	var fx: Node3D = Fx.new()
 	fx.position = pos + Vector3.UP * 0.6
 	fx.scale = Vector3.ONE * 1.1
 	get_parent().add_child(fx)
 	Sfx.play3d(Sfx.boom, pos, -2.0)
-	for p in plist:
-		if is_instance_valid(p) and p.hp > 0 and p.global_position.distance_to(pos) < 4.5:
-			hit_player(p, int(e.get("dmg")) * 2)
-	_by_id.erase(e.name)
-	elist.erase(e)
-	e.apply_hit(0, -1, false)
 
 
 func hurt_tower(_dmg: int) -> void:

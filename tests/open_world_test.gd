@@ -55,8 +55,26 @@ func _ready() -> void:
 	var ow: Node = OpenWorldScript.new()
 	ow.world = w
 	ow.layout = lay
+	ow.match_seed = 424242
 	root.add_child(ow)
 	_ok("48 karakter muhafızı", ow.rivals_total == 48, str(ow.rivals_total))
+	# Co-op eşitleme: aynı match_seed tüm makinelerde aynı 48 karakteri aynı sırada doğurur
+	var root2 := Node3D.new()
+	add_child(root2)
+	var ow2: Node = OpenWorldScript.new()
+	ow2.world = w
+	ow2.layout = lay
+	ow2.match_seed = 424242
+	root2.add_child(ow2)
+	var same_rivals: bool = ow.elist.size() == ow2.elist.size()
+	for i in mini(ow.elist.size(), ow2.elist.size()):
+		if ow.elist[i].name != ow2.elist[i].name or ow.elist[i].get("char_idx") != ow2.elist[i].get("char_idx"):
+			same_rivals = false
+			break
+	_ok("co-op: aynı tohum tüm makinelerde aynı muhafız/yaratıkları doğurur", same_rivals)
+	root2.queue_free()
+	var has_sync := ow.has_method("_sync_enemies") and ow.has_method("_req_open_crate") and ow.has_method("rival_skill")
+	_ok("co-op: ağ eşitleme RPC'leri hazır", has_sync)
 	for i in 30:
 		await get_tree().physics_frame
 	var far_sleep := true

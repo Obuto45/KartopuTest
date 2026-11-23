@@ -28,6 +28,10 @@ var slow_t := 0.0
 var slow_k := 1.0
 
 var td: Node # OpenWorld denetçisi
+var host := false
+var net_pos := Vector3.ZERO
+var net_vel := Vector3.ZERO
+var net_yaw := 0.0
 var home_pos := Vector3.ZERO
 var aggro_r := 15.0
 var leash_r := 38.0
@@ -141,6 +145,9 @@ func _ready() -> void:
 	shield_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shield_mesh.visible = false
 	add_child(shield_mesh)
+	host = multiplayer.is_server()
+	net_pos = global_position
+	net_yaw = rotation.y
 
 
 func _physics_process(dt: float) -> void:
@@ -174,29 +181,35 @@ func _physics_process(dt: float) -> void:
 			stars.queue_free()
 			stars = null
 
-	tick_t -= dt
-	if tick_t <= 0.0:
-		tick_t += TICK
-		_think()
+	if host:
+		tick_t -= dt
+		if tick_t <= 0.0:
+			tick_t += TICK
+			_think()
 
-	var spd: float = 5.2 * ch.get("speed", 1.0) * spd_k * (1.45 if haste_t > 0.0 else 1.0) * (slow_k if slow_t > 0.0 else 1.0)
-	if td and td.get("night_on"):
-		spd *= 1.12
-	moving = dir.length_squared() > 0.01
-	velocity.x = dir.x * spd
-	velocity.z = dir.z * spd
-	if is_on_floor():
-		if land_armed and velocity.y <= 0.0:
-			land_armed = false
-			_land_slam()
-		velocity.y = 0.0
+		var spd: float = 5.2 * ch.get("speed", 1.0) * spd_k * (1.45 if haste_t > 0.0 else 1.0) * (slow_k if slow_t > 0.0 else 1.0)
+		if td and (td.get("is_night") or td.get("night_on")):
+			spd *= 1.12
+		moving = dir.length_squared() > 0.01
+		velocity.x = dir.x * spd
+		velocity.z = dir.z * spd
+		if is_on_floor():
+			if land_armed and velocity.y <= 0.0:
+				land_armed = false
+				_land_slam()
+			velocity.y = 0.0
+		else:
+			velocity.y -= 22.0 * dt
+		if moving or not is_on_floor():
+			move_and_slide()
+			if moving:
+				aim = atan2(-dir.x, -dir.z)
+		rotation.y = lerp_angle(rotation.y, aim, minf(1.0, dt * 10.0))
 	else:
-		velocity.y -= 22.0 * dt
-	if moving or not is_on_floor():
-		move_and_slide()
-		if moving:
-			aim = atan2(-dir.x, -dir.z)
-	rotation.y = lerp_angle(rotation.y, aim, minf(1.0, dt * 10.0))
+		global_position = net_pos if global_position.distance_squared_to(net_pos) > 36.0 else global_position.lerp(net_pos + net_vel * 0.1, minf(1.0, dt * 12.0))
+		rotation.y = lerp_angle(rotation.y, net_yaw, minf(1.0, dt * 10.0))
+		var lp := _local_player()
+		name_lbl.visible = lp != null and global_position.distance_to(lp.global_position) < 28.0 and invis_t <= 0.0
 
 	var want := "Idle"
 	if swing_t > 0.0:
@@ -208,6 +221,16 @@ func _physics_process(dt: float) -> void:
 		anim.play(want, 0.14)
 
 
+func _local_player() -> Node3D:
+	if td == null:
+		return null
+	var my_id := str(multiplayer.get_unique_id())
+	for p in td.plist:
+		if is_instance_valid(p) and str(p.name) == my_id:
+			return p as Node3D
+	return _nearest_player()
+
+
 func _think() -> void:
 	if td == null or td.state != "fight":
 		dir = Vector3.ZERO
@@ -215,7 +238,7 @@ func _think() -> void:
 	var p := _nearest_player()
 	var d_p := global_position.distance_to(p.global_position) if p else 999.0
 	name_lbl.visible = d_p < 28.0 and invis_t <= 0.0
-	var ar := aggro_r * (1.25 if td.get("night_on") else 1.0)
+	var ar := aggro_r * (1.25 if td.get("is_night") or td.get("night_on") else 1.0)
 	if p:
 		var ph := Vector2(p.global_position.x - home_pos.x, p.global_position.z - home_pos.z).length()
 		var home_d := Vector2(global_position.x - home_pos.x, global_position.z - home_pos.z).length()
@@ -234,7 +257,10 @@ func _think() -> void:
 		# Kendi Q yeteneğini kullan!
 		if skill_cd <= 0.0 and slow_t <= 0.0 and dist < 24.0:
 			skill_cd = clampf(float(ch.get("cd", 11.0)) * 0.85, 6.0, 14.0)
-			_cast_skill(p)
+			if td and td.has_method("rival_skill"):
+				td.rival_skill.rpc(eid, p.name.to_int())
+			else:
+				_cast_skill(p)
 		# Temel saldırı: menzilli (büyücü/kovboy/asker) veya yakın dövüş
 		var ranged: bool = ch.sk.has("homing") or ch.sk.has("volley") or (ch.sk.has("area") and ch.sk.area.get("at", "") == "aim")
 		var reach := 10.5 if ranged else 2.2
@@ -242,7 +268,10 @@ func _think() -> void:
 			dir = Vector3.ZERO
 			if atk_cd <= 0.0 and slow_t <= 0.0:
 				atk_cd = 1.65 if ranged else 1.1
-				_basic_attack(p, ranged)
+				if td and td.has_method("rival_attack"):
+					td.rival_attack.rpc(eid, p.global_position, ranged)
+				else:
+					_basic_attack(p, ranged)
 			return
 		var want := to / maxf(dist, 0.001)
 		for o in td.elist:
@@ -291,16 +320,24 @@ func _nearest_player() -> Node3D:
 	return best
 
 
-func _basic_attack(p: Node3D, ranged: bool) -> void:
+func attack_visual(target_pos: Vector3, ranged: bool) -> void:
+	if hp <= 0:
+		return
 	swing_t = 0.45
 	cur = ""
 	var d_val := roundi(dmg * (1.2 if td and (td.get("is_night") or td.get("night_on")) else 1.0))
 	if ranged:
-		_fire_bolt(p.global_position + Vector3.UP * 0.9, ch.color, d_val, 22.0, 0.0)
+		_fire_bolt(target_pos + Vector3.UP * 0.9, ch.color, d_val, 22.0, 0.0)
 	else:
 		Sfx.play3d(Sfx.whoosh, global_position + Vector3.UP, -6.0)
-		if global_position.distance_to(p.global_position) <= 2.6:
-			td.hit_player(p, d_val)
+		if host:
+			var p := _nearest_player()
+			if p and global_position.distance_to(p.global_position) <= 2.8:
+				td.hit_player(p, d_val)
+
+
+func _basic_attack(p: Node3D, ranged: bool) -> void:
+	attack_visual(p.global_position, ranged)
 
 
 # ---------- Karakterin Kendi Q Yeteneği (characters.gd::sk) ----------
@@ -366,16 +403,17 @@ func _cast_skill(p: Node3D) -> void:
 	if sk.get("backstab", false):
 		var back_p := p.global_position + p.global_basis.z * 2.0
 		_ring_fx(global_position, 1.6, col, 0.3)
-		global_position = Vector3(back_p.x, global_position.y, back_p.z)
-		_ring_fx(global_position, 2.0, col, 0.35)
-		td.hit_player(p, 16)
+		if host:
+			global_position = Vector3(back_p.x, global_position.y, back_p.z)
+			td.hit_player(p, 16)
+		_ring_fx(back_p, 2.0, col, 0.35)
 		return
 	if sk.get("swap", false):
 		var my_p := global_position
-		global_position = p.global_position
-		p.global_position = my_p
+		if host:
+			global_position = p.global_position
 		_ring_fx(global_position, 2.2, col, 0.4)
-		_ring_fx(p.global_position, 2.2, col, 0.4)
+		_ring_fx(my_p, 2.2, col, 0.4)
 		return
 
 	# 4. Yaylım roketi / dev gülle (volley)
@@ -399,7 +437,7 @@ func _cast_skill(p: Node3D) -> void:
 		var ac: Color = a.get("color", col)
 		var r: float = clampf(float(a.get("r", 4.0)), 2.5, 7.5)
 		var at_pos := p.global_position if a.get("at", "") == "aim" else global_position
-		at_pos.y = 0.05
+		at_pos.y = _ground_y(at_pos.x, at_pos.z) + 0.05
 		var dly: float = float(a.get("delay", 0.0))
 		if dly > 0.0:
 			_delayed_strike(at_pos, r, ac, dly, a)
@@ -431,23 +469,25 @@ func _apply_area_to_player(p: Node3D, at: Vector3, r: float, a: Dictionary) -> v
 	diff.y = 0.0
 	if diff.length() > r:
 		return
-	var dd: int = mini(int(a.get("dmg", 0)), 26)
-	if dd > 0:
-		td.hit_player(p, dd)
-	if a.has("burn"):
-		td.hit_player(p, mini(int(a.burn[0]), 10))
-	if a.has("knock") or a.has("up"):
-		var dir_out := diff.normalized() if diff.length() > 0.1 else Vector3.FORWARD
-		p.velocity += dir_out * minf(float(a.get("knock", 0.0)) * 0.65, 9.0) + Vector3.UP * minf(float(a.get("up", 0.0)) * 0.65, 9.0)
-	if a.has("pull") or a.has("yank"):
-		var dir_in := -diff.normalized() if diff.length() > 0.2 else Vector3.ZERO
-		p.velocity += dir_in * minf(float(a.get("pull", a.get("yank", 8.0))) * 0.7, 11.0)
-	if a.has("blind") and p.has_method("set"):
-		p.buffs["blind"] = [1.0, minf(float(a.blind), 1.0)]
-	if a.has("slow"):
-		p.buffs["slow"] = [clampf(float(a.slow[0]), 0.45, 0.85), minf(float(a.slow[1]), 2.2)]
-	if a.has("stun"):
-		p.buffs["slow"] = [0.25, minf(float(a.stun), 1.0)] # açık dünyada tamamen kilitlemek yerine sert yavaşlatma
+	if host:
+		var dd: int = mini(int(a.get("dmg", 0)), 26)
+		if dd > 0:
+			td.hit_player(p, dd)
+		if a.has("burn"):
+			td.hit_player(p, mini(int(a.burn[0]), 10))
+	if p.is_multiplayer_authority():
+		if a.has("knock") or a.has("up"):
+			var dir_out := diff.normalized() if diff.length() > 0.1 else Vector3.FORWARD
+			p.velocity += dir_out * minf(float(a.get("knock", 0.0)) * 0.65, 9.0) + Vector3.UP * minf(float(a.get("up", 0.0)) * 0.65, 9.0)
+		if a.has("pull") or a.has("yank"):
+			var dir_in := -diff.normalized() if diff.length() > 0.2 else Vector3.ZERO
+			p.velocity += dir_in * minf(float(a.get("pull", a.get("yank", 8.0))) * 0.7, 11.0)
+		if a.has("blind"):
+			p.buffs["blind"] = [1.0, minf(float(a.blind), 1.0)]
+		if a.has("slow"):
+			p.buffs["slow"] = [clampf(float(a.slow[0]), 0.45, 0.85), minf(float(a.slow[1]), 2.2)]
+		if a.has("stun"):
+			p.buffs["slow"] = [0.25, minf(float(a.stun), 1.0)] # açık dünyada tamamen kilitlemek yerine sert yavaşlatma
 
 
 func _delayed_strike(at: Vector3, r: float, col: Color, dly: float, a: Dictionary) -> void:
@@ -531,9 +571,10 @@ func _fire_bolt(target: Vector3, col: Color, d_val: int, speed: float, blast_r: 
 		if is_instance_valid(self) and is_instance_valid(td):
 			if blast_r > 0.0:
 				_boom(end_p, blast_r * 0.35)
-			var p := _nearest_player()
-			if p and p.global_position.distance_to(end_p) < maxf(blast_r, 1.75):
-				td.hit_player(p, d_val)
+			if host:
+				var p := _nearest_player()
+				if p and p.global_position.distance_to(end_p) < maxf(blast_r, 1.75):
+					td.hit_player(p, d_val)
 		if is_instance_valid(mi):
 			mi.queue_free())
 
@@ -567,8 +608,10 @@ func _spawn_homing(p: Node3D, col: Color, d_val: int, speed: float, knock: float
 			mi.position += (state_arr[0] as Vector3) * speed * step_dt
 			if is_instance_valid(p) and p.hp > 0 and mi.position.distance_to(p.global_position + Vector3.UP * 0.9) < 1.15:
 				state_arr[1] = true
-				td.hit_player(p, d_val)
-				p.velocity += (state_arr[0] as Vector3) * knock * 0.5
+				if host:
+					td.hit_player(p, d_val)
+				if p.is_multiplayer_authority():
+					p.velocity += (state_arr[0] as Vector3) * knock * 0.5
 				_ring_fx(mi.position, 1.2, col, 0.25)
 				mi.queue_free())
 	get_tree().create_timer(steps * step_dt + 0.05, false).timeout.connect(func() -> void:
@@ -576,11 +619,17 @@ func _spawn_homing(p: Node3D, col: Color, d_val: int, speed: float, knock: float
 			mi.queue_free())
 
 
+func _ground_y(x: float, z: float) -> float:
+	if td and td.has_method("_gy"):
+		return float(td._gy(x, z))
+	return 0.0
+
+
 func _ring_fx(at: Vector3, r: float, col: Color, dur: float) -> void:
 	if td == null:
 		return
 	var ring := Fx.ground(r, col, Vector4(0.15, 0.14, 0.08, 1.8))
-	ring.position = Vector3(at.x, 0.08, at.z)
+	ring.position = Vector3(at.x, _ground_y(at.x, at.z) + 0.08, at.z)
 	td.get_parent().add_child(ring)
 	var tw := ring.create_tween().set_parallel()
 	Fx.anim(tw, ring, "shape", Vector4(0.15, 0.14, 0.08, 1.8), Vector4(0.96, 0.03, 0.08, 1.8), dur).set_ease(Tween.EASE_OUT)
