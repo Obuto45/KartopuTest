@@ -43,10 +43,10 @@ func _smat(path: String, params := {}) -> ShaderMaterial:
 
 
 func _ready() -> void:
-	_half = 75.0 if open_world else HALF
-	_mask_half = 95.0 if open_world else MASK_HALF
-	_mask_n = 192 if open_world else MASK_N
-	_vis.seed = 17 if open_world else 7
+	_half = 90.0 if open_world else HALF
+	_mask_half = 110.0 if open_world else MASK_HALF
+	_mask_n = 224 if open_world else MASK_N
+	_vis.seed = 23 if open_world else 7
 	_make_noise()
 	_mask = Image.create(_mask_n, _mask_n, false, Image.FORMAT_RGB8)
 	_rock_mat = _smat("res://shaders/stone.gdshader", {"moss": 0.75})
@@ -62,8 +62,8 @@ func _ready() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 2024
 	var used := [] # [konum (Vector2), yarıçap]
-	var tree_count := 95 if open_world else 24
-	var rock_count := 62 if open_world else 28
+	var tree_count := 115 if open_world else 24
+	var rock_count := 72 if open_world else 28
 	for i in tree_count: # alan içindeki büyük ağaçlar (çarpışmalı)
 		var p = _free_spot(rng, 2.0, used)
 		if p != null:
@@ -97,8 +97,8 @@ func _ready() -> void:
 	_wall_dress(wall_mat)
 	_props(used)
 	ground_mat.set_shader_parameter("mask_tex", ImageTexture.create_from_image(_mask))
-	_grass(ground_mat, 34000 if open_world else 18000)
-	_flowers(ground_mat, 1400 if open_world else 900)
+	_grass(ground_mat, 38000 if open_world else 18000)
+	_flowers(ground_mat, 1600 if open_world else 900)
 	_ambient()
 
 	# Toplanan parçalar: tür başına tek çizim.
@@ -249,7 +249,7 @@ func _environment(host: Node = self) -> Array:
 
 ## Doğma noktalarından ve diğer nesnelerden uzak boş bir nokta bulur; bulamazsa null.
 func _free_spot(rng: RandomNumberGenerator, r: float, used: Array):
-	var clear_r := 9.5 if open_world else 4.5
+	var clear_r := 11.5 if open_world else 4.5
 	for t in 30:
 		var p := Vector2(rng.randf_range(-_half + 2.5, _half - 2.5), rng.randf_range(-_half + 2.5, _half - 2.5))
 		var ok := true

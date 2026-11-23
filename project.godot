@@ -3,7 +3,7 @@
 [application]
 
 config/name="KartopuTest"
-config/version="1.16"
+config/version="1.17"
 run/main_scene="res://main.tscn"
 
 [autoload]

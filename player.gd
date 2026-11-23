@@ -1444,7 +1444,9 @@ func respawn() -> void:
 func _td_init() -> void:
 	if stats.is_empty():
 		stats = Weapons.base_stats(ch)
-		if not td.get("is_story"): # Hikaye modunda silahsız başlanır; silahlar görevlerle kazanılır
+		if td.get("is_open_world"): # Açık dünyada yalnız Kılıç ile başlanır; diğer silahlar evlerdeki kutulardan toplanır
+			inv[0] = {"kind": "weapon", "id": "sword", "count": 1, "lvl": 1, "ammo": 0}
+		else:
 			var wid: String = Weapons.get_weapon(Net.weapons.get(get_multiplayer_authority(), 0)).id
 			inv[0] = {"kind": "weapon", "id": wid, "count": 1, "lvl": 1, "ammo": Weapons.full_ammo(wid)}
 	slot = 1
