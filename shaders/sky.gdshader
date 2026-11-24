@@ -17,14 +17,14 @@ float cloud_fbm(vec2 uv) {
 
 void sky() {
 	float y = EYEDIR.y;
-	float hy = clamp(y, 0.0, 1.0);
+	float hy = clamp(y, 0.0001, 1.0);
 
 	// Üç bantlı altın saat göğü: sıcak şeftali ufuk -> açık mavi orta -> derin lacivert tepe
 	vec3 col = mix(horizon_col, mid_col, smoothstep(0.0, 0.34, pow(hy, 0.72)));
 	col = mix(col, top_col, smoothstep(0.25, 0.92, pow(hy, 0.58)));
 
-	// Atmosferik ufuk sıcaklığı ve güneş yönünde dengeli Mie saçılımı
-	float sd = max(dot(EYEDIR, LIGHT0_DIRECTION), 0.0);
+	// Atmosferik ufuk sıcaklığı ve güneş yönünde dengeli Mie saçılımı (NaN korumalı)
+	float sd = clamp(dot(EYEDIR, LIGHT0_DIRECTION), 0.0001, 1.0);
 	float horizon_band = exp(-abs(y) * 10.0);
 	col += sun_col * horizon_band * (0.08 + 0.20 * pow(sd, 2.4));
 	col += sun_col * (pow(sd, 6.0) * 0.16 + pow(sd, 48.0) * 0.28);

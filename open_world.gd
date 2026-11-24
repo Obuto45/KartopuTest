@@ -90,6 +90,9 @@ var _env: Environment
 var _base_env := {}
 var _camp_light: OmniLight3D
 var _respawn_t := 0.0
+var _camp_heal_t := 0.0
+var _camp_flame: Node3D
+var _last_biome := -1
 var _loot_rng := RandomNumberGenerator.new()
 var _orb_id := 0
 var _sync_t := 0.0
@@ -193,23 +196,51 @@ func _build_spawn_camp() -> void:
 	root.name = "SpawnCamp"
 	root.position.y = _gy(0.0, 0.0)
 	get_parent().add_child(root)
-	var stone := _mat(Color(0.45, 0.44, 0.42), 0.92)
-	var wood := _mat(Color(0.38, 0.24, 0.14), 0.9)
-	# Başlangıç kamp ateşi: oyuncunun ön-solunda sıcak referans noktası
+	var stone := _mat(Color(0.42, 0.41, 0.40), 0.92)
+	var wood := _mat(Color(0.32, 0.20, 0.12), 0.92)
+	var char_m := _mat(Color(0.14, 0.10, 0.08), 0.96, 0.0, Color(0.95, 0.28, 0.04), 0.45)
+	# Başlangıç kamp ateşi: taş halka, yanık kütükler, çok katmanlı titreyen alev konileri ve yükselen kıvılcımlar
 	var fire_pos := Vector3(-4.2, 0.0, -5.2)
-	for i in 8:
-		var ang := i * TAU / 8.0
-		_vis_box(root, fire_pos + Vector3(cos(ang) * 0.72, 0.14, sin(ang) * 0.72), Vector3(0.34, 0.28, 0.34), stone, Vector3(0, ang, 0))
-	for a in [0.3, -0.6, 1.1]:
-		_vis_box(root, fire_pos + Vector3(0, 0.12, 0), Vector3(0.18, 0.16, 1.1), wood, Vector3(0.12, a, 0))
-	var flame := _vis_box(root, fire_pos + Vector3(0, 0.42, 0), Vector3(0.32, 0.56, 0.32),
-		_mat(Color(1.0, 0.55, 0.15), 0.4, 0.0, Color(1.0, 0.52, 0.12), 2.8), Vector3(0, 0.4, 0))
-	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for i in 10:
+		var ang := i * TAU / 10.0
+		var r := 0.78 + (0.06 if i % 2 == 0 else -0.04)
+		_vis_box(root, fire_pos + Vector3(cos(ang) * r, 0.13, sin(ang) * r), Vector3(0.30, 0.26, 0.26), stone, Vector3(0.08, ang, 0.05))
+	for a in [0.25, -0.55, 1.15, 2.2]:
+		_vis_box(root, fire_pos + Vector3(0, 0.13, 0), Vector3(0.15, 0.14, 1.05), wood, Vector3(0.18, a, 0.06))
+	_vis_box(root, fire_pos + Vector3(0, 0.08, 0), Vector3(0.65, 0.10, 0.65), char_m, Vector3(0, 0.5, 0))
+
+	_camp_flame = Node3D.new()
+	_camp_flame.position = fire_pos + Vector3(0, 0.16, 0)
+	root.add_child(_camp_flame)
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0; cone.bottom_radius = 0.34; cone.height = 0.82; cone.radial_segments = 8
+	for fl in [
+		[Vector3(0, 0.36, 0), Vector3(1.0, 1.0, 1.0), Color(1.0, 0.36, 0.06), 2.4],
+		[Vector3(0.06, 0.32, -0.04), Vector3(0.72, 0.85, 0.72), Color(1.0, 0.65, 0.14), 3.0],
+		[Vector3(-0.04, 0.24, 0.03), Vector3(0.45, 0.62, 0.45), Color(1.0, 0.92, 0.58), 3.6],
+	]:
+		var fm := MeshInstance3D.new()
+		fm.mesh = cone
+		fm.position = fl[0]
+		fm.scale = fl[1]
+		fm.material_override = _mat(fl[2], 0.3, 0.0, fl[2], fl[3])
+		fm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_camp_flame.add_child(fm)
+
+	var embers := Fx.parts(Fx.quad("glow", 0.14), 18, 1.6, 0.6, 1.6,
+		[Color(1.0, 0.72, 0.22, 0.95), Color(1.0, 0.32, 0.06, 0.0)], 0.9, 0.2, false)
+	embers.position = fire_pos + Vector3(0, 0.45, 0)
+	embers.direction = Vector3.UP
+	embers.spread = 28.0
+	embers.gravity = Vector3(0, 0.4, 0)
+	embers.emitting = true
+	root.add_child(embers)
+
 	_camp_light = OmniLight3D.new()
-	_camp_light.position = fire_pos + Vector3(0, 1.25, 0)
-	_camp_light.light_color = Color(1.0, 0.62, 0.25)
-	_camp_light.light_energy = 1.6
-	_camp_light.omni_range = 14.0
+	_camp_light.position = fire_pos + Vector3(0, 1.35, 0)
+	_camp_light.light_color = Color(1.0, 0.60, 0.22)
+	_camp_light.light_energy = 2.0
+	_camp_light.omni_range = 16.0
 	_camp_light.shadow_enabled = false
 	root.add_child(_camp_light)
 	# Başlangıçta 1 adet yakın ikmal kutusu (oyuncu hemen ilk silahını alabilsin!)
@@ -271,31 +302,47 @@ func _build_house(root: Node3D, h: Dictionary, idx: int) -> void:
 	_vis_box(node, Vector3(-door_w * 0.5, door_h * 0.5, d * 0.5 + 0.05), Vector3(0.18, door_h, 0.38), trim_m)
 	_vis_box(node, Vector3(door_w * 0.5, door_h * 0.5, d * 0.5 + 0.05), Vector3(0.18, door_h, 0.38), trim_m)
 
-	# 4 köşe ahşap sütun
+	# 4 köşe ahşap sütun + yarı ahşap yatay ve çapraz cephe kirişleri
 	for sx in [-1.0, 1.0]:
 		for sz in [-1.0, 1.0]:
 			_vis_box(node, Vector3(sx * w * 0.5, wh * 0.5, sz * d * 0.5), Vector3(0.42, wh + 0.1, 0.42), trim_m)
+	for sz in [-d * 0.5, d * 0.5]:
+		_vis_box(node, Vector3(0, wh - 0.12, sz), Vector3(w + 0.15, 0.22, 0.38), trim_m)
+		_vis_box(node, Vector3(0, 0.28, sz), Vector3(w + 0.15, 0.22, 0.38), trim_m)
+	for sx in [-w * 0.5, w * 0.5]:
+		_vis_box(node, Vector3(sx, wh - 0.12, 0), Vector3(0.38, 0.22, d + 0.15), trim_m)
+		_vis_box(node, Vector3(sx, 0.28, 0), Vector3(0.38, 0.22, d + 0.15), trim_m)
+	# Ön sundurma direkleri ve saçak (evin girişi uzaktan hemen seçilsin)
+	for sx in [-1.0, 1.0]:
+		_vis_box(node, Vector3(sx * 1.45, 1.35, d * 0.5 + 1.15), Vector3(0.18, 2.7, 0.18), trim_m)
+	_vis_box(node, Vector3(0, 2.78, d * 0.5 + 0.72), Vector3(3.5, 0.16, 1.45), roof_m, Vector3(0.22, 0, 0))
 
-	# Beşik çatı (iki eğimli kanat + üst mahya + ön/arka alınlık + baca)
+	# Beşik çatı (iki eğimli kanat + üst mahya + ön/arka alınlık + taş baca ve şapka)
 	var slope := 0.46
 	var half_span := w * 0.58
-	_solid_box(node, Vector3(-w * 0.26, wh + 0.85, 0), Vector3(half_span, 0.24, d + 1.1), roof_m, Vector3(0, 0, slope))
-	_solid_box(node, Vector3(w * 0.26, wh + 0.85, 0), Vector3(half_span, 0.24, d + 1.1), roof_m, Vector3(0, 0, -slope))
-	_vis_box(node, Vector3(0, wh + 1.88, 0), Vector3(0.36, 0.36, d + 1.15), trim_m)
+	_solid_box(node, Vector3(-w * 0.26, wh + 0.85, 0), Vector3(half_span, 0.24, d + 1.3), roof_m, Vector3(0, 0, slope))
+	_solid_box(node, Vector3(w * 0.26, wh + 0.85, 0), Vector3(half_span, 0.24, d + 1.3), roof_m, Vector3(0, 0, -slope))
+	_vis_box(node, Vector3(0, wh + 1.88, 0), Vector3(0.36, 0.36, d + 1.35), trim_m)
 	# Alınlık dolgu kirişleri
 	for sz in [-d * 0.5, d * 0.5]:
 		_vis_box(node, Vector3(0, wh + 0.42, sz), Vector3(w * 0.72, 0.82, 0.24), wall_m)
 		_vis_box(node, Vector3(0, wh + 1.10, sz), Vector3(w * 0.36, 0.65, 0.24), wall_m)
-	# Taş baca
+	# Taş baca + şapka
 	_vis_box(node, Vector3(w * 0.26, wh + 1.9, -d * 0.25), Vector3(0.85, 2.2, 0.85), stone_m)
+	_vis_box(node, Vector3(w * 0.26, wh + 3.05, -d * 0.25), Vector3(1.05, 0.18, 1.05), trim_m)
 
-	# Parlayan pencereler (ön iki yan + sol/sağ cephe; gece parlaklaşır)
+	# Çıtaları olan sıcak ışıklı pencereler (ön iki yan + sol/sağ cephe + arka pencere)
 	for wx in [-2.65, 2.65]:
-		_vis_box(node, Vector3(wx, 1.85, d * 0.5 + 0.14), Vector3(1.15, 1.05, 0.08), trim_m)
-		_vis_box(node, Vector3(wx, 1.85, d * 0.5 + 0.17), Vector3(0.95, 0.85, 0.06), win_m)
+		_vis_box(node, Vector3(wx, 1.85, d * 0.5 + 0.14), Vector3(1.22, 1.12, 0.08), trim_m)
+		_vis_box(node, Vector3(wx, 1.85, d * 0.5 + 0.17), Vector3(0.96, 0.86, 0.06), win_m)
+		_vis_box(node, Vector3(wx, 1.85, d * 0.5 + 0.20), Vector3(0.08, 0.96, 0.04), trim_m)
+		_vis_box(node, Vector3(wx, 1.85, d * 0.5 + 0.20), Vector3(1.04, 0.08, 0.04), trim_m)
+		_vis_box(node, Vector3(wx, 1.25, d * 0.5 + 0.22), Vector3(1.30, 0.10, 0.18), trim_m) # denizlik
 	for sx in [-1.0, 1.0]:
-		_vis_box(node, Vector3(sx * (w * 0.5 + 0.14), 1.85, 0.0), Vector3(0.08, 1.05, 1.5), trim_m)
-		_vis_box(node, Vector3(sx * (w * 0.5 + 0.17), 1.85, 0.0), Vector3(0.06, 0.85, 1.28), win_m)
+		_vis_box(node, Vector3(sx * (w * 0.5 + 0.14), 1.85, 0.0), Vector3(0.08, 1.12, 1.56), trim_m)
+		_vis_box(node, Vector3(sx * (w * 0.5 + 0.17), 1.85, 0.0), Vector3(0.06, 0.86, 1.28), win_m)
+		_vis_box(node, Vector3(sx * (w * 0.5 + 0.20), 1.85, 0.0), Vector3(0.04, 0.96, 0.08), trim_m)
+		_vis_box(node, Vector3(sx * (w * 0.5 + 0.20), 1.85, 0.0), Vector3(0.04, 0.08, 1.36), trim_m)
 
 	# İç mekan dekoru: arka duvarda ahşap masa + tavan feneri + kapı üstü fener
 	_vis_box(node, Vector3(0, 0.82, -d * 0.5 + 0.85), Vector3(2.2, 0.12, 0.9), trim_m)
@@ -466,6 +513,7 @@ func _process(dt: float) -> void:
 	_update_day_night(dt)
 	_update_crates(dt)
 	_update_orbs(dt)
+	_update_camp_and_biome(dt)
 	_update_respawn(dt)
 	_update_sleep(dt)
 	if multiplayer.is_server() and not multiplayer.get_peers().is_empty():
@@ -582,36 +630,42 @@ func _update_day_night(dt: float) -> void:
 		else:
 			toast.emit("☀ ŞAFAK SÖKTÜ — Orman aydınlandı.", Color(1.0, 0.86, 0.45))
 
+	var night_k := 1.0 - day_k
+	if world and "night_k" in world:
+		world.night_k = night_k
+		world.dusk_k = dusk_k
+
 	if _sun and _base_env.has("sun_e"):
-		var pitch := lerpf(-18.0, -52.0, day_k) if sun_sin >= -0.05 else lerpf(-22.0, -45.0, 1.0 - day_k)
+		var pitch := lerpf(-20.0, -52.0, day_k) if sun_sin >= -0.05 else lerpf(-24.0, -45.0, night_k)
 		var yaw := lerpf(-48.0, 48.0, fmod(day_t + 0.25, 1.0))
 		_sun.rotation_degrees = Vector3(pitch, yaw, 0.0)
-		var day_col: Color = _base_env["sun_c"]
-		var dusk_col := Color(1.0, 0.56, 0.28)
-		var moon_col := Color(0.55, 0.68, 0.98)
-		var c := moon_col.lerp(day_col, day_k).lerp(dusk_col, dusk_k * 0.65)
-		if world == null: # karanlık dünyada renkleri biyom verir (world.gd)
-			_sun.light_color = c
-		_sun.light_energy = lerpf(0.38, float(_base_env["sun_e"]), day_k)
+		if world == null: # karanlık dünyada renkleri biyom + night_k ile world.gd yönetir (çakışma yok!)
+			var day_col: Color = _base_env["sun_c"]
+			var dusk_col := Color(1.0, 0.56, 0.28)
+			var moon_col := Color(0.55, 0.68, 0.98)
+			_sun.light_color = moon_col.lerp(day_col, day_k).lerp(dusk_col, dusk_k * 0.65)
+		_sun.light_energy = lerpf(0.42, float(_base_env["sun_e"]), day_k)
 
 	if _env and _base_env.has("amb_e"):
-		_env.ambient_light_energy = lerpf(0.24, float(_base_env["amb_e"]), day_k)
+		_env.ambient_light_energy = lerpf(0.30, float(_base_env["amb_e"]), day_k)
 		if world == null:
 			_env.ambient_light_color = Color(0.16, 0.22, 0.38).lerp(_base_env["amb_c"], day_k)
 			_env.fog_light_color = Color(0.10, 0.14, 0.26).lerp(_base_env["fog_c"], day_k).lerp(Color(0.85, 0.45, 0.25), dusk_k * 0.4)
-		_env.fog_light_energy = lerpf(0.45, float(_base_env["fog_e"]), day_k)
+			_env.fog_light_energy = lerpf(0.48, float(_base_env["fog_e"]), day_k)
 		_env.volumetric_fog_albedo = Color(0.22, 0.30, 0.52).lerp(_base_env["vfog_c"], day_k)
 		_env.volumetric_fog_density = lerpf(0.0085, float(_base_env["vfog_d"]), day_k)
-		_env.tonemap_exposure = lerpf(0.76, float(_base_env["exp"]), day_k)
+		_env.tonemap_exposure = lerpf(0.82, float(_base_env["exp"]), day_k)
 
-	var night_k := 1.0 - day_k
 	for l: OmniLight3D in _house_lights:
 		if is_instance_valid(l):
-			l.light_energy = lerpf(0.35, 3.0, night_k)
+			l.light_energy = lerpf(0.45, 3.2, night_k)
 	for wm: StandardMaterial3D in _win_mats:
-		wm.emission_energy_multiplier = lerpf(0.3, 2.4, night_k)
+		wm.emission_energy_multiplier = lerpf(0.35, 2.5, night_k)
 	if _camp_light and is_instance_valid(_camp_light):
-		_camp_light.light_energy = lerpf(1.4, 3.4, night_k) + sin(elapsed * 9.0) * 0.22
+		_camp_light.light_energy = lerpf(1.8, 3.8, night_k) + sin(elapsed * 9.5) * 0.28
+	if _camp_flame and is_instance_valid(_camp_flame):
+		_camp_flame.scale = Vector3(1.0 + sin(elapsed * 11.0) * 0.08, 1.0 + sin(elapsed * 14.3) * 0.14, 1.0 + cos(elapsed * 9.7) * 0.08)
+		_camp_flame.rotation.y = sin(elapsed * 4.5) * 0.25
 
 
 func _update_crates(dt: float) -> void:
@@ -1010,7 +1064,39 @@ func _take_char(pool: Array[int], biome: int) -> int:
 
 var _sleep_t := 0.0
 
-## Yüklenmemiş chunk'taki düşman uyur: altında çarpışan zemin yok, düşmesin ve boşuna düşünmesin.
+func _update_camp_and_biome(dt: float) -> void:
+	var p := _local_player()
+	if p == null:
+		return
+	# Boşluğa düşme koruması (hızlı koşuda henüz kurulmamış chunk kenarından sarkılırsa zemine çıkar)
+	if world != null and p.hp > 0:
+		var gy := _gy(p.global_position.x, p.global_position.z)
+		if p.global_position.y < gy - 6.0:
+			p.global_position.y = gy + 0.8
+			if "velocity" in p:
+				p.velocity.y = 0.0
+	# Kamp ateşi iyileştirme aurası (başlangıç kampı ateşi yakınında +10 HP/sn)
+	var fire_w := Vector3(-4.2, _gy(-4.2, -5.2), -5.2)
+	if p.hp > 0 and p.hp < p.max_hp and p.global_position.distance_to(fire_w) < 5.0:
+		_camp_heal_t += dt
+		if _camp_heal_t >= 0.8:
+			_camp_heal_t = 0.0
+			p.gain(8)
+	else:
+		_camp_heal_t = 0.0
+	# Biyom geçiş bildirimi
+	if world != null and elapsed > 2.5:
+		var b: int = world.biome_at(p.global_position.x, p.global_position.z)
+		if _last_biome == -1:
+			_last_biome = b
+		elif b != _last_biome:
+			_last_biome = b
+			var bnames := ["🌲 Lanetli Orman", "🌿 Sis Bataklığı", "🌋 Kül Dağları", "🏛 Yıkık Krallık"]
+			var bcols := [Color(0.75, 0.65, 1.0), Color(0.55, 0.92, 0.68), Color(1.0, 0.62, 0.35), Color(1.0, 0.90, 0.58)]
+			toast.emit("%s bölgesine girdin" % bnames[clampi(b, 0, 3)], bcols[clampi(b, 0, 3)])
+
+
+## Yüklenmemiş (ya da çarpışma zemini henüz kurulmamış) chunk'taki düşman uyur; uyanırken zemine güvenle oturur.
 func _update_sleep(dt: float) -> void:
 	_sleep_t -= dt
 	if world == null or _sleep_t > 0.0:
@@ -1020,9 +1106,17 @@ func _update_sleep(dt: float) -> void:
 		if not is_instance_valid(e):
 			continue
 		var k := Vector2i(floori(e.position.x / world.CHUNK), floori(e.position.z / world.CHUNK))
-		var awake: bool = world.chunks.has(k)
+		var chunk_node: Node = world.chunks.get(k)
+		var awake: bool = chunk_node != null and chunk_node.get_node_or_null("Body") != null
+		var was_sleeping: bool = e.process_mode == Node.PROCESS_MODE_DISABLED
 		e.process_mode = Node.PROCESS_MODE_INHERIT if awake else Node.PROCESS_MODE_DISABLED
 		e.visible = awake
+		if awake:
+			var gy := _gy(e.position.x, e.position.z)
+			if was_sleeping or e.position.y < gy - 1.2:
+				e.position.y = gy + 0.25
+				if e is CharacterBody3D:
+					(e as CharacterBody3D).velocity.y = 0.0
 
 
 ## Tohumlu yerleşim: her biyomda 2 ev + 1 karakol, 5 kamp; birbirine en az MIN_GAP, kuru ve düz zeminde.

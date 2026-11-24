@@ -18,7 +18,10 @@ var t := 0.0
 var scare := 0.0
 var body: Node3D
 var head: Node3D
+var tail_node: Node3D
 var wings: Array = []
+var legs: Array = [] # [Node3D pivot, float phase_sign]
+var allow_water := false
 # Açık dünya (world.gd) ayarları; TD'de varsayılanlar kullanılır.
 var bounds := Rect2(-HALF, -HALF, HALF * 2.0, HALF * 2.0) # dolaşma alanı, ebeveyne göre
 var keep_out := KEEP_OUT # ebeveynin merkezinden uzak durma yarıçapı (0: yok)
@@ -27,18 +30,26 @@ var vis_end := 0.0 # parçaların görünürlük mesafesi (0: sınırsız)
 var speed := 0.9 # gezinme hızı (kaçarken 5)
 
 
-func _part(parent: Node3D, mesh: Mesh, pos: Vector3, size: Vector3, col: Color) -> MeshInstance3D:
+func _part(parent: Node3D, mesh: Mesh, pos: Vector3, size: Vector3, col: Color, rough := 0.80) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.position = pos
 	mi.scale = size
 	var m := StandardMaterial3D.new()
 	m.albedo_color = col
-	m.roughness = 0.9
+	m.roughness = rough
 	mi.material_override = m
 	mi.visibility_range_end = vis_end
 	parent.add_child(mi)
 	return mi
+
+
+func _leg_pivot(parent: Node3D, pivot_pos: Vector3, phase: float) -> Node3D:
+	var piv := Node3D.new()
+	piv.position = pivot_pos
+	parent.add_child(piv)
+	legs.append([piv, phase])
+	return piv
 
 
 func _ready() -> void:
@@ -72,36 +83,49 @@ func _model() -> void:
 		body.add_child(w)
 		_part(w, ball, Vector3(sx * 0.02, -0.06, 0.02), Vector3(0.07, 0.2, 0.3), white.darkened(0.08))
 		wings.append(w)
-		_part(self, leg, Vector3(sx * 0.07, 0.07, 0), Vector3(0.035, 0.07, 0.035), orange)
+		var lp := _leg_pivot(self, Vector3(sx * 0.07, 0.14, 0), sx)
+		_part(lp, leg, Vector3(0, -0.07, 0), Vector3(0.032, 0.07, 0.032), orange, 0.55)
+		_part(lp, ball, Vector3(0, -0.13, -0.02), Vector3(0.055, 0.02, 0.08), orange, 0.6)
 	head = Node3D.new()
 	head.position = Vector3(0, 0.42, -0.17)
 	body.add_child(head)
 	_part(head, ball, Vector3(0, 0.12, -0.03), Vector3(0.21, 0.22, 0.21), white)
-	_part(head, cone, Vector3(0, 0.1, -0.16), Vector3(0.09, 0.05, 0.09), orange).rotation.x = -PI / 2 # gaga
+	_part(head, cone, Vector3(0, 0.1, -0.16), Vector3(0.09, 0.05, 0.09), orange, 0.45).rotation.x = -PI / 2 # gaga
 	for sx in [-1.0, 1.0]:
-		_part(head, ball, Vector3(sx * 0.075, 0.15, -0.09), Vector3.ONE * 0.04, Color(0.05, 0.05, 0.05))
+		_part(head, ball, Vector3(sx * 0.075, 0.15, -0.09), Vector3.ONE * 0.042, Color(0.04, 0.04, 0.05), 0.15)
+		_part(head, ball, Vector3(sx * 0.088, 0.162, -0.106), Vector3.ONE * 0.014, Color.WHITE, 0.1)
 	if not chick:
-		_part(head, ball, Vector3(0, 0.24, -0.02), Vector3(0.05, 0.1, 0.14), Color(0.85, 0.12, 0.1)) # ibik
-		_part(head, ball, Vector3(0, 0.03, -0.12), Vector3(0.05, 0.08, 0.05), Color(0.85, 0.12, 0.1))
+		_part(head, ball, Vector3(0, 0.24, -0.02), Vector3(0.05, 0.1, 0.14), Color(0.85, 0.12, 0.1), 0.6) # ibik
+		_part(head, ball, Vector3(0, 0.03, -0.12), Vector3(0.05, 0.08, 0.05), Color(0.85, 0.12, 0.1), 0.6)
 	if chick:
 		scale = Vector3.ONE * 0.5
 
 
 func _pick(from: Vector3, away: Vector3, dist: float) -> void:
-	var dir := away if away != Vector3.ZERO else Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))
-	var p := from + dir.normalized().rotated(Vector3.UP, rng.randf_range(-0.6, 0.6)) * dist
-	p.x = clampf(p.x, bounds.position.x, bounds.end.x)
-	p.z = clampf(p.z, bounds.position.y, bounds.end.y)
-	if Vector2(p.x, p.z).length() < keep_out:
-		p = Vector3(p.x, 0, p.z).normalized() * keep_out if p.length() > 0.1 else Vector3(keep_out, 0, 0)
-	target = Vector3(p.x, 0, p.z)
+	for _try in 6:
+		var dir := away if away != Vector3.ZERO else Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1))
+		if dir.length_squared() < 0.001:
+			dir = Vector3(1, 0, 0)
+		var p := from + dir.normalized().rotated(Vector3.UP, rng.randf_range(-0.65, 0.65)) * dist
+		p.x = clampf(p.x, bounds.position.x, bounds.end.x)
+		p.z = clampf(p.z, bounds.position.y, bounds.end.y)
+		if Vector2(p.x, p.z).length() < keep_out:
+			p = Vector3(p.x, 0, p.z).normalized() * keep_out if p.length() > 0.1 else Vector3(keep_out, 0, 0)
+		if allow_water or not ground.is_valid() or float(ground.call(p.x, p.z)) >= 0.12:
+			target = Vector3(p.x, 0, p.z)
+			return
+		away = Vector3.ZERO
+	target = Vector3(from.x, 0, from.z)
 
 
-## Patlama ya da oyuncu: from noktasından uzağa koşar.
+## Patlama ya da oyuncu: dünya koordinatındaki from noktasından uzağa koşar (chunk-yerel dönüşümle!).
 func flee(from: Vector3) -> void:
-	scare = 1.6
+	scare = 1.8
 	wait = 0.0
-	_pick(position, position - Vector3(from.x, 0, from.z), rng.randf_range(5.0, 8.0))
+	var local_from: Vector3 = get_parent().to_local(from) if get_parent() is Node3D else from
+	var away := position - Vector3(local_from.x, position.y, local_from.z)
+	away.y = 0.0
+	_pick(position, away, rng.randf_range(5.5, 9.0))
 
 
 ## Vuruldu: tüy bulutu bırakıp yok olur (player.chicken_die her makinede çağırır).
@@ -160,8 +184,17 @@ func _process(dt: float) -> void:
 			_pick(position, Vector3.ZERO, rng.randf_range(1.0, 4.0))
 	var run := scare > 0.0 and moving
 	body.position.y = absf(sin(t * (22.0 if run else 9.0))) * (0.07 if run else 0.025) if moving else 0.0
-	# dururken ara ara yere eğilip gagalar; yürürken başı ileri geri sallanır
-	var peck := maxf(sin(t * 1.3 + position.x), 0.0) * absf(sin(t * 9.0))
-	head.rotation.x = sin(t * 9.0) * 0.12 if moving else -peck * 0.9
+	# dururken ara ara yere eğilip gagalar/otlar; yürürken başı doğal sallanır
+	var peck := maxf(sin(t * 1.3 + position.x), 0.0) * absf(sin(t * 7.5))
+	head.rotation.x = sin(t * 8.5) * 0.10 if moving else -peck * 0.65
+	head.rotation.y = sin(t * 1.4 + position.z) * 0.25 if not moving else 0.0
 	for i in wings.size():
-		wings[i].rotation.z = (1.0 if i == 0 else -1.0) * (absf(sin(t * 28.0)) * 1.1 if run else 0.0)
+		wings[i].rotation.z = (1.0 if i == 0 else -1.0) * (absf(sin(t * 24.0)) * 1.15 if run else 0.0)
+	var leg_freq := 16.0 if run else 8.5
+	var leg_amp := 0.65 if run else 0.36
+	for pair in legs:
+		var piv: Node3D = pair[0]
+		var ph: float = pair[1]
+		piv.rotation.x = sin(t * leg_freq) * leg_amp * ph if moving else lerpf(piv.rotation.x, 0.0, minf(dt * 8.0, 1.0))
+	if tail_node:
+		tail_node.rotation.y = sin(t * (10.0 if run else 3.2) + position.x) * (0.35 if run else 0.22)

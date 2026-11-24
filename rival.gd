@@ -204,6 +204,10 @@ func _physics_process(dt: float) -> void:
 			move_and_slide()
 			if moving:
 				aim = atan2(-dir.x, -dir.z)
+		var gy := _ground_y(global_position.x, global_position.z)
+		if global_position.y < gy - 1.5:
+			global_position.y = gy + 0.25
+			velocity.y = 0.0
 		rotation.y = lerp_angle(rotation.y, aim, minf(1.0, dt * 10.0))
 	else:
 		global_position = net_pos if global_position.distance_squared_to(net_pos) > 36.0 else global_position.lerp(net_pos + net_vel * 0.1, minf(1.0, dt * 12.0))

@@ -24,6 +24,7 @@ var equips: Dictionary = Weapons.EQUIPS
 
 # Üst-sol bilgi kartı
 var day_lbl: Label
+var biome_lbl: Label
 var rival_lbl: Label
 var monster_lbl: Label
 var crate_lbl: Label
@@ -31,6 +32,7 @@ var party_lbl: Label
 
 # Minimap
 var minimap: Control
+var map_wide := false # M tuşu: 220 m yakın radar <-> 480 m tam harita görünümü
 
 # Alt XP + Hotbar
 var xp_fill: ColorRect
@@ -76,15 +78,18 @@ class MinimapView extends Control:
 		var p: Node3D = ui_ref.player
 		var center := size * 0.5
 		var rad := minf(size.x, size.y) * 0.5 - 4.0
-		var world_r := 76.0 # radar menzili (metre)
+		var world_r := 480.0 if ui_ref.map_wide else 220.0 # 1 km karanlık dünyaya uygun menzil (M ile geçiş)
 
 		# Koyu cam daire ve menzil halkaları
-		draw_circle(center, rad, Color(0.04, 0.06, 0.10, 0.84))
-		draw_arc(center, rad, 0.0, TAU, 64, Color(1.0, 0.82, 0.45, 0.48), 2.0, true)
+		draw_circle(center, rad, Color(0.04, 0.06, 0.10, 0.86))
+		draw_arc(center, rad, 0.0, TAU, 64, Color(1.0, 0.82, 0.45, 0.52), 2.0, true)
 		draw_arc(center, rad * 0.66, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.09), 1.0, true)
 		draw_arc(center, rad * 0.33, 0.0, TAU, 36, Color(1.0, 1.0, 1.0, 0.09), 1.0, true)
 		draw_line(center + Vector2(-rad + 6, 0), center + Vector2(rad - 6, 0), Color(1, 1, 1, 0.07), 1.0)
 		draw_line(center + Vector2(0, -rad + 6), center + Vector2(0, rad - 6), Color(1, 1, 1, 0.07), 1.0)
+		var fnt := ThemeDB.fallback_font
+		for cp in [["K", Vector2(0, -rad + 12)], ["G", Vector2(0, rad - 4)], ["D", Vector2(rad - 10, 4)], ["B", Vector2(-rad + 4, 4)]]:
+			draw_string(fnt, center + (cp[1] as Vector2) - Vector2(4, 0), cp[0], HORIZONTAL_ALIGNMENT_CENTER, -1, 10, Color(1.0, 0.9, 0.65, 0.65))
 
 		var ppos := p.global_position if p and is_instance_valid(p) else Vector3.ZERO
 		var scale_k := (rad - 8.0) / world_r
@@ -214,6 +219,7 @@ func _build_top_left() -> void:
 	panel.add_child(v)
 
 	day_lbl = _t(v, "☀  GÜNDÜZ  •  AÇIK DÜNYA", 15, Color(1.0, 0.88, 0.50), true)
+	biome_lbl = _t(v, "🌲 Lanetli Orman", 13, Color(0.78, 0.86, 1.0))
 	var stats := HBoxContainer.new()
 	stats.mouse_filter = MOUSE_FILTER_IGNORE
 	stats.add_theme_constant_override("separation", 14)
@@ -221,7 +227,7 @@ func _build_top_left() -> void:
 	rival_lbl = _t(stats, "⚔ Muhafız: 0/48", 14, Color(0.84, 0.65, 1.0))
 	monster_lbl = _t(stats, "☠ Yaratık: 0/30", 14, Color(1.0, 0.56, 0.52))
 	crate_lbl = _t(stats, "✦ Kutu: 0/22", 14, Color(0.45, 0.94, 1.0))
-	var tip := _t(v, "[E] Kutu Aç / Çanta   •   [Tab] Çanta   •   [Q] Yetenek", 12, Color(0.82, 0.86, 0.94))
+	var tip := _t(v, "[E] Kutu / Çanta   •   [Tab] Çanta   •   [M] Harita   •   [Q] Yetenek", 12, Color(0.82, 0.86, 0.94))
 	tip.modulate.a = 0.72
 	party_lbl = _t(v, "", 13, Color(0.65, 0.90, 1.0))
 	party_lbl.hide()
@@ -600,6 +606,10 @@ func _input(e: InputEvent) -> void:
 		_choose(key - KEY_1)
 		get_viewport().set_input_as_handled()
 		return
+	if key == KEY_M:
+		map_wide = not map_wide
+		get_viewport().set_input_as_handled()
+		return
 	if key == KEY_TAB and player and int(player.get("hp")) > 0:
 		_toggle_inv()
 		get_viewport().set_input_as_handled()
@@ -623,6 +633,15 @@ func _update_top_left() -> void:
 	rival_lbl.text = "⚔ Muhafız: %d/%d" % [ow.rivals_killed, ow.rivals_total]
 	monster_lbl.text = "☠ Yaratık: %d/%d" % [ow.monsters_killed, ow.monsters_total]
 	crate_lbl.text = "✦ Kutu: %d/%d" % [ow.crates_opened, ow.crates_total]
+	if biome_lbl:
+		var bnames: Array[String] = ["🌲 Lanetli Orman", "🌿 Sis Bataklığı", "🌋 Kül Dağları", "🏛 Yıkık Krallık"]
+		var b_txt: String = bnames[clampi(int(ow.world.biome_at(player.global_position.x, player.global_position.z)), 0, 3)] if ow.world else "🌲 Orman"
+		var near_d := INF
+		for c in ow.crates:
+			if not c.opened:
+				near_d = minf(near_d, player.global_position.distance_to(c.pos))
+		var crate_hint := ("  •  🧭 En Yakın Kutu: %d m" % roundi(near_d)) if near_d < INF else "  •  ✔ Tüm Kutular Açıldı"
+		biome_lbl.text = b_txt + crate_hint
 	if party_lbl:
 		var lines := PackedStringArray()
 		for mate in ow.plist:

@@ -305,6 +305,11 @@ func _host(dt: float) -> void:
 		move_and_slide()
 		if moving:
 			aim = atan2(-dir.x, -dir.z)
+	if td and td.has_method("_gy"):
+		var gy: float = td._gy(global_position.x, global_position.z)
+		if global_position.y < gy - 1.5:
+			global_position.y = gy + 0.25
+			velocity.y = 0.0
 	rotation.y = lerp_angle(rotation.y, aim, minf(1.0, dt * 10.0))
 
 

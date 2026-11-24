@@ -1878,7 +1878,12 @@ func _muzzle() -> Vector3:
 		var c := get_viewport().get_camera_3d()
 		if c and vm.vcam and not vm.vcam.is_position_behind(p):
 			var depth := -(c.global_transform.affine_inverse() * p).z
-			return c.project_position(vm.vcam.unproject_position(p), depth) # ikisi de aynı piksel boyutunda (vp.size = pencere)
+			var proj := c.project_position(vm.vcam.unproject_position(p), depth) # ikisi de aynı piksel boyutunda
+			# Kullanıcı FOV'u 80°'den büyük/küçükse (ör. 105°) namlu sapmasını matematiksel olarak 80° referansına hizala
+			var fk := tan(deg_to_rad(FOV * 0.5)) / maxf(tan(deg_to_rad(c.fov * 0.5)), 0.01)
+			var rel := look.global_basis.inverse() * (proj - look.global_position)
+			rel.x *= fk; rel.y *= fk
+			return look.global_position + look.global_basis * rel
 		return p
 	var m := hold.find_child("muzzle", true, false) as Node3D if hold and hold.visible else null
 	if m: # başkasının elindeki silahın gerçek namlusu

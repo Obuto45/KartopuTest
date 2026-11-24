@@ -14,7 +14,7 @@ varying float gust_v;
 
 void vertex() {
 	vec3 root = MODEL_MATRIX[3].xyz;
-	h = clamp((VERTEX.y - root.y) / (top * length(MODEL_MATRIX[1].xyz)), 0.0, 1.0);
+	h = clamp((VERTEX.y - root.y) / max(top * length(MODEL_MATRIX[1].xyz), 0.001), 0.0, 1.0);
 	// Uzakta bıçak köke doğru kısalır: aniden kesilmez; çiçekler solmaz.
 	float fade = 1.0 - smoothstep(fade_start, fade_end, distance(root, CAMERA_POSITION_WORLD)) * step(0.5, tint_mix);
 	far = 1.0 - fade;
@@ -34,7 +34,7 @@ void fragment() {
 	// Kök koyu, uç açık ve sarımsı; uzakta zemin rengine yaklaşır.
 	vec3 root_c = base * 0.45;
 	vec3 tip_c = base * 1.9 + vec3(0.05, 0.06, 0.0) * (0.7 + 0.6 * gust_v);
-	vec3 grass = mix(root_c, tip_c, smoothstep(0.0, 1.0, pow(h, 1.35))) * COLOR.rgb;
+	vec3 grass = mix(root_c, tip_c, smoothstep(0.0, 1.0, pow(max(h, 0.0001), 1.35))) * COLOR.rgb;
 	grass = mix(grass, base * COLOR.rgb, far * 0.85);
 	ALBEDO = mix(COLOR.rgb, grass, tint_mix);
 	BACKLIGHT = tip_c * h * h * 0.5 * (1.0 - far) * tint_mix; // uçta sahte subsurface
