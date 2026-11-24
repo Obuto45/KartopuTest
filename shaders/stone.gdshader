@@ -73,12 +73,12 @@ void fragment() {
 	float moss_w = clamp(m * moss, 0.0, 1.0);
 	vec3 moss_shaded = moss_col * (0.62 + 0.72 * fine + 0.16 * micro);
 	col = mix(col, moss_shaded, moss_w);
-	// Zemin temas gölgesi (AO)
-	col *= mix(0.58, 1.0, smoothstep(0.0, 0.65, wp.y));
+	// Yükseklikten bağımsız yumuşak ortam gölgesi (tepe/vadi haritalarında kararma yapmaz)
+	col *= mix(0.76, 1.0, smoothstep(-0.35, 0.45, nrm.y));
 
-	// Hafif rim: kenarlar açılır, sert siluet yumuşar.
-	float rim = pow(1.0 - clamp(dot(normalize(NORMAL), VIEW), 0.0, 1.0), 3.0);
-	col += col * rim * 0.35;
+	// Hafif rim: kenarlar açılır, sert siluet yumuşar (NaN korumalı).
+	float rim = pow(max(1.0 - clamp(dot(normalize(NORMAL), VIEW), 0.0, 1.0), 0.0001), 3.0);
+	col += col * rim * 0.30;
 
 	// Prosedürel normal kabartması (6 ek örnek): yalnızca yakında; blok derzleri, çatlak ve kabuk yarıkları ışığı yakalar
 	if (length(VERTEX) < 30.0) {

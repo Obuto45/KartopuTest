@@ -13,26 +13,26 @@ const CELLS := 32 # chunk başına ızgara: 2 m'lik kareler
 const NAMES := ["cursed_forest", "swamp", "ash_mountains", "ruins"]
 # Görünüm forest.gd'nin (kule savunması) zemin/ağaç/kaya/gök stilidir; biyomlar onun tonlamasıdır.
 # Zemin tonu: rgb çarpan, a doygunluk (ground.gdshader köşe rengi).
-const GROUND := [Color(0.62, 0.48, 0.8, 0.5), Color(0.72, 0.8, 0.68, 0.45), Color(1.45, 0.74, 0.5, 0.4), Color(1.05, 1.0, 0.85, 0.8)]
+const GROUND := [Color(0.58, 0.72, 0.74, 0.68), Color(0.70, 0.84, 0.64, 0.62), Color(1.38, 0.76, 0.52, 0.48), Color(1.06, 1.02, 0.86, 0.85)]
 # Yaprak: forest rengini bu renge doğru çeker (a = miktar).
-const CURSED_LEAF := [Color(0.2, 0.06, 0.24), Color(0.3, 0.05, 0.1), Color(0.14, 0.1, 0.24), Color(0.15, 0.12, 0.2)] # ağaç başına ton: mor, kızıl, mavi-mor, gri-mor
-const LEAF := [Color(0.2, 0.06, 0.24, 0.6), Color(0.24, 0.26, 0.18, 0.55), Color(0.2, 0.2, 0.2, 1.0), Color(0, 0, 0, 0.0)]
-const FOG := [Color(0.5, 0.36, 0.62), Color(0.56, 0.62, 0.52), Color(0.62, 0.45, 0.32), Color(0.82, 0.74, 0.62)]
-const FOG_DENSITY := [0.011, 0.010, 0.005, 0.005]
-const SKY_TOP := [Color(0.3, 0.28, 0.4), Color(0.36, 0.44, 0.4), Color(0.34, 0.27, 0.22), Color(0.5, 0.58, 0.68)]
-const SKY_HOR := [Color(0.6, 0.5, 0.58), Color(0.58, 0.62, 0.45), Color(0.85, 0.5, 0.28), Color(0.78, 0.8, 0.8)]
+const CURSED_LEAF := [Color(0.18, 0.24, 0.36), Color(0.26, 0.14, 0.34), Color(0.14, 0.28, 0.26), Color(0.22, 0.18, 0.34)] # derin gece-çamı, mistik mor, zümrüt-çam
+const LEAF := [Color(0.18, 0.22, 0.34, 0.52), Color(0.24, 0.34, 0.22, 0.48), Color(0.24, 0.20, 0.18, 0.92), Color(0, 0, 0, 0.0)]
+const FOG := [Color(0.38, 0.42, 0.58), Color(0.46, 0.58, 0.52), Color(0.58, 0.38, 0.26), Color(0.76, 0.74, 0.66)]
+const FOG_DENSITY := [0.0068, 0.0072, 0.0044, 0.0040]
+const SKY_TOP := [Color(0.12, 0.18, 0.38), Color(0.16, 0.32, 0.38), Color(0.22, 0.16, 0.20), Color(0.22, 0.44, 0.70)]
+const SKY_HOR := [Color(0.52, 0.52, 0.68), Color(0.56, 0.68, 0.60), Color(0.88, 0.52, 0.28), Color(0.86, 0.80, 0.68)]
 # Biyom renk derecelemesi: [kontrast, doygunluk]; forest.gd'nin 1.06/1.12 değerine karşı (TD env'i ayrı kaynak, dokunulmaz)
-const GRADE := [Vector2(1.12, 1.18), Vector2(1.1, 1.16), Vector2(1.14, 1.08), Vector2(1.06, 1.2)] # AgX doygunluğu kırar, burada geri alınır
-const SUN := [Color(0.82, 0.66, 0.9), Color(0.82, 0.9, 0.78), Color(1.0, 0.68, 0.38), Color(1.0, 0.84, 0.64)]
+const GRADE := [Vector2(1.08, 1.16), Vector2(1.06, 1.14), Vector2(1.12, 1.10), Vector2(1.05, 1.18)]
+const SUN := [Color(0.92, 0.88, 1.0), Color(0.90, 0.96, 0.84), Color(1.0, 0.72, 0.42), Color(1.0, 0.88, 0.68)]
 const RADIUS := [2, 3, 4] # Settings.quality -> yüklü chunk yarıçapı
-const VIS := [90.0, 140.0, 200.0] # dekor görünürlük mesafesi
-const GRASS_VIS := [30.0, 45.0, 60.0]
+const VIS := [105.0, 155.0, 220.0] # dekor görünürlük mesafesi
+const GRASS_VIS := [34.0, 48.0, 64.0]
 const GRASS_N := [7500, 12500, 19000] # chunk başına çimen denemesi (görsel; çarpışmayı etkilemez)
 # Gök ortam ışığı payı ve yerine gelen renk: kül dağında morumsu gök, kızıl-gri zemini maviye boyamasın.
-const FILL := [Color(0.6, 0.72, 1.0), Color(0.6, 0.72, 1.0), Color(0.95, 0.6, 0.32), Color(0.6, 0.72, 1.0)] # dolgu ışığı rengi
-const SKY_AMB := [1.0, 1.0, 0.15, 1.0]
-const AMB_COL := [Color(0.45, 0.32, 0.55), Color(0.4, 0.45, 0.38), Color(0.52, 0.37, 0.25), Color(0.6, 0.52, 0.42)]
-const HILL := [Color(0.13, 0.07, 0.17), Color(0.12, 0.16, 0.1), Color(0.24, 0.12, 0.08), Color(0.15, 0.18, 0.1)]
+const FILL := [Color(0.55, 0.68, 0.98), Color(0.58, 0.74, 0.86), Color(0.96, 0.62, 0.34), Color(0.62, 0.76, 1.0)]
+const SKY_AMB := [0.95, 0.95, 0.22, 1.0]
+const AMB_COL := [Color(0.36, 0.38, 0.56), Color(0.38, 0.48, 0.42), Color(0.54, 0.38, 0.26), Color(0.58, 0.56, 0.48)]
+const HILL := [Color(0.14, 0.16, 0.26), Color(0.14, 0.22, 0.16), Color(0.26, 0.14, 0.10), Color(0.18, 0.24, 0.16)]
 const ROADS := 6 # merkezden dışarı kıvrılan toprak yol sayısı
 const SMALL := ["grass", "stem", "cap", "glow", "fstem", "fhead", "lily"] # kısa mesafede görünür, gölgesiz
 const MAX_FAUNA := 4 # chunk başına en çok hayvan
@@ -41,6 +41,8 @@ const FAR_N := 20 # uzak zemin ızgarası: FAR_N x FAR_N kare, kenarı CHUNK
 
 var players: Node # main.gd verir; boşsa kamera ya da merkez izlenir
 var clear_pts: Array = [] # Vector3: Açık Dünya evleri/kampları; 13 m içine ağaç ve kaya konmaz
+var night_k := 0.0 # open_world.gd gün döngüsü: 0 gündüz, 1 gece
+var dusk_k := 0.0 # open_world.gd gün batımı/şafak sıcaklığı (0..1)
 var chunks := {} # Vector2i -> Node3D
 var build_ms := 0.0 # son kurulum adımının süresi (test/profil)
 var stage_ms := {} # adım -> en uzun süre (ms): far, decor, flora, build
@@ -389,9 +391,10 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 					_tree_list.append([lp, 0.6, b])
 					if n % 9 == 2: # mor-gri yosunlu kaya
 						var r := vr.randf_range(0.6, 1.4)
-						var q := lp + Vector3(-1.5, -r * 0.35, -1.0)
-						items.rock.append([Transform3D(Basis(Vector3.UP, vr.randf() * TAU).scaled(Vector3(r, r * 0.7, r)), q), Color(0.26, 0.22, 0.3)])
-						_sats(items, "rock", q + Vector3(0, r * 0.35, 0), r, Color(0.22, 0.2, 0.26), vr)
+						var q := lp + Vector3(-1.5, 0.0, -1.0)
+						q.y = height(node.position.x + q.x, node.position.z + q.z) - r * 0.35
+						items.rock.append([Transform3D(Basis(Vector3.UP, vr.randf() * TAU).scaled(Vector3(r, r * 0.7, r)), q), Color(0.28, 0.26, 0.34)])
+						_sats(items, "rock", q + Vector3(0, r * 0.35, 0), r, Color(0.24, 0.22, 0.30), vr, node.position)
 			1: # sazlık, seyrek solgun ağaç
 				if lp.y < 0.4:
 					for c in 8:
@@ -406,13 +409,13 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 					var r := rng.randf_range(0.6, 1.8)
 					items.rock.append([Transform3D(rot.scaled(Vector3(r, r * 0.7, r)), lp - Vector3(0, r * 0.35, 0)),
 						Color(0.2, 0.26, 0.2).lerp(Color(0.3, 0.33, 0.26), rng.randf())])
-					_sats(items, "rock", lp, r, Color(0.2, 0.27, 0.18), vr)
+					_sats(items, "rock", lp, r, Color(0.2, 0.27, 0.18), vr, node.position)
 			2: # kül dağı: yosunsuz gri/kızıl forest kayaları, seyrek kuru ağaç
 				if n % 2 == 0:
 					var r := rng.randf_range(0.8, 3.5)
 					items.ash.append([Transform3D(rot.scaled(Vector3(r, r * rng.randf_range(0.6, 0.9), r)), lp - Vector3(0, r * 0.35, 0)),
 						Color(0.3, 0.26, 0.22).lerp(Color(0.36, 0.3, 0.24), rng.randf())])
-					_sats(items, "ash", lp, r, Color(0.26, 0.22, 0.18), vr)
+					_sats(items, "ash", lp, r, Color(0.26, 0.22, 0.18), vr, node.position)
 					var sl := absf(height(wx + 2.0, wz) - lp.y) + absf(height(wx, wz + 2.0) - lp.y)
 					if sl > 1.2: # dik yamaç: kayalık çıkıntı öbeği, yamaca yaslı
 						for c in vr.randi_range(2, 4):
@@ -440,11 +443,12 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 					var st := vr.randf_range(0.25, 0.45) # basamak: bir uçta yükselen kırık blok
 					var sx := vr.randf_range(0.6, 1.2) * signf(vr.randf() - 0.5)
 					items.wall.append([Transform3D(rot.scaled(Vector3(sz.x * st, sz.y * 0.5, 0.95)), lp + rot * Vector3(sx * sz.x * 0.35, sz.y * 0.8 - 0.3, 0)), Color(0.95, 0.93, 0.9)])
-					for v in vr.randi_range(1, 3): # düşmüş bloklar ve moloz duvar dibinde
+					for v in vr.randi_range(1, 3): # düşmüş bloklar ve moloz duvar dibinde (yamaçta havada kalmaz)
 						var bs := vr.randf_range(0.35, 0.8)
-						var q := lp + rot * Vector3(vr.randf_range(-0.5, 0.5) * sz.x, bs * 0.3, vr.randf_range(0.8, 1.8) * signf(vr.randf() - 0.5))
+						var q := lp + rot * Vector3(vr.randf_range(-0.5, 0.5) * sz.x, 0.0, vr.randf_range(0.8, 1.8) * signf(vr.randf() - 0.5))
+						q.y = height(node.position.x + q.x, node.position.z + q.z) + bs * 0.2
 						items.pillar.append([Transform3D(Basis.from_euler(Vector3(vr.randf_range(-0.4, 0.4), vr.randf() * TAU, vr.randf_range(-0.4, 0.4))).scaled(Vector3(bs * 1.4, bs, bs)), q), Color(1.1, 1.07, 1.0)])
-					_sats(items, "rock", lp + rot * Vector3(0, 0, 0.9), 1.2, Color(0.4, 0.37, 0.33), vr)
+					_sats(items, "rock", lp + rot * Vector3(0, 0, 0.9), 1.2, Color(0.4, 0.37, 0.33), vr, node.position)
 					for v in 2: # tepede sarmaşık, dipte çalı
 						var r := rng.randf_range(0.6, 1.0)
 						var ux := rng.randf_range(-0.4, 0.4) # wall ağı üst kenarı birim x'te 0.35*|sin(9x)| oyulur: sarmaşık oyuğa otursun
@@ -472,7 +476,7 @@ func _decor(k: Vector2i, node: Node3D, body: StaticBody3D) -> void:
 					var r := rng.randf_range(0.4, 1.0)
 					items.rock.append([Transform3D(rot.scaled(Vector3(r, r * 0.7, r)), lp - Vector3(0, r * 0.25, 0)), # gri-kahve, yarı gömülü
 						[Color(0.4, 0.37, 0.33), Color(0.46, 0.41, 0.35), Color(0.34, 0.33, 0.31)][n % 3]])
-					_sats(items, "rock", lp, r, Color(0.38, 0.35, 0.31), vr)
+					_sats(items, "rock", lp, r, Color(0.38, 0.35, 0.31), vr, node.position)
 	node.set_meta("trees", _tree_list)
 	node.set_meta("items", items)
 	node.set_meta("grass_seed", rng.seed + 1)
@@ -499,20 +503,24 @@ func _add_items(node: Node3D, items: Dictionary) -> void:
 		mmi.multimesh = mm
 		mmi.material_override = _mats[key]
 		mmi.visibility_range_end = GRASS_VIS[Settings.quality] if key in SMALL else vis
-		mmi.visibility_range_end_margin = 10.0
-		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		mmi.visibility_range_end_margin = 0.0
+		# VISIBILITY_RANGE_FADE_SELF ekranda siyah dither noktaları oluşturuyordu -> kapalı (çim shader'ı zaten yumuşak kısalır)
+		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
 		if key in ["reed", "grass", "rock"] or key in SMALL:
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.add_child(mmi)
 
 
-## Büyük kayanın çevresine 2-4 küçük gömülü uydu taş (görsel; çarpışmasız).
-func _sats(items: Dictionary, key: String, p: Vector3, r: float, col: Color, vr: RandomNumberGenerator) -> void:
+## Büyük kayanın çevresine 2-4 küçük gömülü uydu taş (gerçek zemin yüksekliğine oturur; yamaçta havada kalmaz).
+func _sats(items: Dictionary, key: String, p: Vector3, r: float, col: Color, vr: RandomNumberGenerator, origin := Vector3.ZERO) -> void:
 	for i in vr.randi_range(2, 4):
 		var a := vr.randf() * TAU
 		var pr := r * vr.randf_range(0.2, 0.4)
+		var qx := p.x + cos(a) * r * 1.15
+		var qz := p.z + sin(a) * r * 1.15
+		var qy := height(origin.x + qx, origin.z + qz) - pr * 0.35
 		items[key].append([Transform3D(Basis.from_euler(Vector3(vr.randf(), vr.randf() * TAU, vr.randf())).scaled(Vector3(pr, pr * 0.7, pr)),
-			p + Vector3(cos(a) * r * 1.15, -pr * 0.3, sin(a) * r * 1.15)), col.lerp(Color(0.5, 0.48, 0.45), vr.randf() * 0.3)])
+			Vector3(qx, qy, qz)), col.lerp(Color(0.5, 0.48, 0.45), vr.randf() * 0.3)])
 
 
 ## forest.gd ağacı; yaprak ve gövde biyoma göre tonlanır.
@@ -685,6 +693,8 @@ func _fauna_spawn(k: Vector2i, node: Node3D) -> void:
 	var oz := node.position.z
 	for i in list.size():
 		var a: Array = list[i]
+		if _near_clear(ox + a[1].x, oz + a[1].z): # evlerin ve kampların içine hayvan doğmasın
+			continue
 		var c: Node3D = ChickenScript.new() if a[0] == "chicken" else CritterScript.new()
 		if a[0] != "chicken":
 			c.kind = a[0]
@@ -804,20 +814,29 @@ func _update_env(dt: float) -> void:
 		amb += AMB_COL[i] * w[i]
 		sky += SKY_AMB[i] * w[i]
 	var t := 1.0 - exp(-dt * 0.8)
-	_env.fog_light_color = _env.fog_light_color.lerp(fog, t)
-	_env.fog_density = lerpf(_env.fog_density, dens, t)
-	_env.ambient_light_color = _env.ambient_light_color.lerp(amb, t)
+	var nk := clampf(night_k, 0.0, 1.0)
+	var dk := clampf(dusk_k, 0.0, 1.0)
+	var night_fog := Color(0.08, 0.11, 0.22)
+	var dusk_col := Color(1.0, 0.56, 0.28)
+	var target_fog := fog.lerp(dusk_col * 0.85, dk * 0.45).lerp(night_fog, nk * 0.82)
+	var target_amb := amb.lerp(Color(0.14, 0.19, 0.34), nk * 0.78)
+	var target_sun := sun.lerp(dusk_col, dk * 0.6).lerp(Color(0.48, 0.62, 0.96), nk * 0.85)
+	_env.fog_light_color = _env.fog_light_color.lerp(target_fog, t)
+	_env.fog_density = lerpf(_env.fog_density, dens * lerpf(1.0, 1.32, nk), t)
+	_env.ambient_light_color = _env.ambient_light_color.lerp(target_amb, t)
 	_env.ambient_light_sky_contribution = lerpf(_env.ambient_light_sky_contribution, sky, t)
-	_sun.light_color = _sun.light_color.lerp(sun, t)
-	var skym := _env.sky.sky_material as ShaderMaterial # kül dağında gök pembe/mora kaymasın: kömür-kahve tepe, sıcak ufuk
+	_sun.light_color = _sun.light_color.lerp(target_sun, t)
+	var skym := _env.sky.sky_material as ShaderMaterial
 	var sky_top := Color(0, 0, 0)
 	var sky_hor := Color(0, 0, 0)
 	for i in 4:
 		sky_top += SKY_TOP[i] * w[i]
 		sky_hor += SKY_HOR[i] * w[i]
+	sky_top = sky_top.lerp(Color(0.03, 0.05, 0.14), nk * 0.88)
+	sky_hor = sky_hor.lerp(Color(0.95, 0.54, 0.30), dk * 0.55).lerp(Color(0.10, 0.14, 0.28), nk * 0.86)
 	skym.set_shader_parameter("top_col", sky_top)
 	skym.set_shader_parameter("horizon_col", sky_hor)
-	skym.set_shader_parameter("mid_col", sky_top.lerp(sky_hor, 0.45)) # 3 bantlı gök: orta bant biyomla kaysın
+	skym.set_shader_parameter("mid_col", sky_top.lerp(sky_hor, 0.45))
 	var gr := Vector2.ZERO
 	for i in 4:
 		gr += GRADE[i] * w[i]
@@ -850,14 +869,14 @@ func _cam_pos() -> Vector3:
 ## [yaprak mı, yarı boy, sayı, renkler, yerçekimi, boyut, kameraya göre y]
 func _particles() -> void:
 	var cfg := [
-		[[false, Vector3(22, 3, 22), 700, [Color(1.8, 0.6, 2.8, 0.9)], Vector3(0, 0.05, 0), 1.4, 1.5], # mor sporlar
-			[false, Vector3(18, 2, 18), 90, [Color(2.6, 1.0, 3.2)], Vector3(0, 0.3, 0), 0.6, 0.5]], # yükselen kıvılcım
-		[[false, Vector3(20, 1.5, 20), 110, [Color(2.2, 2.6, 0.6)], Vector3.ZERO, 2.2, 1.0, true], # ateşböceği
-			[true, Vector3(14, 1.2, 14), 260, [Color(0.05, 0.05, 0.04), Color(0.14, 0.13, 0.1)], Vector3(0, 0.02, 0), 0.22, 0.8]], # sinek
-		[[true, Vector3(16, 5, 16), 700, [Color(0.1, 0.09, 0.09), Color(0.2, 0.18, 0.17), Color(0.14, 0.12, 0.11), Color(0.85, 0.4, 0.15)], Vector3(0.2, -0.3, 0.05), 0.6, 3.5], # kül
-			[false, Vector3(16, 3, 16), 220, [Color(4.0, 1.2, 0.3)], Vector3(0.05, 0.5, 0), 1.3, 0.5]], # kor
-		[[false, Vector3(22, 3, 22), 650, ForestScript.POLLEN, Vector3(0.03, 0.01, 0.0), 1.7, 1.5], # polen
-			[true, Vector3(16, 0.5, 16), 90, ForestScript.LEAF_TONES, Vector3(0.25, -0.55, 0.1), 1.8, 4.0]]] # yaprak
+		[[false, Vector3(22, 3, 22), 420, [Color(1.4, 0.7, 2.2, 0.78)], Vector3(0, 0.05, 0), 1.1, 1.5], # yumuşak mor sporlar
+			[false, Vector3(18, 2, 18), 70, [Color(2.0, 1.1, 2.8)], Vector3(0, 0.28, 0), 0.55, 0.5]], # yükselen kıvılcım
+		[[false, Vector3(20, 1.5, 20), 120, [Color(2.2, 2.6, 0.65)], Vector3.ZERO, 2.0, 1.0, true], # ateşböceği
+			[false, Vector3(18, 1.4, 18), 90, [Color(0.75, 0.92, 0.58, 0.55)], Vector3(0, 0.03, 0), 0.7, 0.9]], # yumuşak bataklık ışığı (siyah sinek noktaları kaldırıldı)
+		[[true, Vector3(16, 4.5, 16), 240, [Color(0.72, 0.58, 0.48, 0.72), Color(0.85, 0.52, 0.28, 0.8), Color(0.95, 0.46, 0.16, 0.85)], Vector3(0.18, -0.25, 0.05), 0.45, 3.2], # sıcak kül-kor taneleri (siyah noktalar kaldırıldı)
+			[false, Vector3(16, 3, 16), 190, [Color(3.6, 1.25, 0.35)], Vector3(0.05, 0.5, 0), 1.15, 0.5]], # kor
+		[[false, Vector3(22, 3, 22), 480, ForestScript.POLLEN, Vector3(0.03, 0.01, 0.0), 1.4, 1.5], # polen
+			[true, Vector3(16, 0.5, 16), 80, ForestScript.LEAF_TONES, Vector3(0.25, -0.55, 0.1), 1.6, 4.0]]] # yaprak
 	for b in 4:
 		for c in cfg[b]:
 			var pt: GPUParticles3D = _f._particles(c[0], c[1], int(c[2] * [0.4, 0.75, 1.0][Settings.quality]), c[3], c[4], c[5])
@@ -981,7 +1000,7 @@ func _far_ground(cell: Vector2i) -> void:
 			var w := weights(x, z)
 			var y := height(x, z, w)
 			if maxf(absf(x), absf(z)) < HALF:
-				y -= 40.0 if Vector2(x, z).distance_to(c) < near else 4.0
+				y -= 7.0 if Vector2(x, z).distance_to(c) < near else 1.5
 			var col := Color(0, 0, 0, 0)
 			for b in 4:
 				col += GROUND[b] * w[b]

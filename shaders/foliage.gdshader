@@ -17,7 +17,10 @@ void vertex() {
 	vec3 o = MODEL_MATRIX[3].xyz;
 	// Taç normali kümenin merkezinden dışa: düz yüzler kaybolur, top gibi yumuşak aydınlanır.
 	vec3 center = o + MODEL_MATRIX[1].xyz * UV.x;
-	NORMAL = normalize(mix(NORMAL, normalize(VERTEX - center), sphere_normal));
+	vec3 radial = VERTEX - center;
+	vec3 sn = length(radial) > 0.0001 ? normalize(radial) : NORMAL;
+	vec3 mn = mix(NORMAL, sn, sphere_normal);
+	NORMAL = length(mn) > 0.0001 ? normalize(mn) : vec3(0.0, 1.0, 0.0);
 	float t = TIME * 1.1 + o.x * 0.31 + o.z * 0.23;
 	vec3 d = vec3(sin(t), 0.0, cos(t * 0.8)) * 0.04; // bütün küme birlikte
 	vec2 w = wind_dir_n() * (0.04 + 0.16 * wind_wave(o.xz, TIME)) * wind_strength; // çimle aynı dalga
@@ -41,8 +44,8 @@ void fragment() {
 	// Çam eteği altı: dal kahvesi dokunuşu, kapkara kalmasın
 	c = mix(c, vec3(0.16, 0.12, 0.07), down * 0.55);
 
-	// Yumuşak Fresnel kenar parıltısı
-	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.4);
+	// Yumuşak Fresnel kenar parıltısı (pow(0) NaN korumalı)
+	float fres = pow(max(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 0.0001), 3.4);
 	c += sunlit_tint * fres * 0.06 * h;
 
 	ALBEDO = c;
@@ -54,6 +57,6 @@ void fragment() {
 void light() {
 	float nl = dot(NORMAL, LIGHT) * 0.5 + 0.5;
 	float tone = 0.3 + 0.3 * smoothstep(0.15, 0.55, nl) + 0.4 * smoothstep(0.5, 0.95, nl);
-	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.5) * smoothstep(0.0, 0.8, dot(LIGHT, -VIEW));
+	float rim = pow(max(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 0.0001), 2.5) * smoothstep(0.0, 0.8, dot(LIGHT, -VIEW));
 	DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * (tone + rim * 0.7) / PI;
 }

@@ -36,7 +36,8 @@ void fragment() {
 #ifndef CHEAP
 	float d = texture(depth_tex, SCREEN_UV).x;
 	vec4 sv = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, d, 1.0);
-	float depth = max(VERTEX.z - sv.z / sv.w, 0.0); // suyun arkasındaki zemine metre
+	float wz = abs(sv.w) > 0.0001 ? sv.z / sv.w : VERTEX.z;
+	float depth = clamp(VERTEX.z - wz, 0.0, 60.0); // suyun arkasındaki zemine metre
 	float k = 1.0 - exp(-depth * density);
 	col = mix(shallow_col, deep_col, k);
 	a = mix(0.45, 0.93, k);
@@ -47,8 +48,8 @@ void fragment() {
 	a = max(a, foam) * smoothstep(0.0, 0.5, depth); // geniş yumuşak kıyı geçişi (sert koyu kenar yok)
 	rough = mix(0.4, 0.65, 1.0 - k); // sığda mat, derinde yansıtıcı
 #endif
-	// Fresnel: sığ açıdan bakınca gök rengi karışır (hem CHEAP hem tam yolda).
-	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
+	// Fresnel: sığ açıdan bakınca gök rengi karışır (NaN korumalı).
+	float fres = pow(max(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 0.0001), 4.0);
 	col = mix(col, sky_col, fres * 0.55);
 	ALBEDO = col;
 	ALPHA = a;
