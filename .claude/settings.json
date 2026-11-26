@@ -9,7 +9,9 @@
     "claude-hud@claude-hud": true,
     "agent-skills@addy-agent-skills": true,
     "ui-ux-pro-max@ui-ux-pro-max-skill": true,
-    "diagram-design@diagram-design": true
+    "diagram-design@diagram-design": true,
+    "ruflo-core@ruflo": true,
+    "ruflo-console@ruflo": true
   },
   "extraKnownMarketplaces": {
     "claude-plugins-official": {
@@ -84,6 +86,12 @@
       "source": {
         "source": "github",
         "repo": "alirezarezvani/claude-skills"
+      }
+    },
+    "ruflo": {
+      "source": {
+        "source": "github",
+        "repo": "ruvnet/ruflo"
       }
     }
   }
